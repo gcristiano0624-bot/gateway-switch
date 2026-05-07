@@ -105,7 +105,7 @@ Open Claude Desktop, select the corresponding Claude model from the model select
 
 ### Download from Releases
 
-Go to the [Releases](https://github.com/your-username/gateway-switch/releases) page to download the latest `.dmg` or `.app` file.
+Go to the [Releases](https://github.com/gcristiano0624-bot/gateway-switch/releases/) page to download the latest `.dmg` or `.app` file.
 
 ### Homebrew
 

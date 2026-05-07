@@ -105,7 +105,7 @@ Claude Desktop 支持通过 Developer Gateway 接入第三方推理服务，但�
 
 ### 从 Release 下载
 
-前往 [Releases](https://github.com/your-username/gateway-switch/releases) 页面下载最新版本的 `.dmg` 或 `.app` 文件。
+前往 [Releases](https://github.com/gcirstiano0624-bot/gateway-switch/releases) 页面下载最新版本的 `.dmg` 或 `.app` 文件。
 
 ### Homebrew
 

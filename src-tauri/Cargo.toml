@@ -1,0 +1,33 @@
+[package]
+name = "gateway-switch"
+version = "1.0.0"
+description = "Gateway Switch - Claude Desktop Model Router"
+authors = ["Hugo Guan"]
+edition = "2021"
+
+[lib]
+name = "gateway_switch_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.37", features = ["bundled"] }
+dirs = "6"
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"] }
+bytes = "1"
+futures-util = "0.3"
+async-stream = "0.3"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+tower = "0.5"
+
+[dev-dependencies]
+tempfile = "3"

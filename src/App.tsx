@@ -82,7 +82,20 @@ const NAV: { key: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { key: "settings", label: "Settings", icon: Settings },
 ];
 
-const CLAUDE_ALIASES = ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5"];
+const CLAUDE_ALIASES = [
+  "claude-opus-4-7",
+  "claude-opus-4-20250514",
+  "claude-opus-4-0",
+  "claude-sonnet-4-6",
+  "claude-sonnet-4-20250514",
+  "claude-sonnet-4-5",
+  "claude-sonnet-4-0",
+  "claude-haiku-4-5",
+  "claude-haiku-4-20250414",
+  "claude-sonnet-3-7",
+  "claude-sonnet-3-5-v2",
+  "claude-haiku-3-5",
+];
 
 const PROVIDER_PRESETS: Array<{ id: string; name: string; base_url: string; auth_header: string; auth_scheme: string }> = [
   { id: "volcengine", name: "Volcano Engine Ark", base_url: "https://ark.cn-beijing.volces.com/api/v3", auth_header: "Authorization", auth_scheme: "Bearer" },

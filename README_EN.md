@@ -43,7 +43,7 @@ The community workaround is to place an **Anthropic-compatible gateway** in betw
 
 ### Model Routing
 
-- Map Claude aliases (`claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5`) to any upstream model
+- Map Claude aliases (`claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5`, and 9 more) to any upstream model
 - Each alias can bind to a different provider and model
 - Real-time view of active routes
 

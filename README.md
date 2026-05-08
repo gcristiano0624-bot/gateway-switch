@@ -43,7 +43,7 @@ Claude Desktop 支持通过 Developer Gateway 接入第三方推理服务，但�
 
 ### 模型路由
 
-- 将 Claude 别名（`claude-opus-4-7`、`claude-sonnet-4-6`、`claude-haiku-4-5`）映射到任意上游模型
+- 将 Claude 别名（`claude-opus-4-7`、`claude-sonnet-4-6`、`claude-haiku-4-5` 等 12 个）映射到任意上游模型
 - 一个别名可以绑定不同 Provider 的不同模型
 - 实时查看当前活跃的路由列表
 

@@ -1,12 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import {
-  LayoutDashboard, Server, Route, Monitor, FileText, Settings,
-  Play, Square, RefreshCw, Link, Unlink, Plus, Trash2, Edit3,
-  CheckCircle, XCircle, Zap
-} from "lucide-react";
 import "./App.css";
 
+// ── Types ──
 type Page = "dashboard" | "providers" | "routes" | "desktop" | "logs" | "settings";
 
 type Status = {
@@ -73,15 +69,7 @@ type Health = {
   latency_ms: number | null;
 };
 
-const NAV: { key: Page; label: string; icon: typeof LayoutDashboard }[] = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "providers", label: "Providers", icon: Server },
-  { key: "routes", label: "Routes", icon: Route },
-  { key: "desktop", label: "Desktop", icon: Monitor },
-  { key: "logs", label: "Logs", icon: FileText },
-  { key: "settings", label: "Settings", icon: Settings },
-];
-
+// ── Constants ──
 const CLAUDE_ALIASES = [
   "claude-opus-4-7",
   "claude-opus-4-20250514",
@@ -97,15 +85,171 @@ const CLAUDE_ALIASES = [
   "claude-haiku-3-5",
 ];
 
-const PROVIDER_PRESETS: Array<{ id: string; name: string; base_url: string; auth_header: string; auth_scheme: string }> = [
-  { id: "volcengine", name: "Volcano Engine Ark", base_url: "https://ark.cn-beijing.volces.com/api/v3", auth_header: "Authorization", auth_scheme: "Bearer" },
-  { id: "xiaomimo", name: "XiaoMiMo", base_url: "https://api.xiaomimo.com/v1", auth_header: "x-api-key", auth_scheme: "" },
-  { id: "openrouter", name: "OpenRouter", base_url: "https://openrouter.ai/api/v1", auth_header: "Authorization", auth_scheme: "Bearer" },
-  { id: "deepseek", name: "DeepSeek", base_url: "https://api.deepseek.com/v1", auth_header: "Authorization", auth_scheme: "Bearer" },
-  { id: "siliconflow", name: "SiliconFlow", base_url: "https://api.siliconflow.cn/v1", auth_header: "Authorization", auth_scheme: "Bearer" },
-  { id: "custom", name: "Custom Provider", base_url: "", auth_header: "x-api-key", auth_scheme: "" },
+const PROVIDER_PRESETS = [
+  { id: "volcengine", name: "Volcano Engine", base_url: "https://ark.cn-beijing.volces.com/api/v3", auth_header: "Authorization", auth_scheme: "Bearer", logo: "V", color: "#ef4444", colorBg: "rgba(239,68,68,0.1)", shortUrl: "ark.cn-beijing.volces.com" },
+  { id: "xiaomimo", name: "XiaoMiMo", base_url: "https://api.xiaomimo.com/v1", auth_header: "x-api-key", auth_scheme: "", logo: "X", color: "#f59e0b", colorBg: "rgba(245,158,11,0.1)", shortUrl: "api.xiaomimo.com" },
+  { id: "openrouter", name: "OpenRouter", base_url: "https://openrouter.ai/api/v1", auth_header: "Authorization", auth_scheme: "Bearer", logo: "OR", color: "#6366f1", colorBg: "rgba(99,102,241,0.1)", shortUrl: "openrouter.ai" },
+  { id: "deepseek", name: "DeepSeek", base_url: "https://api.deepseek.com/v1", auth_header: "Authorization", auth_scheme: "Bearer", logo: "DS", color: "#3b82f6", colorBg: "rgba(59,130,246,0.1)", shortUrl: "api.deepseek.com" },
+  { id: "siliconflow", name: "SiliconFlow", base_url: "https://api.siliconflow.cn/v1", auth_header: "Authorization", auth_scheme: "Bearer", logo: "SF", color: "#8b5cf6", colorBg: "rgba(139,92,246,0.1)", shortUrl: "api.siliconflow.cn" },
+  { id: "custom", name: "Custom", base_url: "", auth_header: "x-api-key", auth_scheme: "", logo: "+", color: "#64748b", colorBg: "rgba(100,116,139,0.1)", shortUrl: "Add your own provider" },
 ];
 
+// ── Helpers ──
+function getModelFamily(alias: string): string {
+  if (alias.includes("opus")) return "opus";
+  if (alias.includes("sonnet")) return "sonnet";
+  if (alias.includes("haiku")) return "haiku";
+  return "sonnet";
+}
+
+function getModelAbbrev(alias: string): string {
+  const f = getModelFamily(alias);
+  if (f === "opus") return "Op";
+  if (f === "sonnet") return "Sn";
+  if (f === "haiku") return "Hk";
+  return "Md";
+}
+
+// ── Inline SVG Icons ──
+const IconLayers = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" />
+  </svg>
+);
+
+const IconGrid = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+  </svg>
+);
+
+const IconSun = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+  </svg>
+);
+
+const IconShuffle = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="16 3 21 3 21 8" /><line x1="4" y1="20" x2="21" y2="3" /><polyline points="21 16 21 21 16 21" /><line x1="15" y1="15" x2="21" y2="21" /><line x1="4" y1="4" x2="9" y2="9" />
+  </svg>
+);
+
+const IconMonitor = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
+  </svg>
+);
+
+const IconTerminal = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
+  </svg>
+);
+
+const IconSettings = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </svg>
+);
+
+const IconPulse = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+  </svg>
+);
+
+const IconPlay = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="5 3 19 12 5 21 5 3" />
+  </svg>
+);
+
+const IconStop = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="6" y="6" width="12" height="12" rx="1" />
+  </svg>
+);
+
+const IconRefresh = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+  </svg>
+);
+
+const IconZap = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+  </svg>
+);
+
+const IconLink = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+  </svg>
+);
+
+const IconUnlink = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18.84 12.25l1.72-1.71a5 5 0 0 0-7.07-7.07l-3 3a5 5 0 0 0-.54 6.54" /><path d="M5.16 11.75l-1.72 1.71a5 5 0 0 0 7.07 7.07l3-3a5 5 0 0 0 .54-6.54" /><line x1="2" y1="2" x2="22" y2="22" />
+  </svg>
+);
+
+const IconPlus = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+const IconEdit = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+
+const IconTrash = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </svg>
+);
+
+const IconSearch = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </svg>
+);
+
+const IconCheck = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+const IconX = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
+const IconArrowRight = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+  </svg>
+);
+
+const IconDownload = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
+const IconUpload = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+  </svg>
+);
+
+// ── Main App ──
 function App() {
   const [page, setPage] = useState<Page>("dashboard");
   const [status, setStatus] = useState<Status | null>(null);
@@ -117,6 +261,7 @@ function App() {
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Provider form
   const [pForm, setPForm] = useState({ id: "", name: "", base_url: "", auth_header: "x-api-key", auth_scheme: "", api_key: "" });
@@ -125,6 +270,9 @@ function App() {
   // Route form
   const [rForm, setRForm] = useState({ id: "", claude_alias: "claude-sonnet-4-6", display_name: "", provider_id: "", upstream_model: "" });
   const [editingR, setEditingR] = useState<string | null>(null);
+
+  // Settings
+  const [importPath, setImportPath] = useState("");
 
   const flash = (msg: string, type: "success" | "error" = "success") => {
     if (type === "success") { setSuccess(msg); setError(null); }
@@ -214,137 +362,294 @@ function App() {
     try { await invoke("save_settings", { payload: settings }); flash("Settings saved"); await loadAll(); } catch (e) { flash(String(e), "error"); }
   };
 
-  // ---- Sidebar ----
+  const doImport = async () => {
+    if (!importPath) return;
+    try { await invoke("import_config", { filePath: importPath }); flash("Config imported"); setImportPath(""); await loadAll(); } catch (e) { flash(String(e), "error"); }
+  };
+  const doExport = async () => {
+    try { const p = await invoke<string>("export_config"); flash(`Exported to ${p}`); } catch (e) { flash(String(e), "error"); }
+  };
+
+  // =====================================================
+  //  SIDEBAR
+  // =====================================================
   const Sidebar = () => (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <h1>Gateway Switch</h1>
-        <p>Claude Desktop Router</p>
-      </div>
-      <nav className="sidebar-nav">
-        {NAV.map(n => (
-          <button key={n.key} className={`sidebar-item ${page === n.key ? "active" : ""}`} onClick={() => setPage(n.key)}>
-            <n.icon /> {n.label}
-          </button>
-        ))}
-      </nav>
-      <div className="sidebar-footer">
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span className={`dot ${status?.gateway_running ? "dot-green" : "dot-red"}`} />
-          <span style={{ color: "#a1a1aa", fontSize: 12 }}>
-            Gateway {status?.gateway_running ? "Running" : "Stopped"}
-          </span>
+        <div className="brand-icon">
+          <IconLayers />
         </div>
+        <div className="brand-text">
+          <div className="brand-name">Gateway Switch</div>
+          <div className="brand-sub">v1.0.0</div>
+        </div>
+      </div>
+
+      <div className="nav-group">
+        <div className="nav-group-label">Overview</div>
+        <button className={`nav-item ${page === "dashboard" ? "active" : ""}`} onClick={() => setPage("dashboard")}>
+          <IconGrid />
+          Dashboard
+        </button>
+      </div>
+
+      <div className="nav-group">
+        <div className="nav-group-label">Configuration</div>
+        <button className={`nav-item ${page === "providers" ? "active" : ""}`} onClick={() => setPage("providers")}>
+          <IconSun />
+          Providers
+          {providers.length > 0 && <span className="nav-badge">{providers.length}</span>}
+        </button>
+        <button className={`nav-item ${page === "routes" ? "active" : ""}`} onClick={() => setPage("routes")}>
+          <IconShuffle />
+          Routes
+          {routes.length > 0 && <span className="nav-badge">{routes.length}</span>}
+        </button>
+        <button className={`nav-item ${page === "desktop" ? "active" : ""}`} onClick={() => setPage("desktop")}>
+          <IconMonitor />
+          Desktop
+        </button>
+      </div>
+
+      <div className="nav-group">
+        <div className="nav-group-label">System</div>
+        <button className={`nav-item ${page === "logs" ? "active" : ""}`} onClick={() => setPage("logs")}>
+          <IconTerminal />
+          Logs
+        </button>
+        <button className={`nav-item ${page === "settings" ? "active" : ""}`} onClick={() => setPage("settings")}>
+          <IconSettings />
+          Settings
+        </button>
+      </div>
+
+      <div className="sidebar-footer">
+        <span className={`status-dot ${status?.gateway_running ? "on" : "off"}`} />
+        <span className="status-text">Gateway <strong>{status?.gateway_running ? "Running" : "Stopped"}</strong></span>
       </div>
     </aside>
   );
 
-  // ---- Dashboard ----
+  // =====================================================
+  //  DASHBOARD PAGE
+  // =====================================================
   const DashboardPage = () => (
     <div>
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20 }}>Dashboard</h2>
-      <div className="metrics-row">
-        <div className="metric">
-          <div className="metric-label">Gateway</div>
-          <div className="metric-value">{status?.gateway_running ? <span style={{ color: "var(--green)" }}>Running</span> : <span style={{ color: "var(--red)" }}>Stopped</span>}</div>
+      <div className="page-header">
+        <h1>Dashboard</h1>
+        <p>Gateway overview and quick controls</p>
+      </div>
+
+      {/* KPI Row */}
+      <div className="kpi-row">
+        <div className="kpi-card">
+          <div className="kpi-icon green">
+            <IconPulse />
+          </div>
+          <div className="kpi-info">
+            <div className="kpi-label">Gateway</div>
+            {status?.gateway_running ? (
+              <span className="kpi-badge green"><span className="dot" /> Running</span>
+            ) : (
+              <span className="kpi-badge red"><span className="dot" /> Stopped</span>
+            )}
+          </div>
         </div>
-        <div className="metric">
-          <div className="metric-label">Desktop</div>
-          <div className="metric-value">{desktop?.managed ? <span style={{ color: "var(--accent)" }}>Managed</span> : <span style={{ color: "var(--text-muted)" }}>Unmanaged</span>}</div>
+        <div className="kpi-card">
+          <div className="kpi-icon blue">
+            <IconMonitor />
+          </div>
+          <div className="kpi-info">
+            <div className="kpi-label">Desktop</div>
+            {desktop?.managed ? (
+              <span className="kpi-badge blue"><span className="dot" /> Managed</span>
+            ) : (
+              <span className="kpi-badge muted"><span className="dot" /> Unmanaged</span>
+            )}
+          </div>
         </div>
-        <div className="metric">
-          <div className="metric-label">Providers</div>
-          <div className="metric-value">{providers.length}</div>
+        <div className="kpi-card">
+          <div className="kpi-icon amber">
+            <IconSun />
+          </div>
+          <div className="kpi-info">
+            <div className="kpi-label">Providers</div>
+            <div className="kpi-value">{providers.length}</div>
+          </div>
         </div>
-        <div className="metric">
-          <div className="metric-label">Routes</div>
-          <div className="metric-value">{routes.length}</div>
+        <div className="kpi-card">
+          <div className="kpi-icon purple">
+            <IconShuffle />
+          </div>
+          <div className="kpi-info">
+            <div className="kpi-label">Routes</div>
+            <div className="kpi-value">{routes.length}</div>
+          </div>
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      {/* Two column: Quick Actions + Active Routes */}
+      <div className="two-col">
+        {/* Quick Actions */}
         <div className="card">
-          <div className="card-header">
-            <span className="card-title">Quick Actions</span>
-          </div>
-          <div className="btn-group">
+          <div className="card-title">Quick Actions</div>
+          <div className="qa-buttons">
             {status?.gateway_running ? (
-              <button className="btn btn-danger" onClick={stopGw}><Square size={14} /> Stop Gateway</button>
+              <button className="btn btn-danger" onClick={stopGw}>
+                <IconStop /> Stop Gateway
+              </button>
             ) : (
-              <button className="btn btn-primary" onClick={startGw}><Play size={14} /> Start Gateway</button>
+              <button className="btn btn-primary" onClick={startGw}>
+                <IconPlay /> Start Gateway
+              </button>
             )}
-            <button className="btn" onClick={checkHealth}><Zap size={14} /> Health Check</button>
-            <button className="btn" onClick={() => void loadAll()}><RefreshCw size={14} /> Refresh</button>
+            <button className="btn" onClick={checkHealth}>
+              <IconZap /> Health Check
+            </button>
+            <button className="btn" onClick={() => void loadAll()}>
+              <IconRefresh /> Refresh
+            </button>
           </div>
+
+          {/* Health bar */}
           {health && (
-            <div style={{ marginTop: 12, padding: 10, background: health.ok ? "var(--green-light)" : "var(--red-light)", borderRadius: 8, fontSize: 13 }}>
-              {health.ok ? "Healthy" : "Unhealthy"}: {health.message}
-              {health.latency_ms && ` (${health.latency_ms}ms)`}
-            </div>
+            <>
+              <div className="health-row">
+                <span className="health-label">Health</span>
+                <div className="health-bar-track">
+                  <div className={`health-bar-fill ${health.ok ? "" : "err"}`} style={{ width: health.ok ? "100%" : "0%" }} />
+                </div>
+                <span className={`health-text ${health.ok ? "ok" : "err"}`}>
+                  {health.ok ? "100%" : "0%"}
+                </span>
+              </div>
+              <div className="health-row">
+                <span className="health-label" />
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                  {health.message}
+                  {health.latency_ms != null && ` - ${health.latency_ms}ms`}
+                </span>
+              </div>
+            </>
           )}
-          <div style={{ marginTop: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #f4f4f5" }}>
-              <span style={{ color: "var(--text-muted)", fontSize: 13 }}>Listen Address</span>
-              <span style={{ fontWeight: 600, fontSize: 13 }}>127.0.0.1:{status?.gateway_port ?? 3456}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0" }}>
-              <span style={{ color: "var(--text-muted)", fontSize: 13 }}>Config Path</span>
-              <span style={{ fontWeight: 600, fontSize: 13, wordBreak: "break-all", textAlign: "right", maxWidth: "60%" }}>{desktop?.config_path ?? "-"}</span>
-            </div>
+
+          {/* Info grid */}
+          <div className="info-grid">
+            <span className="info-key">Address</span>
+            <span className="info-val">{status?.gateway_port ? `127.0.0.1:${status.gateway_port}` : "Not running"}</span>
+            <span className="info-key">Port</span>
+            <span className="info-val">{status?.gateway_port ?? 3456}</span>
+            <span className="info-key">Auth Token</span>
+            <span className="info-val">{settings?.auth_token ? settings.auth_token.slice(0, 12) + "...••••" : "---"}</span>
           </div>
         </div>
 
+        {/* Active Routes */}
         <div className="card">
-          <div className="card-header">
-            <span className="card-title">Active Routes</span>
+          <div className="card-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            Active Routes
+            <button className="btn" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => setPage("routes")}>
+              View All <IconArrowRight />
+            </button>
           </div>
-          {routes.length === 0 ? (
-            <div className="empty">No routes configured yet. Go to Routes page to add one.</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {routes.map(r => (
-                <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", background: "#fafafa", borderRadius: 8 }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>{r.claude_alias}</div>
-                    <div style={{ color: "var(--text-muted)", fontSize: 12 }}>{r.display_name} &rarr; {r.upstream_model}</div>
+          <div className="route-list">
+            {routes.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">--</div>
+                <h3>No routes configured</h3>
+                <p>Go to Routes page to add one.</p>
+              </div>
+            ) : (
+              routes.slice(0, 6).map(r => (
+                <div key={r.id} className="route-item">
+                  <div className={`route-icon ${getModelFamily(r.claude_alias)}`}>
+                    {getModelAbbrev(r.claude_alias)}
                   </div>
-                  <span className={`badge ${r.enabled ? "badge-green" : "badge-gray"}`}>{r.enabled ? "Active" : "Disabled"}</span>
+                  <div className="route-info">
+                    <div className="route-name">{r.claude_alias}</div>
+                    <div className="route-path">{r.upstream_model} via {r.provider_id}</div>
+                  </div>
+                  <span className={`route-status ${r.enabled ? "active" : "disabled"}`}>
+                    {r.enabled ? "Active" : "Disabled"}
+                  </span>
                 </div>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </div>
+      </div>
+
+      {/* Providers preview */}
+      <div className="section-label">Providers</div>
+      <div className="providers-grid">
+        {PROVIDER_PRESETS.map(preset => {
+          const isConnected = providers.some(p => p.id === preset.id && p.enabled);
+          return (
+            <div
+              key={preset.id}
+              className="provider-card"
+              onClick={() => {
+                setPage("providers");
+                setEditingP(null);
+                setPForm({ id: preset.id, name: preset.name, base_url: preset.base_url, auth_header: preset.auth_header, auth_scheme: preset.auth_scheme, api_key: "" });
+              }}
+            >
+              <div className="provider-logo" style={{ background: preset.colorBg, color: preset.color }}>
+                {preset.logo}
+              </div>
+              <div className="provider-info">
+                <div className="provider-name">{preset.name}</div>
+                <div className="provider-models">{preset.shortUrl}</div>
+              </div>
+              <span className={`provider-status ${isConnected ? "connected" : "disconnected"}`} />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 
-  // ---- Providers ----
+  // =====================================================
+  //  PROVIDERS PAGE
+  // =====================================================
   const ProvidersPage = () => (
     <div>
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20 }}>Providers</h2>
+      <div className="page-header">
+        <h1>Providers</h1>
+        <p>Manage your Anthropic-compatible upstream services</p>
+      </div>
 
-      {/* Preset selector */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title" style={{ marginBottom: 14 }}>Quick Add from Preset</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {PROVIDER_PRESETS.map(preset => (
-            <button
+      {/* Preset grid */}
+      <div className="section-label">Quick Add</div>
+      <div className="providers-grid">
+        {PROVIDER_PRESETS.map(preset => {
+          const isConnected = providers.some(p => p.id === preset.id && p.enabled);
+          return (
+            <div
               key={preset.id}
-              className="btn"
+              className="provider-card"
               onClick={() => {
                 setEditingP(null);
                 setPForm({ id: preset.id, name: preset.name, base_url: preset.base_url, auth_header: preset.auth_header, auth_scheme: preset.auth_scheme, api_key: "" });
               }}
             >
-              {preset.name}
-            </button>
-          ))}
-        </div>
+              <div className="provider-logo" style={{ background: preset.colorBg, color: preset.color }}>
+                {preset.logo}
+              </div>
+              <div className="provider-info">
+                <div className="provider-name">{preset.name}</div>
+                <div className="provider-models">{preset.shortUrl}</div>
+              </div>
+              <span className={`provider-status ${isConnected ? "connected" : "disconnected"}`} />
+            </div>
+          );
+        })}
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title" style={{ marginBottom: 14 }}>{editingP ? "Edit Provider" : "Add Provider"}</div>
-        <div className="form-grid">
+      {/* Add/Edit form */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-title">{editingP ? "Edit Provider" : "Add Provider"}</div>
+        <div className="form-row">
           <div className="form-field">
             <label>Provider ID</label>
             <input value={pForm.id} disabled={!!editingP} onChange={e => setPForm({ ...pForm, id: e.target.value })} placeholder="e.g. ark" />
@@ -367,49 +672,80 @@ function App() {
           </div>
           <div className="form-field">
             <label>API Key</label>
-            <input type="password" value={pForm.api_key} onChange={e => setPForm({ ...pForm, api_key: e.target.value })} />
+            <input type="password" value={pForm.api_key} onChange={e => setPForm({ ...pForm, api_key: e.target.value })} placeholder="Your API key" />
           </div>
         </div>
-        <div style={{ marginTop: 14 }}>
+        <div className="qa-buttons" style={{ marginTop: 16 }}>
           <button className="btn btn-primary" onClick={saveProvider}>
-            {editingP ? <Edit3 size={14} /> : <Plus size={14} />} {editingP ? "Save" : "Add"}
+            {editingP ? <><IconEdit /> Save</> : <><IconPlus /> Add Provider</>}
           </button>
-          {editingP && <button className="btn" style={{ marginLeft: 8 }} onClick={() => { setEditingP(null); setPForm({ id: "", name: "", base_url: "", auth_header: "x-api-key", auth_scheme: "", api_key: "" }); }}>Cancel</button>}
+          {editingP && (
+            <button className="btn" onClick={() => {
+              setEditingP(null);
+              setPForm({ id: "", name: "", base_url: "", auth_header: "x-api-key", auth_scheme: "", api_key: "" });
+            }}>Cancel</button>
+          )}
         </div>
       </div>
+
+      {/* Providers table */}
       <div className="table-wrap">
         <table>
-          <thead><tr><th>ID</th><th>Name</th><th>Base URL</th><th>Auth</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Provider</th>
+              <th>Base URL</th>
+              <th>Auth</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
           <tbody>
             {providers.map(p => (
               <tr key={p.id}>
-                <td style={{ fontWeight: 600 }}>{p.id}</td>
-                <td>{p.name}</td>
-                <td style={{ fontSize: 12, color: "var(--text-muted)" }}>{p.base_url}</td>
+                <td style={{ fontWeight: 600 }}>{p.name}</td>
+                <td style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--muted)" }}>{p.base_url}</td>
                 <td><span className="badge badge-blue">{p.auth_header}</span></td>
                 <td><span className={`badge ${p.enabled ? "badge-green" : "badge-gray"}`}>{p.enabled ? "Active" : "Disabled"}</span></td>
                 <td>
-                  <div className="btn-group">
-                    <button className="btn btn-sm" onClick={() => editProvider(p)}><Edit3 size={12} /></button>
-                    <button className="btn btn-sm btn-danger" onClick={() => delProvider(p.id)}><Trash2 size={12} /></button>
+                  <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
+                    <button className="btn" style={{ padding: "5px 8px" }} onClick={() => editProvider(p)}><IconEdit /></button>
+                    <button className="btn btn-danger" style={{ padding: "5px 8px" }} onClick={() => delProvider(p.id)}><IconTrash /></button>
                   </div>
                 </td>
               </tr>
             ))}
-            {providers.length === 0 && <tr><td colSpan={6} className="empty">No providers configured</td></tr>}
+            {providers.length === 0 && (
+              <tr>
+                <td colSpan={5}>
+                  <div className="empty-state">
+                    <div className="empty-icon">--</div>
+                    <h3>No providers configured</h3>
+                    <p>Click a preset above to get started.</p>
+                  </div>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
     </div>
   );
 
-  // ---- Routes ----
+  // =====================================================
+  //  ROUTES PAGE
+  // =====================================================
   const RoutesPage = () => (
     <div>
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20 }}>Model Routes</h2>
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title" style={{ marginBottom: 14 }}>{editingR ? "Edit Route" : "Add Route"}</div>
-        <div className="form-grid">
+      <div className="page-header">
+        <h1>Model Routes</h1>
+        <p>Map Claude model aliases to upstream provider models</p>
+      </div>
+
+      {/* Add/Edit form */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-title">{editingR ? "Edit Route" : "Add Route"}</div>
+        <div className="form-row">
           <div className="form-field">
             <label>Route ID</label>
             <input value={rForm.id} disabled={!!editingR} onChange={e => setRForm({ ...rForm, id: e.target.value })} placeholder="e.g. sonnet-ark" />
@@ -436,140 +772,276 @@ function App() {
             <input value={rForm.upstream_model} onChange={e => setRForm({ ...rForm, upstream_model: e.target.value })} placeholder="e.g. deepseek-v3" />
           </div>
         </div>
-        <div style={{ marginTop: 14 }}>
+        <div className="qa-buttons" style={{ marginTop: 16 }}>
           <button className="btn btn-primary" onClick={saveRoute}>
-            {editingR ? <Edit3 size={14} /> : <Plus size={14} />} {editingR ? "Save" : "Add"}
+            {editingR ? <><IconEdit /> Save</> : <><IconPlus /> Add Route</>}
           </button>
-          {editingR && <button className="btn" style={{ marginLeft: 8 }} onClick={() => { setEditingR(null); setRForm({ id: "", claude_alias: "claude-sonnet-4-6", display_name: "", provider_id: "", upstream_model: "" }); }}>Cancel</button>}
+          {editingR && (
+            <button className="btn" onClick={() => {
+              setEditingR(null);
+              setRForm({ id: "", claude_alias: "claude-sonnet-4-6", display_name: "", provider_id: "", upstream_model: "" });
+            }}>Cancel</button>
+          )}
         </div>
       </div>
+
+      {/* Route cards */}
+      <div className="section-label">Route Cards</div>
+      <div className="route-list" style={{ marginBottom: 20 }}>
+        {routes.length > 0 ? (
+          routes.map(r => (
+            <div key={r.id} className="route-item">
+              <div className={`route-icon ${getModelFamily(r.claude_alias)}`}>
+                {getModelAbbrev(r.claude_alias)}
+              </div>
+              <div className="route-info">
+                <div className="route-name">{r.claude_alias}</div>
+                <div className="route-path">{r.display_name || r.upstream_model} via {r.provider_id}</div>
+              </div>
+              <span className={`route-status ${r.enabled ? "active" : "disabled"}`}>
+                {r.enabled ? "Active" : "Disabled"}
+              </span>
+              <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
+                <button className="btn" style={{ padding: "5px 8px" }} onClick={() => editRoute(r)}><IconEdit /></button>
+                <button className="btn btn-danger" style={{ padding: "5px 8px" }} onClick={() => delRoute(r.id)}><IconTrash /></button>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="empty-state">
+            <div className="empty-icon">--</div>
+            <h3>No routes configured</h3>
+            <p>Add a route above to start mapping models.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Routes table */}
+      <div className="section-label">Route Table</div>
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Claude Alias</th><th>Display Name</th><th>Provider</th><th>Upstream Model</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Claude Alias</th>
+              <th>Display Name</th>
+              <th>Provider</th>
+              <th>Upstream Model</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
           <tbody>
             {routes.map(r => (
               <tr key={r.id}>
                 <td style={{ fontWeight: 600 }}>{r.claude_alias}</td>
                 <td>{r.display_name}</td>
                 <td><span className="badge badge-blue">{r.provider_id}</span></td>
-                <td>{r.upstream_model}</td>
+                <td style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{r.upstream_model}</td>
                 <td><span className={`badge ${r.enabled ? "badge-green" : "badge-gray"}`}>{r.enabled ? "Active" : "Disabled"}</span></td>
                 <td>
-                  <div className="btn-group">
-                    <button className="btn btn-sm" onClick={() => editRoute(r)}><Edit3 size={12} /></button>
-                    <button className="btn btn-sm btn-danger" onClick={() => delRoute(r.id)}><Trash2 size={12} /></button>
+                  <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
+                    <button className="btn" style={{ padding: "5px 8px" }} onClick={() => editRoute(r)}><IconEdit /></button>
+                    <button className="btn btn-danger" style={{ padding: "5px 8px" }} onClick={() => delRoute(r.id)}><IconTrash /></button>
                   </div>
                 </td>
               </tr>
             ))}
-            {routes.length === 0 && <tr><td colSpan={6} className="empty">No routes configured</td></tr>}
+            {routes.length === 0 && (
+              <tr>
+                <td colSpan={6}>
+                  <div className="empty-state">
+                    <div className="empty-icon">--</div>
+                    <h3>No routes configured</h3>
+                    <p>Add a route above to start mapping models.</p>
+                  </div>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
     </div>
   );
 
-  // ---- Desktop ----
+  // =====================================================
+  //  DESKTOP PAGE
+  // =====================================================
   const DesktopPage = () => (
     <div>
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20 }}>Claude Desktop</h2>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div className="page-header">
+        <h1>Claude Desktop</h1>
+        <p>Manage Claude Desktop binding and model exposure</p>
+      </div>
+
+      <div className="two-col">
+        {/* Binding Status */}
         <div className="card">
-          <div className="card-title" style={{ marginBottom: 14 }}>Binding Status</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "var(--text-muted)", fontSize: 13 }}>Status</span>
-              <span className={`badge ${desktop?.managed ? "badge-green" : "badge-gray"}`}>{desktop?.managed ? "Managed" : "Unmanaged"}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "var(--text-muted)", fontSize: 13 }}>Config File</span>
-              <span style={{ fontSize: 12, wordBreak: "break-all", textAlign: "right", maxWidth: "60%" }}>{desktop?.config_path ?? "-"}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "var(--text-muted)", fontSize: 13 }}>Base URL</span>
-              <span style={{ fontSize: 12 }}>{desktop?.base_url ?? "Not set"}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "var(--text-muted)", fontSize: 13 }}>Backup</span>
-              <span style={{ fontSize: 12 }}>{desktop?.backup_path ? "Available" : "None"}</span>
-            </div>
+          <div className="card-title">Binding Status</div>
+          <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+            <span className="info-key">Config File</span>
+            <span className="info-val">{desktop?.config_path ?? "-"}</span>
+            <span className="info-key">Base URL</span>
+            <span className="info-val">{desktop?.base_url ?? "Not set"}</span>
+            <span className="info-key">Auth Scheme</span>
+            <span className="info-val">{desktop?.auth_scheme ?? "Not set"}</span>
+            <span className="info-key">Backup</span>
+            <span className="info-val">{desktop?.backup_path ? "Available" : "None"}</span>
+            <span className="info-key">Status</span>
+            <span className="info-val">
+              <span className={`badge ${desktop?.managed ? "badge-green" : "badge-gray"}`}>
+                {desktop?.managed ? "Managed" : "Unmanaged"}
+              </span>
+            </span>
           </div>
-          <div className="btn-group" style={{ marginTop: 16 }}>
-            <button className="btn btn-primary" onClick={bindDesktop}><Link size={14} /> Bind Desktop</button>
-            <button className="btn" onClick={restoreDesktop}><Unlink size={14} /> Restore</button>
+          <div className="qa-buttons" style={{ marginTop: 16 }}>
+            <button className="btn btn-primary" onClick={bindDesktop}>
+              <IconLink /> Bind Desktop
+            </button>
+            <button className="btn" onClick={restoreDesktop}>
+              <IconUnlink /> Restore
+            </button>
           </div>
         </div>
+
+        {/* Exposed Models */}
         <div className="card">
-          <div className="card-title" style={{ marginBottom: 14 }}>Exposed Models</div>
+          <div className="card-title">Exposed Models</div>
           {desktop?.models && desktop.models.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div className="route-list">
               {desktop.models.map(m => (
-                <div key={m} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#f4f4f5", borderRadius: 8, fontSize: 13 }}>
-                  <CheckCircle size={14} style={{ color: "var(--green)" }} /> {m}
+                <div key={m} className="route-item">
+                  <div className={`route-icon ${getModelFamily(m)}`}>
+                    {getModelAbbrev(m)}
+                  </div>
+                  <div className="route-info">
+                    <div className="route-name">{m}</div>
+                    <div className="route-path">Exposed to Claude Desktop</div>
+                  </div>
+                  <span className="route-status active">
+                    <IconCheck /> Active
+                  </span>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="empty">No models exposed. Bind Desktop first.</div>
+            <div className="empty-state">
+              <div className="empty-icon">--</div>
+              <h3>No models exposed</h3>
+              <p>Bind Desktop first to expose models.</p>
+            </div>
           )}
         </div>
       </div>
     </div>
   );
 
-  // ---- Logs ----
-  const LogsPage = () => (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700 }}>Request Logs</h2>
-        <button className="btn" onClick={() => void loadAll()}><RefreshCw size={14} /> Refresh</button>
-      </div>
-      <div className="table-wrap">
-        <table>
-          <thead><tr><th>Time</th><th>Alias</th><th>Provider</th><th>Upstream</th><th>Mode</th><th>Status</th><th>Duration</th></tr></thead>
-          <tbody>
-            {logs.map(l => (
-              <tr key={l.request_id + l.created_at}>
-                <td style={{ fontSize: 12, color: "var(--text-muted)" }}>{l.created_at.replace("T", " ").slice(0, 19)}</td>
-                <td style={{ fontWeight: 600 }}>{l.claude_alias}</td>
-                <td>{l.provider_id}</td>
-                <td style={{ fontSize: 12 }}>{l.upstream_model}</td>
-                <td><span className={`badge ${l.is_stream ? "badge-orange" : "badge-blue"}`}>{l.is_stream ? "stream" : "sync"}</span></td>
-                <td>
-                  <span className={`badge ${l.status_code && l.status_code < 400 ? "badge-green" : l.status_code ? "badge-red" : "badge-gray"}`}>
-                    {l.status_code ?? "pending"}
-                  </span>
-                </td>
-                <td>{l.duration_ms ? `${l.duration_ms}ms` : "-"}</td>
-              </tr>
-            ))}
-            {logs.length === 0 && <tr><td colSpan={7} className="empty">No logs yet</td></tr>}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  // =====================================================
+  //  LOGS PAGE
+  // =====================================================
+  const LogsPage = () => {
+    const filteredLogs = searchQuery
+      ? logs.filter(l =>
+          l.claude_alias.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          l.provider_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          l.upstream_model.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          l.request_id.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      : logs;
 
-  // ---- Settings ----
-  const [importPath, setImportPath] = useState("");
-
-  const doImport = async () => {
-    if (!importPath) return;
-    try { await invoke("import_config", { filePath: importPath }); flash("Config imported"); setImportPath(""); await loadAll(); } catch (e) { flash(String(e), "error"); }
-  };
-  const doExport = async () => {
-    try { const p = await invoke<string>("export_config"); flash(`Exported to ${p}`); } catch (e) { flash(String(e), "error"); }
-  };
-
-  const SettingsPage = () => {
-    if (!settings) return <div className="empty">Loading...</div>;
     return (
       <div>
-        <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20 }}>Settings</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div className="page-header">
+          <h1>Request Logs</h1>
+          <p>Monitor gateway request activity</p>
+        </div>
+
+        <div className="qa-buttons" style={{ marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", background: "#fff", flex: 1, maxWidth: 320 }}>
+            <IconSearch />
+            <input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search logs..."
+              style={{ border: "none", outline: "none", fontSize: 13, flex: 1, background: "transparent", fontFamily: "inherit", color: "var(--fg)" }}
+            />
+          </div>
+          <button className="btn" onClick={() => void loadAll()}>
+            <IconRefresh /> Refresh
+          </button>
+        </div>
+
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Alias</th>
+                <th>Provider</th>
+                <th>Upstream</th>
+                <th>Mode</th>
+                <th>Status</th>
+                <th>Duration</th>
+                {filteredLogs.some(l => l.error_summary) && <th>Error</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredLogs.map(l => (
+                <tr key={l.request_id + l.created_at}>
+                  <td style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-mono)" }}>
+                    {l.created_at.replace("T", " ").slice(0, 19)}
+                  </td>
+                  <td style={{ fontWeight: 600 }}>{l.claude_alias}</td>
+                  <td><span className="badge badge-blue">{l.provider_id}</span></td>
+                  <td style={{ fontSize: 12 }}>{l.upstream_model}</td>
+                  <td><span className={`badge ${l.is_stream ? "badge-amber" : "badge-blue"}`}>{l.is_stream ? "stream" : "sync"}</span></td>
+                  <td>
+                    <span className={`badge ${l.status_code && l.status_code < 400 ? "badge-green" : l.status_code ? "badge-red" : "badge-gray"}`}>
+                      {l.status_code ?? "pending"}
+                    </span>
+                  </td>
+                  <td>{l.duration_ms ? `${l.duration_ms}ms` : "-"}</td>
+                  {filteredLogs.some(lg => lg.error_summary) && (
+                    <td style={{ fontSize: 12, color: "var(--red)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {l.error_summary || "-"}
+                    </td>
+                  )}
+                </tr>
+              ))}
+              {filteredLogs.length === 0 && (
+                <tr>
+                  <td colSpan={filteredLogs.some(l => l.error_summary) ? 8 : 7}>
+                    <div className="empty-state">
+                      <div className="empty-icon">--</div>
+                      <h3>{searchQuery ? "No matching logs" : "No logs yet"}</h3>
+                      <p>{searchQuery ? "Try a different search query." : "Logs will appear here once requests are made."}</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  // =====================================================
+  //  SETTINGS PAGE
+  // =====================================================
+  const SettingsPage = () => {
+    if (!settings) return <div className="empty-state"><h3>Loading...</h3></div>;
+    return (
+      <div>
+        <div className="page-header">
+          <h1>Settings</h1>
+          <p>Configure gateway behavior and manage data</p>
+        </div>
+
+        <div className="two-col">
+          {/* Gateway Configuration */}
           <div className="card">
-            <div className="card-title" style={{ marginBottom: 14 }}>Gateway Configuration</div>
-            <div className="form-grid">
+            <div className="card-title">Gateway Configuration</div>
+            <div className="form-row">
               <div className="form-field">
                 <label>Listen Host</label>
                 <input value={settings.listen_host} onChange={e => setSettings({ ...settings, listen_host: e.target.value })} />
@@ -583,39 +1055,54 @@ function App() {
                 <input value={settings.auth_token} onChange={e => setSettings({ ...settings, auth_token: e.target.value })} />
               </div>
             </div>
-            <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#fafafa", borderRadius: 8 }}>
-                <span style={{ fontSize: 13 }}>Auto-start Gateway on launch</span>
+
+            <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div className="toggle-row">
+                <span>Auto-start Gateway on launch</span>
                 <button className={`toggle ${settings.auto_start_gateway ? "on" : ""}`} onClick={() => setSettings({ ...settings, auto_start_gateway: !settings.auto_start_gateway })} />
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#fafafa", borderRadius: 8 }}>
-                <span style={{ fontSize: 13 }}>Auto-bind Claude Desktop on launch</span>
+              <div className="toggle-row">
+                <span>Auto-bind Claude Desktop on launch</span>
                 <button className={`toggle ${settings.auto_takeover_desktop ? "on" : ""}`} onClick={() => setSettings({ ...settings, auto_takeover_desktop: !settings.auto_takeover_desktop })} />
               </div>
             </div>
+
             <div style={{ marginTop: 16 }}>
-              <button className="btn btn-primary" onClick={saveSettings}>Save Settings</button>
+              <button className="btn btn-primary" onClick={saveSettings}>
+                <IconEdit /> Save Settings
+              </button>
             </div>
           </div>
 
+          {/* Import / Export */}
           <div className="card">
-            <div className="card-title" style={{ marginBottom: 14 }}>Import / Export</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="card-title">Import / Export</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <div>
-                <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>Import Configuration</div>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: "var(--muted)", marginBottom: 6 }}>Import Configuration</div>
+                <div className="qa-buttons">
                   <input
                     value={importPath}
                     onChange={e => setImportPath(e.target.value)}
                     placeholder="/path/to/config.json"
-                    style={{ flex: 1, padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13 }}
+                    style={{ flex: 1, padding: "7px 12px", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", fontSize: 13, outline: "none", fontFamily: "var(--font-mono)" }}
                   />
-                  <button className="btn" onClick={doImport}>Import</button>
+                  <button className="btn" onClick={doImport}><IconUpload /> Import</button>
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>Export Configuration</div>
-                <button className="btn" onClick={doExport}>Export to File</button>
+                <div style={{ fontSize: 12, fontWeight: 500, color: "var(--muted)", marginBottom: 6 }}>Export Configuration</div>
+                <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 10 }}>
+                  Export all providers, routes, and settings to a JSON file.
+                </p>
+                <button className="btn" onClick={doExport}><IconDownload /> Export to File</button>
+              </div>
+              <div style={{ padding: 14, background: "#f8fafc", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg)", marginBottom: 4 }}>Data Storage</div>
+                <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6 }}>
+                  All data is stored under:<br />
+                  <code style={{ fontSize: 11, fontFamily: "var(--font-mono)" }}>~/Library/Application Support/Gateway Switch/</code>
+                </div>
               </div>
             </div>
           </div>
@@ -624,6 +1111,9 @@ function App() {
     );
   };
 
+  // =====================================================
+  //  PAGE ROUTER
+  // =====================================================
   const Content = () => {
     switch (page) {
       case "dashboard": return <DashboardPage />;
@@ -639,9 +1129,20 @@ function App() {
     <div className="app-layout">
       <Sidebar />
       <main className="main-content">
-        {error && <div className="alert alert-error"><XCircle size={14} style={{ marginRight: 6 }} />{error}</div>}
-        {success && <div className="alert alert-success"><CheckCircle size={14} style={{ marginRight: 6 }} />{success}</div>}
         <Content />
+        {/* Toast notifications - fixed position, non-blocking */}
+        {error && (
+          <div className="toast toast-error">
+            <IconX />
+            <span>{error}</span>
+          </div>
+        )}
+        {success && (
+          <div className="toast toast-success">
+            <IconCheck />
+            <span>{success}</span>
+          </div>
+        )}
       </main>
     </div>
   );

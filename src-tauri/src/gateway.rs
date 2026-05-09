@@ -140,7 +140,7 @@ async fn count_tokens(State(ctx): State<Ctx>, headers: HeaderMap, Json(body): Js
     let route = resolve(&ctx.db, model).map_err(bad_req)?;
     let mut upstream = body.clone();
     upstream["model"] = json!(route.upstream_model);
-    let resp = ctx.client.post(format!("{}/v1/messages/count_tokens", route.base_url))
+    let resp = ctx.client.post(upstream_url(&route.base_url, "messages/count_tokens"))
         .headers(to_headers(&route.headers)?).json(&upstream)
         .send().await.map_err(upstream_err)?;
     let status = resp.status();
@@ -159,7 +159,7 @@ async fn messages(State(ctx): State<Ctx>, headers: HeaderMap, Json(body): Json<V
     let mut upstream = body.clone();
     upstream["model"] = json!(route.upstream_model);
 
-    let resp = ctx.client.post(format!("{}/v1/messages", route.base_url))
+    let resp = ctx.client.post(upstream_url(&route.base_url, "messages"))
         .headers(to_headers(&route.headers)?).json(&upstream)
         .send().await.map_err(|e| {
             let _ = database::insert_log(&ctx.db, &RequestLog {
@@ -250,6 +250,16 @@ fn auth_headers(p: &Provider) -> Vec<(String, String)> {
         ("anthropic-version".into(), "2023-06-01".into()),
         ("content-type".into(), "application/json".into()),
     ]
+}
+
+fn upstream_url(base_url: &str, endpoint: &str) -> String {
+    let base = base_url.trim_end_matches('/');
+    let endpoint = endpoint.trim_start_matches('/');
+    if base.ends_with("/v1") {
+        format!("{base}/{endpoint}")
+    } else {
+        format!("{base}/v1/{endpoint}")
+    }
 }
 
 fn verify_auth(headers: &HeaderMap, ctx: &Ctx) -> Result<(), Response> {

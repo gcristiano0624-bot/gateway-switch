@@ -2,10 +2,10 @@
 
 # Gateway Switch
 
-**Third-party model router for Claude Desktop**
+**Third-party model router for Claude Desktop and Codex App**
 
-[![Version](https://img.shields.io/badge/Version-1.0.0-blue?style=flat-square)](https://github.com/your-username/gateway-switch/releases)
-[![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/your-username/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.3.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
@@ -15,310 +15,244 @@ English | [中文](./README.md)
 
 ---
 
-## Why Gateway Switch?
+## What is Gateway Switch?
 
-Claude Desktop supports connecting third-party inference services via its Developer Gateway mode. However, since 2025 it has started validating model IDs, rejecting any that aren't official Claude models.
+Gateway Switch is a macOS desktop app that routes Claude Desktop and Codex App model traffic to third-party model APIs.
 
-The community workaround is to place an **Anthropic-compatible gateway** in between — translating third-party model names into Claude model aliases. Gateway Switch is the **desktop app version** of this gateway. No more manual YAML editing, no more hand-written Python scripts, no more starting services from the terminal.
+It solves two related problems:
 
-**Core value of Gateway Switch:**
+- **Claude Desktop** validates Claude model IDs. Gateway Switch exposes local Claude aliases such as `claude-sonnet-4-6`, maps them to real upstream models, and forwards traffic through an Anthropic Messages compatible gateway.
+- **Codex App** uses OpenAI Responses API, while many third-party providers only support Chat Completions. Gateway Switch exposes a local `/v1/responses` endpoint, converts Codex requests to `/v1/chat/completions`, then converts responses back into Responses format.
 
-- **All-in-one client** — Add providers, configure routes, start the gateway, take over Claude Desktop, all from a GUI
-- **Preset templates** — Built-in presets for Volcano Engine Ark, XiaoMiMo, OpenRouter, DeepSeek, SiliconFlow, and more
-- **One-click takeover / restore** — Automatic config backup before takeover, one-click restore to original state
-- **Full SSE streaming support** — Not simple chunk replacement, but per-event parsing and model field rewriting
-- **System tray quick actions** — Start/stop gateway, bind Desktop, all without opening the main window
-- **Import / Export** — JSON format config files for easy migration and backup
+Providers are shared. Claude and Codex have separate route and binding workflows.
+
+---
+
+## Version 1.3.0 Highlights
+
+- Added Codex Gateway: OpenAI Responses API to Chat Completions conversion.
+- Added one-click Codex App binding through `~/.codex/config.toml`.
+- Added Codex restore flow for returning to the original OpenAI login/provider state.
+- Added real model verification on the Codex page and in Logs.
+- Added editable Claude aliases and Codex model names.
+- Fixed input focus loss after typing one character.
+- Fixed duplicated `/v1/v1/...` provider URL handling.
+- Reworked Dashboard into a pure status view with refresh and health checks only.
+- Reorganized navigation into Dashboard, Products, Shared, and System.
 
 ---
 
 ## Features
 
-### Provider Management
+### Dashboard
 
-- 5 built-in presets for common Anthropic-compatible services, one-click form fill
-- Custom provider support with flexible Base URL, Auth Header, Auth Scheme, and API Key
-- Per-provider health check (sends `/v1/models` request to verify connectivity)
-- Automatic reference check before deletion
+- View Claude Gateway and Codex Gateway status.
+- View binding status and latest upstream call.
+- Run Claude/Codex health checks.
+- Refresh current state.
 
-### Model Routing
+Dashboard does not start gateways or bind apps. Startup and binding live on the relevant product page.
 
-- Map Claude aliases (`claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5`, and 9 more) to any upstream model
-- Each alias can bind to a different provider and model
-- Real-time view of active routes
+### Claude
 
-### Claude Desktop Takeover
+- Manage Claude model aliases.
+- Create routes: `Claude Alias -> Provider -> Upstream Model`.
+- Start/stop Claude Gateway.
+- Bind or restore Claude Desktop.
+- Supports Anthropic Messages streaming and non-streaming forwarding.
 
-- Auto-detect `~/Library/Application Support/Claude-3p/configLibrary` status
-- Automatic backup before takeover, one-click restore
-- Auto-inject `inferenceProvider`, `inferenceGatewayBaseUrl`, `inferenceModels` fields
-- Marks `managedBy: "Gateway Switch"` for easy identification
+Default address:
 
-### Gateway
+```text
+http://127.0.0.1:3456
+```
 
-- `GET /health` — Health check
-- `GET /v1/models` — Claude-style model list
-- `POST /v1/messages` — Non-streaming + streaming message forwarding
-- `POST /v1/messages/count_tokens` — Token count pass-through
-- Supports both `x-api-key` and `Authorization: Bearer` auth headers
+### Codex
 
-### Logging
+- Manage Codex model names.
+- Create routes: `Codex Model -> Provider -> Upstream Model`.
+- Start/stop Codex Gateway.
+- Bind or restore Codex App.
+- Convert Responses API requests to Chat Completions.
+- Convert Chat Completions responses back to Responses format.
+- Verify the latest real upstream model directly on the Codex page.
 
-- Per-request record: timestamp, Claude alias, provider, upstream model, mode (stream/sync), status code, duration
-- Retains up to 200 log entries
+Default address:
 
-### Settings
+```text
+http://127.0.0.1:3457
+```
 
-- Customizable listen address / port / auth token
-- Auto-start gateway on app launch
-- Auto-takeover Claude Desktop on launch
-- Config import / export
+### Providers
+
+- Manage shared third-party providers.
+- Configure Base URL, Auth Header, Auth Scheme, and API Key.
+- Use built-in presets or custom providers.
+- Claude and Codex share providers but keep separate routes.
+
+### Logs
+
+- View request time, requested model, provider, real upstream model, status code, and duration.
+- Use logs to verify which model was actually called.
 
 ---
 
 ## Quick Start
 
-### Step 1: Add a Provider
+### Claude Desktop Routing
 
-Open Gateway Switch, go to the **Providers** page, click a preset button (e.g. **Volcano Engine Ark**), fill in your API Key, click **Add**.
+1. Open `Providers` and add a provider that supports Anthropic Messages API.
+2. Open `Claude` and add or select a Claude alias.
+3. Create a route and enter the real upstream model name.
+4. Start Claude Gateway from the `Claude` page.
+5. Bind Claude Desktop from the `Claude` page.
+6. Restart Claude Desktop and use the mapped Claude model.
 
-### Step 2: Create a Route
+### Codex App Routing
 
-Go to the **Routes** page, select a Claude Alias (e.g. `claude-sonnet-4-6`), select the provider, fill in the upstream model ID, click **Add**.
+1. Open `Providers` and add a provider that supports OpenAI Chat Completions.
+2. Open `Codex` and add or select a Codex model, such as `gpt-5.5`.
+3. Create a route and enter the real upstream model name.
+4. Select the default Codex model.
+5. Click `Start & Bind Codex App`.
+6. Restart Codex App and start using it.
 
-### Step 3: Start and Bind
+Binding writes:
 
-Go back to **Dashboard**, click **Start Gateway**, wait for status to change to Running, then click **Bind Claude Desktop**.
+```toml
+model_provider = "gateway-switch"
+model = "gpt-5.5"
+preferred_auth_method = "apikey"
 
-### Step 4: Use
-
-Open Claude Desktop, select the corresponding Claude model from the model selector, and start chatting. All requests will be routed through Gateway Switch to your configured third-party service.
+[model_providers.gateway-switch]
+name = "Gateway Switch"
+base_url = "http://127.0.0.1:3457/v1"
+wire_api = "responses"
+requires_openai_auth = false
+experimental_bearer_token = "gateway-switch-token"
+```
 
 ---
 
-## Download & Installation
+## Provider Auth
 
-### System Requirements
+Common setup:
+
+```text
+Auth Header: Authorization
+Auth Scheme: Bearer
+API Key: sk-...
+```
+
+For providers that require `x-api-key`:
+
+```text
+Auth Header: x-api-key
+Auth Scheme:
+API Key: your-key
+```
+
+When `Auth Scheme` is empty, Gateway Switch sends the raw API key in the configured header.
+
+---
+
+## Verify The Real Model
+
+After sending a request from Claude or Codex:
+
+1. Return to Gateway Switch.
+2. Open the `Codex` page and check `Verify Real Model`.
+3. Or open `Logs` for full history.
+
+Important fields:
+
+- `Requested Model`: the model requested by the client.
+- `Provider`: the matched provider.
+- `Real Upstream`: the actual model sent to the third-party API.
+
+---
+
+## Codex Reasoning Notes
+
+Gateway Switch only converts protocol shape. It does not add or remove model reasoning capability.
+
+If a third-party provider does not return reasoning fields through Chat Completions, Codex may only show final text. Fast replies are normal and depend on the upstream model, provider behavior, and prompt complexity.
+
+---
+
+## Download
+
+Download the latest `.dmg` from [Releases](https://github.com/gcristiano0624-bot/gateway-switch/releases/).
+
+Requirements:
 
 - macOS 12+
-- Claude Desktop installed
-
-### Download from Releases
-
-Go to the [Releases](https://github.com/gcristiano0624-bot/gateway-switch/releases/) page to download the latest `.dmg` or `.app` file.
-
-### Homebrew
-
-```bash
-brew install --cask gateway-switch
-```
-
-### Build from Source
-
-```bash
-# Prerequisites: Node.js 18+, pnpm 8+, Rust 1.85+, Xcode CLI Tools
-
-git clone https://github.com/your-username/gateway-switch.git
-cd gateway-switch
-pnpm install
-pnpm tauri build --bundles app
-```
-
-Build output: `src-tauri/target/release/bundle/macos/Gateway Switch.app`
+- Claude Desktop or Codex App, depending on your use case
 
 ---
 
-## FAQ
+## Build From Source
 
-<details>
-<summary><b>How is Gateway Switch different from a Python script?</b></summary>
-
-A Python script requires you to manually edit YAML config, start the service from the terminal, and manually modify Claude Desktop's config files. Gateway Switch wraps all of this into a GUI — click a button and you're done. It also automatically backs up the original config so you can restore at any time.
-
-</details>
-
-<details>
-<summary><b>Which upstream services are supported?</b></summary>
-
-Any service that implements the Anthropic Messages API format. Built-in presets include: Volcano Engine Ark, XiaoMiMo, OpenRouter, DeepSeek, SiliconFlow. You can also add any custom compatible service.
-
-Note: OpenAI `/v1/chat/completions` format upstreams are not supported.
-
-</details>
-
-<details>
-<summary><b>Will taking over Claude Desktop affect normal usage?</b></summary>
-
-No. The takeover only modifies Claude Desktop's inference endpoint settings. Other features (login, history, etc.) are unaffected. After restoring, the config is fully reverted to its pre-takeover state.
-
-</details>
-
-<details>
-<summary><b>Where is data stored?</b></summary>
-
-All data is stored under `~/Library/Application Support/Gateway Switch/`:
-
-- `gateway.db` — SQLite database (Providers, Routes, Logs)
-- `settings.json` — App settings
-- `backups/` — Config export backups
-
-Claude Desktop config backups are stored in `~/Library/Application Support/Claude-3p/configLibrary/backups/`.
-
-</details>
-
-<details>
-<summary><b>What if the gateway port is already in use?</b></summary>
-
-Go to Settings, change the Listen Port to another value (e.g. 3457), save, and restart the gateway. You'll also need to re-bind Claude Desktop to update the port.
-
-</details>
-
-<details>
-<summary><b>Can I use multiple providers at the same time?</b></summary>
-
-Yes. Each Claude alias can only bind to one provider and one upstream model, but you can create multiple routes to point different aliases to different providers. For example, `claude-opus-4-7` via Volcano Engine and `claude-sonnet-4-6` via DeepSeek.
-
-</details>
-
----
-
-## Architecture
-
-<details>
-<summary><b>Click to expand architecture details</b></summary>
-
-```
-┌─────────────────────────────────────────────┐
-│              Gateway Switch                  │
-│                                              │
-│  ┌────────────┐    ┌───────────────────────┐ │
-│  │ React + TS │←──→│   Tauri IPC (22 cmd)  │ │
-│  │  Frontend  │    └───────────┬───────────┘ │
-│  └────────────┘                │             │
-│          ┌────────────────────┼─────────┐   │
-│          ↓                    ↓         ↓   │
-│  ┌─────────────┐  ┌────────────┐  ┌───────┐│
-│  │   Gateway   │  │  Database  │  │Desktop││
-│  │   (axum)    │  │  (SQLite)  │  │Binding││
-│  │    :3456    │  │            │  │       ││
-│  └──────┬──────┘  └────────────┘  └───────┘│
-│         │                                   │
-└─────────┼───────────────────────────────────┘
-          ↓
-┌───────────────────┐
-│ Upstream Provider  │
-│ (Anthropic API)    │
-└───────────────────┘
-```
-
-**Design Principles:**
-
-- **SSOT (Single Source of Truth)** — SQLite as primary storage; settings.json only for device-level preferences
-- **Atomic Writes** — Config changes write to temp file first, then rename, preventing corruption
-- **Auto Backup** — Config snapshot created before every takeover
-
-</details>
-
----
-
-## Development Guide
-
-<details>
-<summary><b>Click to expand development guide</b></summary>
-
-### Prerequisites
+Requirements:
 
 - Node.js 18+
 - pnpm 8+
-- Rust 1.85+ (via rustup)
+- Rust 1.85+
 - Xcode Command Line Tools
 
-### Commands
+Commands:
 
 ```bash
-# Install dependencies
 pnpm install
-
-# Dev mode (frontend hot reload + backend auto recompile)
-pnpm tauri dev
-
-# Build frontend only
 pnpm build
-
-# Compile backend only
-cd src-tauri && cargo build
-
-# Run tests
 cd src-tauri && cargo test
-
-# Build release
-pnpm tauri build --bundles app
+cd ..
+pnpm tauri build
 ```
 
-### Tech Stack
+Artifacts:
 
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| Desktop Framework | Tauri | 2.x |
-| Backend Language | Rust | 2021 Edition |
-| Async Runtime | tokio | 1.x |
-| HTTP Framework | axum | 0.8 |
-| HTTP Client | reqwest | 0.12 |
-| Database | SQLite (rusqlite) | 0.37 |
-| Frontend Framework | React | 19.x |
-| Type System | TypeScript | 5.x |
-| Styling | TailwindCSS | 4.x |
-| Icons | Lucide React | latest |
-| Build Tool | Vite | 7.x |
-
-### Project Structure
-
+```text
+src-tauri/target/release/bundle/macos/Gateway Switch.app
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.3.0_aarch64.dmg
 ```
-gateway-switch/
-├── src/                          # React frontend
-│   ├── App.tsx                   # Main app (sidebar + 6 pages)
-│   └── App.css                   # Styles (TailwindCSS + CSS variables)
-├── src-tauri/                    # Tauri backend
-│   ├── Cargo.toml                # Rust dependencies
-│   ├── tauri.conf.json           # Tauri config
-│   └── src/
-│       ├── main.rs               # Entry point
-│       ├── lib.rs                # Tauri Builder registration
-│       ├── gateway.rs            # Anthropic-compatible gateway
-│       ├── database.rs           # SQLite DAO layer
-│       ├── desktop_binding.rs    # Claude Desktop config management
-│       ├── commands.rs           # Tauri IPC commands
-│       ├── tray.rs               # System tray
-│       ├── settings.rs           # Settings I/O
-│       ├── state.rs              # App state management
-│       └── models.rs             # Data type definitions
-├── docs/
-│   └── PROJECT.md                # Detailed project documentation
-├── package.json
-├── vite.config.ts
-└── tsconfig.json
-```
-
-</details>
 
 ---
 
-## Contributing
+## Technical Documentation
 
-Issues and Pull Requests are welcome. Before submitting a PR, please ensure:
+Full architecture, protocol conversion, database schema, binding strategy, and release process:
 
-1. `cargo test` passes
-2. `pnpm tauri build` builds successfully
-3. New features include corresponding test cases
+[docs/project.md](./docs/project.md)
 
 ---
 
-## Star History
+## Data Storage
 
-[![Star History Chart](https://api.star-history.com/svg?repos=your-username/gateway-switch&type=Date)](https://star-history.com/#your-username/gateway-switch&Date)
+Gateway Switch app data:
+
+```text
+~/Library/Application Support/Gateway Switch/
+```
+
+Claude Desktop config:
+
+```text
+~/Library/Application Support/Claude-3p/configLibrary/
+```
+
+Codex App config:
+
+```text
+~/.codex/config.toml
+```
 
 ---
 
-## License
+## Known Limits
 
-[MIT](LICENSE) © Hugo Guan
+- Claude Gateway requires an Anthropic Messages compatible upstream.
+- Codex Gateway requires an OpenAI Chat Completions compatible upstream.
+- Visible Codex reasoning depends on whether the upstream returns reasoning data.
+- Codex conversation history across different login/provider states is controlled by Codex App, not Gateway Switch.
+

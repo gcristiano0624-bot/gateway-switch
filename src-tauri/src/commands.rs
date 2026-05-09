@@ -1,7 +1,7 @@
 use std::{fs, time::Instant};
 use tauri::State;
 use crate::{
-    codex_gateway, database, desktop_binding, gateway, models::*, settings,
+    codex_binding, codex_gateway, database, desktop_binding, gateway, models::*, settings,
     state::{AppState, GatewayStatus},
 };
 
@@ -153,7 +153,7 @@ pub async fn check_provider_health(st: State<'_, AppState>, id: String) -> Resul
     let providers = database::list_providers(&st.db_path)?;
     let p = providers.into_iter().find(|p| p.id == id).ok_or("Provider not found")?;
     let client = reqwest::Client::new();
-    let mut req = client.get(format!("{}/v1/models", p.base_url.trim_end_matches('/')));
+    let mut req = client.get(upstream_url(&p.base_url, "models"));
     req = req.header("content-type", "application/json");
     if let Some(key) = p.api_key.as_deref().filter(|s| !s.is_empty()) {
         let mut val = key.to_string();
@@ -324,5 +324,59 @@ pub async fn check_codex_health(st: State<'_, AppState>) -> Result<HealthStatus,
             message: e.to_string(),
             latency_ms: Some(start.elapsed().as_millis() as u64),
         }),
+    }
+}
+
+#[tauri::command]
+pub fn get_codex_binding_info(st: State<'_, AppState>) -> Result<CodexBindingInfo, String> {
+    let _ = st;
+    codex_binding::inspect(&dirs::home_dir().ok_or("no home")?)
+}
+
+#[tauri::command]
+pub fn apply_codex_binding(st: State<'_, AppState>, model: String) -> Result<CodexBindingInfo, String> {
+    let profile = database::get_codex_profile(&st.db_path)?;
+    codex_binding::apply(
+        &dirs::home_dir().ok_or("no home")?,
+        &format!("http://{}:{}/v1", profile.listen_host, profile.listen_port),
+        &profile.auth_token,
+        &model,
+    )
+}
+
+#[tauri::command]
+pub fn restore_codex_binding(st: State<'_, AppState>) -> Result<CodexBindingInfo, String> {
+    let _ = st;
+    codex_binding::restore(&dirs::home_dir().ok_or("no home")?)
+}
+
+// =====================================================
+//  MODEL ALIASES COMMANDS
+// =====================================================
+
+#[tauri::command]
+pub fn list_model_aliases(st: State<'_, AppState>, alias_type: String) -> Result<Vec<ModelAlias>, String> {
+    database::list_model_aliases(&st.db_path, &alias_type)
+}
+
+#[tauri::command]
+pub fn create_model_alias(st: State<'_, AppState>, payload: CreateModelAlias) -> Result<Vec<ModelAlias>, String> {
+    database::create_model_alias(&st.db_path, &payload)?;
+    database::list_model_aliases(&st.db_path, &payload.alias_type)
+}
+
+#[tauri::command]
+pub fn delete_model_alias(st: State<'_, AppState>, id: String, alias_type: String) -> Result<Vec<ModelAlias>, String> {
+    database::delete_model_alias(&st.db_path, &id)?;
+    database::list_model_aliases(&st.db_path, &alias_type)
+}
+
+fn upstream_url(base_url: &str, endpoint: &str) -> String {
+    let base = base_url.trim_end_matches('/');
+    let endpoint = endpoint.trim_start_matches('/');
+    if base.ends_with("/v1") {
+        format!("{base}/{endpoint}")
+    } else {
+        format!("{base}/v1/{endpoint}")
     }
 }

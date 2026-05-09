@@ -14,8 +14,8 @@ fn show<R: Runtime>(app: &AppHandle<R>) {
 
 pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let show_item = MenuItem::with_id(app, "show", "Show Window", true, None::<&str>)?;
-    let start_item = MenuItem::with_id(app, "start", "Start Gateway", true, None::<&str>)?;
-    let stop_item = MenuItem::with_id(app, "stop", "Stop Gateway", true, None::<&str>)?;
+    let start_item = MenuItem::with_id(app, "start", "Start Claude Gateway", true, None::<&str>)?;
+    let stop_item = MenuItem::with_id(app, "stop", "Stop Claude Gateway", true, None::<&str>)?;
     let bind_item = MenuItem::with_id(app, "bind", "Bind Claude Desktop", true, None::<&str>)?;
     let restore_item = MenuItem::with_id(app, "restore", "Restore Desktop", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;

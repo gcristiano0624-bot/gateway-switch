@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
 // ── Types ──
-type Page = "dashboard" | "providers" | "routes" | "codex" | "desktop" | "logs" | "settings";
+type Page = "dashboard" | "claude" | "codex" | "providers" | "logs" | "settings";
 
 type CodexRoute = {
   id: string;
@@ -18,6 +18,23 @@ type CodexGatewayStatus = {
   running: boolean;
   status: string;
   error: string | null;
+};
+
+type CodexBindingInfo = {
+  config_path: string;
+  config_exists: boolean;
+  managed: boolean;
+  model_provider: string | null;
+  model: string | null;
+  base_url: string | null;
+  backup_path: string | null;
+};
+
+type ModelAlias = {
+  id: string;
+  alias: string;
+  alias_type: "claude" | "codex";
+  created_at: string | null;
 };
 
 type Status = {
@@ -85,7 +102,7 @@ type Health = {
 };
 
 // ── Constants ──
-const CLAUDE_ALIASES = [
+const DEFAULT_CLAUDE_ALIASES = [
   "claude-opus-4-7",
   "claude-opus-4-20250514",
   "claude-opus-4-0",
@@ -99,6 +116,8 @@ const CLAUDE_ALIASES = [
   "claude-sonnet-3-5-v2",
   "claude-haiku-3-5",
 ];
+
+const DEFAULT_CODEX_MODELS = ["gpt-4o", "gpt-4o-mini", "o3", "o4-mini", "o3-pro", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"];
 
 const PROVIDER_PRESETS = [
   { id: "volcengine", name: "Volcano Engine", base_url: "https://ark.cn-beijing.volces.com/api/v3", auth_header: "Authorization", auth_scheme: "Bearer", logo: "V", color: "#ef4444", colorBg: "rgba(239,68,68,0.1)", shortUrl: "ark.cn-beijing.volces.com" },
@@ -274,6 +293,7 @@ function App() {
   const [logs, setLogs] = useState<RequestLog[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
+  const [codexHealth, setCodexHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -281,6 +301,12 @@ function App() {
   // Codex state
   const [codexRoutes, setCodexRoutes] = useState<CodexRoute[]>([]);
   const [codexStatus, setCodexStatus] = useState<CodexGatewayStatus | null>(null);
+  const [codexBinding, setCodexBinding] = useState<CodexBindingInfo | null>(null);
+  const [codexBindModel, setCodexBindModel] = useState("");
+  const [claudeAliases, setClaudeAliases] = useState<ModelAlias[]>([]);
+  const [codexAliases, setCodexAliases] = useState<ModelAlias[]>([]);
+  const [newClaudeAlias, setNewClaudeAlias] = useState("");
+  const [newCodexAlias, setNewCodexAlias] = useState("");
   const codexPort = 3457;
   const [cForm, setCForm] = useState({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "" });
   const [editingC, setEditingC] = useState<string | null>(null);
@@ -295,6 +321,10 @@ function App() {
 
   // Settings
   const [importPath, setImportPath] = useState("");
+  const claudeAliasOptions = claudeAliases.length > 0 ? claudeAliases.map(a => a.alias) : DEFAULT_CLAUDE_ALIASES;
+  const codexModelOptions = codexAliases.length > 0 ? codexAliases.map(a => a.alias) : DEFAULT_CODEX_MODELS;
+  const latestCodexLog = logs.find(l => codexRoutes.some(r => r.codex_model === l.claude_alias));
+  const latestClaudeLog = logs.find(l => routes.some(r => r.claude_alias === l.claude_alias));
 
   const flash = (msg: string, type: "success" | "error" = "success") => {
     if (type === "success") { setSuccess(msg); setError(null); }
@@ -304,7 +334,7 @@ function App() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [s, p, r, d, l, cfg, cs, cr] = await Promise.all([
+      const [s, p, r, d, l, cfg, cs, cr, cb, ca, cma] = await Promise.all([
         invoke<Status>("get_status"),
         invoke<Provider[]>("list_providers"),
         invoke<ModelRoute[]>("list_routes"),
@@ -313,6 +343,9 @@ function App() {
         invoke<Settings>("get_settings"),
         invoke<CodexGatewayStatus>("get_codex_status"),
         invoke<CodexRoute[]>("list_codex_routes"),
+        invoke<CodexBindingInfo>("get_codex_binding_info"),
+        invoke<ModelAlias[]>("list_model_aliases", { aliasType: "claude" }),
+        invoke<ModelAlias[]>("list_model_aliases", { aliasType: "codex" }),
       ]);
       setStatus(s);
       setProviders(p);
@@ -322,6 +355,9 @@ function App() {
       setSettings(cfg);
       setCodexStatus(cs);
       setCodexRoutes(cr);
+      setCodexBinding(cb);
+      setClaudeAliases(ca);
+      setCodexAliases(cma);
     } catch (e) {
       setError(String(e));
     }
@@ -329,10 +365,23 @@ function App() {
 
   useEffect(() => { void loadAll(); }, [loadAll]);
 
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      void loadAll();
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, [loadAll]);
+
+  useEffect(() => {
+    const firstModel = codexRoutes.find(r => r.enabled)?.codex_model ?? codexModelOptions[0] ?? "";
+    if (!codexBindModel && firstModel) setCodexBindModel(firstModel);
+  }, [codexBindModel, codexModelOptions, codexRoutes]);
+
   // ---- Actions ----
   const startGw = async () => { try { await invoke("start_gateway"); await loadAll(); flash("Gateway started"); } catch (e) { flash(String(e), "error"); } };
   const stopGw = async () => { try { await invoke("stop_gateway"); await loadAll(); flash("Gateway stopped"); } catch (e) { flash(String(e), "error"); } };
   const checkHealth = async () => { try { const h = await invoke<Health>("check_gateway_health"); setHealth(h); } catch (e) { flash(String(e), "error"); } };
+  const checkCodexHealth = async () => { try { const h = await invoke<Health>("check_codex_health"); setCodexHealth(h); } catch (e) { flash(String(e), "error"); } };
   const bindDesktop = async () => { try { await invoke("apply_binding"); await loadAll(); flash("Desktop bound"); } catch (e) { flash(String(e), "error"); } };
   const restoreDesktop = async () => { try { await invoke("restore_binding"); await loadAll(); flash("Desktop restored"); } catch (e) { flash(String(e), "error"); } };
 
@@ -399,6 +448,28 @@ function App() {
   // Codex actions
   const startCodex = async () => { try { await invoke("start_codex_gateway"); await loadAll(); flash("Codex gateway started"); } catch (e) { flash(String(e), "error"); } };
   const stopCodex = async () => { try { await invoke("stop_codex_gateway"); await loadAll(); flash("Codex gateway stopped"); } catch (e) { flash(String(e), "error"); } };
+  const bindCodexApp = async () => {
+    if (!codexBindModel) {
+      flash("Choose a default Codex model before binding", "error");
+      return;
+    }
+    try {
+      await invoke("start_codex_gateway");
+      const info = await invoke<CodexBindingInfo>("apply_codex_binding", { model: codexBindModel });
+      setCodexBinding(info);
+      await loadAll();
+      flash("Codex App bound to Gateway Switch");
+    } catch (e) { flash(String(e), "error"); }
+  };
+  const restoreCodexApp = async () => {
+    try {
+      const info = await invoke<CodexBindingInfo>("restore_codex_binding");
+      await invoke("stop_codex_gateway");
+      setCodexBinding(info);
+      await loadAll();
+      flash("Codex restored to OpenAI login");
+    } catch (e) { flash(String(e), "error"); }
+  };
   const saveCodexRoute = async () => {
     try {
       if (editingC) {
@@ -421,6 +492,42 @@ function App() {
     setCForm({ id: r.id, codex_model: r.codex_model, display_name: r.display_name, provider_id: r.provider_id, upstream_model: r.upstream_model });
   };
 
+  const addModelAlias = async (aliasType: "claude" | "codex") => {
+    const alias = (aliasType === "claude" ? newClaudeAlias : newCodexAlias).trim();
+    if (!alias) return;
+    try {
+      const updated = await invoke<ModelAlias[]>("create_model_alias", { payload: { alias, alias_type: aliasType } });
+      if (aliasType === "claude") {
+        setClaudeAliases(updated);
+        setNewClaudeAlias("");
+        setRForm(current => ({ ...current, claude_alias: alias }));
+      } else {
+        setCodexAliases(updated);
+        setNewCodexAlias("");
+        setCForm(current => ({ ...current, codex_model: alias }));
+      }
+      flash(`${aliasType === "claude" ? "Claude alias" : "Codex model"} added`);
+    } catch (e) { flash(String(e), "error"); }
+  };
+
+  const removeModelAlias = async (aliasType: "claude" | "codex", id: string, alias: string) => {
+    try {
+      const updated = await invoke<ModelAlias[]>("delete_model_alias", { id, aliasType });
+      if (aliasType === "claude") {
+        setClaudeAliases(updated);
+        if (rForm.claude_alias === alias) {
+          setRForm(current => ({ ...current, claude_alias: updated[0]?.alias ?? DEFAULT_CLAUDE_ALIASES[0] }));
+        }
+      } else {
+        setCodexAliases(updated);
+        if (cForm.codex_model === alias) {
+          setCForm(current => ({ ...current, codex_model: updated[0]?.alias ?? DEFAULT_CODEX_MODELS[0] }));
+        }
+      }
+      flash(`${aliasType === "claude" ? "Claude alias" : "Codex model"} removed`);
+    } catch (e) { flash(String(e), "error"); }
+  };
+
   // =====================================================
   //  SIDEBAR
   // =====================================================
@@ -432,12 +539,12 @@ function App() {
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.0.0</div>
+          <div className="brand-sub">v1.3.0</div>
         </div>
       </div>
 
       <div className="nav-group">
-        <div className="nav-group-label">Overview</div>
+        <div className="nav-group-label">Dashboard</div>
         <button className={`nav-item ${page === "dashboard" ? "active" : ""}`} onClick={() => setPage("dashboard")}>
           <IconGrid />
           Dashboard
@@ -445,15 +552,10 @@ function App() {
       </div>
 
       <div className="nav-group">
-        <div className="nav-group-label">Configuration</div>
-        <button className={`nav-item ${page === "providers" ? "active" : ""}`} onClick={() => setPage("providers")}>
-          <IconSun />
-          Providers
-          {providers.length > 0 && <span className="nav-badge">{providers.length}</span>}
-        </button>
-        <button className={`nav-item ${page === "routes" ? "active" : ""}`} onClick={() => setPage("routes")}>
+        <div className="nav-group-label">Products</div>
+        <button className={`nav-item ${page === "claude" ? "active" : ""}`} onClick={() => setPage("claude")}>
           <IconShuffle />
-          Routes
+          Claude
           {routes.length > 0 && <span className="nav-badge">{routes.length}</span>}
         </button>
         <button className={`nav-item ${page === "codex" ? "active" : ""}`} onClick={() => setPage("codex")}>
@@ -461,9 +563,14 @@ function App() {
           Codex
           {codexRoutes.length > 0 && <span className="nav-badge">{codexRoutes.length}</span>}
         </button>
-        <button className={`nav-item ${page === "desktop" ? "active" : ""}`} onClick={() => setPage("desktop")}>
-          <IconMonitor />
-          Desktop
+      </div>
+
+      <div className="nav-group">
+        <div className="nav-group-label">Shared</div>
+        <button className={`nav-item ${page === "providers" ? "active" : ""}`} onClick={() => setPage("providers")}>
+          <IconSun />
+          Providers
+          {providers.length > 0 && <span className="nav-badge">{providers.length}</span>}
         </button>
       </div>
 
@@ -480,8 +587,10 @@ function App() {
       </div>
 
       <div className="sidebar-footer">
-        <span className={`status-dot ${status?.gateway_running ? "on" : "off"}`} />
-        <span className="status-text">Gateway <strong>{status?.gateway_running ? "Running" : "Stopped"}</strong></span>
+        <span className={`status-dot ${status?.gateway_running || codexStatus?.running ? "on" : "off"}`} />
+        <span className="status-text">
+          Claude <strong>{status?.gateway_running ? "On" : "Off"}</strong> · Codex <strong>{codexStatus?.running ? "On" : "Off"}</strong>
+        </span>
       </div>
     </aside>
   );
@@ -493,7 +602,7 @@ function App() {
     <div>
       <div className="page-header">
         <h1>Dashboard</h1>
-        <p>Gateway overview and quick controls</p>
+        <p>Product gateway overview and quick controls</p>
       </div>
 
       {/* KPI Row */}
@@ -503,7 +612,7 @@ function App() {
             <IconPulse />
           </div>
           <div className="kpi-info">
-            <div className="kpi-label">Gateway</div>
+            <div className="kpi-label">Claude Gateway</div>
             {status?.gateway_running ? (
               <span className="kpi-badge green"><span className="dot" /> Running</span>
             ) : (
@@ -516,8 +625,21 @@ function App() {
             <IconMonitor />
           </div>
           <div className="kpi-info">
-            <div className="kpi-label">Desktop</div>
-            {desktop?.managed ? (
+            <div className="kpi-label">Codex Gateway</div>
+            {codexStatus?.running ? (
+              <span className="kpi-badge green"><span className="dot" /> Running</span>
+            ) : (
+              <span className="kpi-badge red"><span className="dot" /> Stopped</span>
+            )}
+          </div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-icon blue">
+            <IconMonitor />
+          </div>
+          <div className="kpi-info">
+            <div className="kpi-label">Bindings</div>
+            {desktop?.managed || codexBinding?.managed ? (
               <span className="kpi-badge blue"><span className="dot" /> Managed</span>
             ) : (
               <span className="kpi-badge muted"><span className="dot" /> Unmanaged</span>
@@ -539,39 +661,35 @@ function App() {
           </div>
           <div className="kpi-info">
             <div className="kpi-label">Routes</div>
-            <div className="kpi-value">{routes.length}</div>
+            <div className="kpi-value">{routes.length + codexRoutes.length}</div>
           </div>
         </div>
       </div>
 
-      {/* Two column: Quick Actions + Active Routes */}
       <div className="two-col">
-        {/* Quick Actions */}
         <div className="card">
-          <div className="card-title">Quick Actions</div>
+          <div className="card-title">Claude Control</div>
+          <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+            <span className="info-key">Gateway</span>
+            <span className="info-val">
+              <span className={`badge ${status?.gateway_running ? "badge-green" : "badge-gray"}`}>
+                {status?.gateway_running ? "Running" : "Stopped"}
+              </span>
+            </span>
+            <span className="info-key">Binding</span>
+            <span className="info-val">{desktop?.managed ? "Claude Desktop uses Gateway Switch" : "Claude Desktop is unmanaged"}</span>
+            <span className="info-key">Last Call</span>
+            <span className="info-val">{latestClaudeLog ? `${latestClaudeLog.upstream_model} via ${latestClaudeLog.provider_id}` : "No traffic yet"}</span>
+          </div>
           <div className="qa-buttons">
-            {status?.gateway_running ? (
-              <button className="btn btn-danger" onClick={stopGw}>
-                <IconStop /> Stop Gateway
-              </button>
-            ) : (
-              <button className="btn btn-primary" onClick={startGw}>
-                <IconPlay /> Start Gateway
-              </button>
-            )}
-            <button className="btn" onClick={checkHealth}>
-              <IconZap /> Health Check
-            </button>
-            <button className="btn" onClick={() => void loadAll()}>
-              <IconRefresh /> Refresh
-            </button>
+            <button className="btn" onClick={checkHealth}><IconZap /> Check Health</button>
+            <button className="btn" onClick={() => void loadAll()}><IconRefresh /> Refresh</button>
           </div>
 
-          {/* Health bar */}
           {health && (
             <>
               <div className="health-row">
-                <span className="health-label">Health</span>
+                <span className="health-label">Claude</span>
                 <div className="health-bar-track">
                   <div className={`health-bar-fill ${health.ok ? "" : "err"}`} style={{ width: health.ok ? "100%" : "0%" }} />
                 </div>
@@ -588,50 +706,35 @@ function App() {
               </div>
             </>
           )}
-
-          {/* Info grid */}
-          <div className="info-grid">
-            <span className="info-key">Address</span>
-            <span className="info-val">{status?.gateway_port ? `127.0.0.1:${status.gateway_port}` : "Not running"}</span>
-            <span className="info-key">Port</span>
-            <span className="info-val">{status?.gateway_port ?? 3456}</span>
-            <span className="info-key">Auth Token</span>
-            <span className="info-val">{settings?.auth_token ? settings.auth_token.slice(0, 12) + "...••••" : "---"}</span>
-          </div>
         </div>
 
-        {/* Active Routes */}
         <div className="card">
-          <div className="card-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            Active Routes
-            <button className="btn" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => setPage("routes")}>
-              View All <IconArrowRight />
-            </button>
+          <div className="card-title">Codex Control</div>
+          <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+            <span className="info-key">Gateway</span>
+            <span className="info-val">
+              <span className={`badge ${codexStatus?.running ? "badge-green" : "badge-gray"}`}>
+                {codexStatus?.running ? "Running" : "Stopped"}
+              </span>
+            </span>
+            <span className="info-key">Binding</span>
+            <span className="info-val">{codexBinding?.managed ? `Codex App uses ${codexBinding.model ?? "Gateway Switch"}` : "Codex App uses OpenAI login"}</span>
+            <span className="info-key">Last Call</span>
+            <span className="info-val">{latestCodexLog ? `${latestCodexLog.upstream_model} via ${latestCodexLog.provider_id}` : "No traffic yet"}</span>
           </div>
-          <div className="route-list">
-            {routes.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">--</div>
-                <h3>No routes configured</h3>
-                <p>Go to Routes page to add one.</p>
+          <div className="qa-buttons">
+            <button className="btn" onClick={checkCodexHealth}><IconZap /> Check Health</button>
+            <button className="btn" onClick={() => void loadAll()}><IconRefresh /> Refresh</button>
+          </div>
+          {codexHealth && (
+            <div className="health-row">
+              <span className="health-label">Codex</span>
+              <div className="health-bar-track">
+                <div className={`health-bar-fill ${codexHealth.ok ? "" : "err"}`} style={{ width: codexHealth.ok ? "100%" : "0%" }} />
               </div>
-            ) : (
-              routes.slice(0, 6).map(r => (
-                <div key={r.id} className="route-item">
-                  <div className={`route-icon ${getModelFamily(r.claude_alias)}`}>
-                    {getModelAbbrev(r.claude_alias)}
-                  </div>
-                  <div className="route-info">
-                    <div className="route-name">{r.claude_alias}</div>
-                    <div className="route-path">{r.upstream_model} via {r.provider_id}</div>
-                  </div>
-                  <span className={`route-status ${r.enabled ? "active" : "disabled"}`}>
-                    {r.enabled ? "Active" : "Disabled"}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
+              <span className={`health-text ${codexHealth.ok ? "ok" : "err"}`}>{codexHealth.message}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -791,11 +894,73 @@ function App() {
   // =====================================================
   //  ROUTES PAGE
   // =====================================================
-  const RoutesPage = () => (
+  const AliasManager = (aliasType: "claude" | "codex") => {
+    const aliases = aliasType === "claude" ? claudeAliases : codexAliases;
+    const value = aliasType === "claude" ? newClaudeAlias : newCodexAlias;
+    const setValue = aliasType === "claude" ? setNewClaudeAlias : setNewCodexAlias;
+    const title = aliasType === "claude" ? "Claude Aliases" : "Codex Models";
+    const placeholder = aliasType === "claude" ? "e.g. claude-sonnet-4-7" : "e.g. gpt-5.1-codex";
+
+    return (
+      <div className="alias-manager">
+        <div className="alias-manager-head">
+          <div>
+            <div className="card-title">{title}</div>
+            <p>{aliasType === "claude" ? "Maintain the aliases exposed to Claude Desktop and model routes." : "Maintain the model names Codex can request from this gateway."}</p>
+          </div>
+          <div className="alias-add">
+            <input
+              value={value}
+              onChange={e => setValue(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") void addModelAlias(aliasType); }}
+              placeholder={placeholder}
+            />
+            <button className="btn" onClick={() => void addModelAlias(aliasType)}><IconPlus /> Add</button>
+          </div>
+        </div>
+        <div className="alias-chip-list">
+          {aliases.map(a => (
+            <span key={a.id} className="alias-chip">
+              {a.alias}
+              <button aria-label={`Delete ${a.alias}`} onClick={() => void removeModelAlias(aliasType, a.id, a.alias)}><IconX /></button>
+            </span>
+          ))}
+          {aliases.length === 0 && <span className="alias-empty">Default aliases will be used until you add a custom one.</span>}
+        </div>
+      </div>
+    );
+  };
+
+  const ClaudePage = () => (
     <div>
       <div className="page-header">
-        <h1>Model Routes</h1>
-        <p>Map Claude model aliases to upstream provider models</p>
+        <h1>Claude</h1>
+        <p>Configure Claude model routes and Claude Desktop binding</p>
+      </div>
+
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-title">Claude Gateway Status</div>
+        <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+          <span className="info-key">Status</span>
+          <span className="info-val">
+            <span className={`badge ${status?.gateway_running ? "badge-green" : "badge-gray"}`}>
+              {status?.gateway_running ? "Running" : "Stopped"}
+            </span>
+          </span>
+          <span className="info-key">Port</span>
+          <span className="info-val">{status?.gateway_port ?? settings?.listen_port ?? 3456}</span>
+          <span className="info-key">Endpoint</span>
+          <span className="info-val">http://127.0.0.1:{status?.gateway_port ?? settings?.listen_port ?? 3456}/v1/messages</span>
+        </div>
+        <div className="qa-buttons" style={{ marginTop: 16 }}>
+          {status?.gateway_running ? (
+            <button className="btn btn-danger" onClick={stopGw}><IconStop /> Stop</button>
+          ) : (
+            <button className="btn btn-primary" onClick={startGw}><IconPlay /> Start</button>
+          )}
+          <button className="btn" onClick={checkHealth}><IconZap /> Check Health</button>
+          <button className="btn" onClick={() => void loadAll()}><IconRefresh /> Refresh</button>
+        </div>
       </div>
 
       {/* Add/Edit form */}
@@ -809,7 +974,7 @@ function App() {
           <div className="form-field">
             <label>Claude Alias</label>
             <select value={rForm.claude_alias} onChange={e => setRForm({ ...rForm, claude_alias: e.target.value })}>
-              {CLAUDE_ALIASES.map(a => <option key={a} value={a}>{a}</option>)}
+              {claudeAliasOptions.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
           </div>
           <div className="form-field">
@@ -840,6 +1005,8 @@ function App() {
           )}
         </div>
       </div>
+
+      {AliasManager("claude")}
 
       {/* Route cards */}
       <div className="section-label">Route Cards</div>
@@ -916,19 +1083,20 @@ function App() {
           </tbody>
         </table>
       </div>
+
+      <div className="section-label">Claude Desktop</div>
+      {DesktopPage()}
     </div>
   );
 
   // =====================================================
   //  CODEX PAGE
   // =====================================================
-  const CODEX_MODELS = ["gpt-4o", "gpt-4o-mini", "o3", "o4-mini", "o3-pro", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"];
-
   const CodexPage = () => (
     <div>
       <div className="page-header">
         <h1>Codex Gateway</h1>
-        <p>OpenAI Responses API → Chat Completions API converter for Codex CLI</p>
+        <p>OpenAI Responses API to Chat Completions API converter for Codex App and Codex CLI</p>
       </div>
 
       {/* Status + Quick Actions */}
@@ -958,36 +1126,102 @@ function App() {
         </div>
 
         <div className="card">
-          <div className="card-title">Usage Instructions</div>
-          <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 12 }}>
-            Configure Codex CLI to use this gateway:
-          </p>
-          <div style={{ background: "#fafaf9", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: 12, fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.8 }}>
-            <div style={{ color: "var(--muted)" }}># Set environment variables</div>
-            <div>export OPENAI_BASE_URL=http://127.0.0.1:{codexPort}/v1</div>
-            <div>export OPENAI_API_KEY={settings?.auth_token || "gateway-switch-token"}</div>
-            <div style={{ marginTop: 8, color: "var(--muted)" }}># Then use Codex normally</div>
-            <div>codex "your prompt here"</div>
+          <div className="card-title">Verify Real Model</div>
+          <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+            <span className="info-key">Last Codex Model</span>
+            <span className="info-val">{latestCodexLog?.claude_alias ?? "No Codex request yet"}</span>
+            <span className="info-key">Provider</span>
+            <span className="info-val">{latestCodexLog?.provider_id ?? "-"}</span>
+            <span className="info-key">Real Upstream</span>
+            <span className="info-val">{latestCodexLog?.upstream_model ?? "-"}</span>
+            <span className="info-key">Result</span>
+            <span className="info-val">
+              {latestCodexLog ? `${latestCodexLog.status_code ?? "pending"} · ${latestCodexLog.duration_ms ?? "-"}ms` : "-"}
+            </span>
           </div>
-          <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 10 }}>
-            Maps Codex model names (gpt-4o, o3, etc.) to your configured upstream providers.
-          </p>
+          <div className="qa-buttons" style={{ marginTop: 16 }}>
+            <button className="btn" onClick={() => setPage("logs")}><IconSearch /> Open Logs</button>
+            <button className="btn" onClick={() => void loadAll()}><IconRefresh /> Refresh</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-title">Codex App Binding</div>
+        <div className="binding-panel">
+          <div className="binding-state">
+            <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+              <span className="info-key">Config</span>
+              <span className="info-val">{codexBinding?.config_path ?? "~/.codex/config.toml"}</span>
+              <span className="info-key">Binding</span>
+              <span className="info-val">
+                <span className={`badge ${codexBinding?.managed ? "badge-green" : "badge-gray"}`}>
+                  {codexBinding?.managed ? "Managed by Gateway Switch" : "Not bound"}
+                </span>
+              </span>
+              <span className="info-key">Provider</span>
+              <span className="info-val">{codexBinding?.model_provider ?? "Default Codex provider"}</span>
+              <span className="info-key">Default Model</span>
+              <span className="info-val">{codexBinding?.model ?? "Not set"}</span>
+            </div>
+          </div>
+          <div className="binding-actions">
+            <label>Default model for Codex App</label>
+            <select value={codexBindModel} onChange={e => setCodexBindModel(e.target.value)}>
+              {Array.from(new Set([...codexRoutes.map(r => r.codex_model), ...codexModelOptions])).map(model => (
+                <option key={model} value={model}>{model}</option>
+              ))}
+            </select>
+            <p>Bind writes Gateway Switch into `~/.codex/config.toml` and forces API-key mode for the local gateway. Restart Codex App after binding.</p>
+            <div className="qa-buttons" style={{ margin: 0 }}>
+              <button className="btn btn-primary" onClick={bindCodexApp}><IconLink /> Start & Bind Codex App</button>
+              <button className="btn" onClick={restoreCodexApp} disabled={!codexBinding?.managed && !codexBinding?.backup_path}><IconUnlink /> Restore OpenAI Login</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-title">Context and Reasoning Notes</div>
+        <div className="note-grid">
+          <div>
+            <strong>Reply speed</strong>
+            <p>Gateway Switch converts protocol shape; it does not add or remove a model's native reasoning ability. If the upstream model is fast, or does not expose reasoning tokens through Chat Completions, the visible response can be very quick.</p>
+          </div>
+          <div>
+            <strong>Project history</strong>
+            <p>Binding preserves `~/.codex/config.toml` project entries. Existing Codex conversations may still be separated by Codex's own account/provider state, so switching providers can show a different conversation list even when local project trust remains intact.</p>
+          </div>
         </div>
       </div>
 
       {/* Add/Edit route form */}
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-title">{editingC ? "Edit Codex Route" : "Add Codex Route"}</div>
+        <div className="route-explainer">
+          <div className="route-explainer-copy">
+            <strong>Codex Model must match the model used by Codex CLI.</strong>
+            <span>If you do not need a disguised name, set Codex Model and Upstream Model to the same third-party model name.</span>
+          </div>
+          <div className="route-flow">
+            <span>codex -m <b>{cForm.codex_model || "model-name"}</b></span>
+            <IconArrowRight />
+            <span>{providers.find(p => p.id === cForm.provider_id)?.name || "Provider"}</span>
+            <IconArrowRight />
+            <span><b>{cForm.upstream_model || "upstream-model"}</b></span>
+          </div>
+        </div>
         <div className="form-row">
           <div className="form-field">
             <label>Route ID</label>
             <input value={cForm.id} disabled={!!editingC} onChange={e => setCForm({ ...cForm, id: e.target.value })} placeholder="e.g. gpt4o-deepseek" />
           </div>
           <div className="form-field">
-            <label>Codex Model</label>
+            <label>Codex Model (requested by Codex)</label>
             <select value={cForm.codex_model} onChange={e => setCForm({ ...cForm, codex_model: e.target.value })}>
-              {CODEX_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+              {codexModelOptions.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
+            <span className="field-hint">This is the model name used in `codex -m ...`.</span>
           </div>
           <div className="form-field">
             <label>Display Name</label>
@@ -1001,8 +1235,9 @@ function App() {
             </select>
           </div>
           <div className="form-field">
-            <label>Upstream Model</label>
+            <label>Upstream Model (real provider model)</label>
             <input value={cForm.upstream_model} onChange={e => setCForm({ ...cForm, upstream_model: e.target.value })} placeholder="e.g. deepseek-chat" />
+            <span className="field-hint">This is the actual model name sent to the third-party API.</span>
           </div>
         </div>
         <div className="qa-buttons" style={{ marginTop: 16 }}>
@@ -1017,6 +1252,8 @@ function App() {
           )}
         </div>
       </div>
+
+      {AliasManager("codex")}
 
       {/* Route cards */}
       <div className="section-label">Active Codex Routes</div>
@@ -1056,11 +1293,6 @@ function App() {
   // =====================================================
   const DesktopPage = () => (
     <div>
-      <div className="page-header">
-        <h1>Claude Desktop</h1>
-        <p>Manage Claude Desktop binding and model exposure</p>
-      </div>
-
       <div className="two-col">
         {/* Binding Status */}
         <div className="card">
@@ -1163,9 +1395,9 @@ function App() {
             <thead>
               <tr>
                 <th>Time</th>
-                <th>Alias</th>
+                <th>Requested Model</th>
                 <th>Provider</th>
-                <th>Upstream</th>
+                <th>Real Upstream</th>
                 <th>Mode</th>
                 <th>Status</th>
                 <th>Duration</th>
@@ -1304,21 +1536,20 @@ function App() {
   // =====================================================
   const Content = () => {
     switch (page) {
-      case "dashboard": return <DashboardPage />;
-      case "providers": return <ProvidersPage />;
-      case "routes": return <RoutesPage />;
-      case "codex": return <CodexPage />;
-      case "desktop": return <DesktopPage />;
-      case "logs": return <LogsPage />;
-      case "settings": return <SettingsPage />;
+      case "dashboard": return DashboardPage();
+      case "claude": return ClaudePage();
+      case "codex": return CodexPage();
+      case "providers": return ProvidersPage();
+      case "logs": return LogsPage();
+      case "settings": return SettingsPage();
     }
   };
 
   return (
     <div className="app-layout">
-      <Sidebar />
+      {Sidebar()}
       <main className="main-content">
-        <Content />
+        {Content()}
         {/* Toast notifications - fixed position, non-blocking */}
         {error && (
           <div className="toast toast-error">

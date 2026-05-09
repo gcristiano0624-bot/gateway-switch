@@ -67,7 +67,44 @@ pub fn initialize(db: &Path) -> Result<(), String> {
         INSERT INTO codex_profile (id, listen_host, listen_port, auth_token)
         VALUES ('default', '127.0.0.1', 3457, 'gateway-switch-token')
         ON CONFLICT(id) DO NOTHING;
+        CREATE TABLE IF NOT EXISTS model_aliases (
+            id TEXT PRIMARY KEY,
+            alias TEXT NOT NULL,
+            alias_type TEXT NOT NULL CHECK (alias_type IN ('claude', 'codex')),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
     "#).map_err(|e| e.to_string())?;
+    // Seed default claude aliases if table is empty
+    {
+        let conn = open(db)?;
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM model_aliases WHERE alias_type='claude'", [], |r| r.get(0)).unwrap_or(0);
+        if count == 0 {
+            let defaults = [
+                "claude-opus-4-7", "claude-opus-4-20250514", "claude-opus-4-0",
+                "claude-sonnet-4-6", "claude-sonnet-4-20250514", "claude-sonnet-4-5",
+                "claude-sonnet-4-0", "claude-haiku-4-5", "claude-haiku-4-20250414",
+                "claude-sonnet-3-7", "claude-sonnet-3-5-v2", "claude-haiku-3-5",
+            ];
+            for alias in defaults {
+                let id = uuid::Uuid::new_v4().to_string();
+                let _ = conn.execute(
+                    "INSERT INTO model_aliases (id, alias, alias_type) VALUES (?1, ?2, 'claude')",
+                    params![id, alias],
+                );
+            }
+        }
+        let codex_count: i64 = conn.query_row("SELECT COUNT(*) FROM model_aliases WHERE alias_type='codex'", [], |r| r.get(0)).unwrap_or(0);
+        if codex_count == 0 {
+            let defaults = ["gpt-4o", "gpt-4o-mini", "o3", "o4-mini", "o3-pro", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"];
+            for alias in defaults {
+                let id = uuid::Uuid::new_v4().to_string();
+                let _ = conn.execute(
+                    "INSERT INTO model_aliases (id, alias, alias_type) VALUES (?1, ?2, 'codex')",
+                    params![id, alias],
+                );
+            }
+        }
+    }
     Ok(())
 }
 
@@ -312,5 +349,37 @@ pub fn save_codex_profile(db: &Path, p: &GatewayProfile) -> Result<(), String> {
         "UPDATE codex_profile SET listen_host=?1, listen_port=?2, auth_token=?3 WHERE id='default'",
         params![p.listen_host, p.listen_port, p.auth_token],
     ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ---- Model Aliases ----
+
+pub fn list_model_aliases(db: &Path, alias_type: &str) -> Result<Vec<ModelAlias>, String> {
+    let conn = open(db)?;
+    let mut stmt = conn.prepare(
+        "SELECT id, alias, alias_type, created_at FROM model_aliases WHERE alias_type = ?1 ORDER BY created_at ASC"
+    ).map_err(|e| e.to_string())?;
+    let rows = stmt.query_map(params![alias_type], |r| Ok(ModelAlias {
+        id: r.get(0)?,
+        alias: r.get(1)?,
+        alias_type: r.get(2)?,
+        created_at: r.get(3)?,
+    })).map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+pub fn create_model_alias(db: &Path, a: &CreateModelAlias) -> Result<(), String> {
+    let conn = open(db)?;
+    let id = uuid::Uuid::new_v4().to_string();
+    conn.execute(
+        "INSERT INTO model_aliases (id, alias, alias_type) VALUES (?1, ?2, ?3)",
+        params![id, a.alias, a.alias_type],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn delete_model_alias(db: &Path, id: &str) -> Result<(), String> {
+    let conn = open(db)?;
+    conn.execute("DELETE FROM model_aliases WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
     Ok(())
 }

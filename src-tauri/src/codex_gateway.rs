@@ -148,8 +148,8 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
     // Convert Responses API request → Chat Completions request
     let chat_req = convert_request(&body, &route.upstream_model);
 
-    // Forward to upstream provider's /v1/chat/completions
-    let resp = ctx.client.post(format!("{}/v1/chat/completions", route.base_url))
+    // Forward to upstream provider's Chat Completions endpoint.
+    let resp = ctx.client.post(upstream_url(&route.base_url, "chat/completions"))
         .headers(to_headers(&route.headers)?)
         .json(&chat_req)
         .send().await.map_err(|e| {
@@ -165,6 +165,16 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
     let status = resp.status();
 
     if !is_stream {
+        if !status.is_success() {
+            let text = resp.text().await.unwrap_or_default();
+            let _ = database::insert_log(&ctx.db, &RequestLog {
+                request_id: req_id, claude_alias: route.display.clone(),
+                provider_id: route.provider_id.clone(), upstream_model: route.upstream_model.clone(),
+                status_code: Some(status.as_u16()), duration_ms: Some(started.elapsed().as_millis() as u64),
+                is_stream: false, error_summary: Some(text.clone()), created_at: String::new(),
+            });
+            return Err(upstream_status_err(status, text));
+        }
         let chat_response = resp.json::<Value>().await.map_err(upstream_err)?;
         let responses_response = convert_sync_response(&chat_response, &route.display, &resp_id, &msg_id);
         let _ = database::insert_log(&ctx.db, &RequestLog {
@@ -176,6 +186,17 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
         return Ok((status, Json(responses_response)).into_response());
     }
 
+    if !status.is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        let _ = database::insert_log(&ctx.db, &RequestLog {
+            request_id: req_id, claude_alias: route.display.clone(),
+            provider_id: route.provider_id.clone(), upstream_model: route.upstream_model.clone(),
+            status_code: Some(status.as_u16()), duration_ms: Some(started.elapsed().as_millis() as u64),
+            is_stream: true, error_summary: Some(text.clone()), created_at: String::new(),
+        });
+        return Err(upstream_status_err(status, text));
+    }
+
     // Streaming: convert Chat Completions SSE → Responses API SSE
     let display = route.display.clone();
     let provider_id = route.provider_id.clone();
@@ -184,6 +205,7 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
     let body_stream = resp.bytes_stream();
 
     let sse = stream! {
+        let mut seq: i64 = 0;
         // 1. Emit response.created
         let created_event = json!({
             "type": "response.created",
@@ -193,9 +215,12 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
                 "created_at": chrono::Utc::now().timestamp(),
                 "model": display,
                 "output": [],
-                "status": "in_progress"
-            }
+                "status": "in_progress",
+                "usage": null
+            },
+            "sequence_number": seq
         });
+        seq += 1;
         yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!(
             "event: response.created\ndata: {}\n\n", serde_json::to_string(&created_event).unwrap()
         )));
@@ -210,10 +235,29 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
                 "role": "assistant",
                 "content": [],
                 "status": "in_progress"
-            }
+            },
+            "sequence_number": seq
         });
+        seq += 1;
         yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!(
             "event: response.output_item.added\ndata: {}\n\n", serde_json::to_string(&item_added).unwrap()
+        )));
+
+        let part_added = json!({
+            "type": "response.content_part.added",
+            "item_id": msg_id,
+            "output_index": 0,
+            "content_index": 0,
+            "part": {
+                "type": "output_text",
+                "text": "",
+                "annotations": []
+            },
+            "sequence_number": seq
+        });
+        seq += 1;
+        yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!(
+            "event: response.content_part.added\ndata: {}\n\n", serde_json::to_string(&part_added).unwrap()
         )));
 
         // 3. Stream content deltas from Chat Completions format
@@ -230,21 +274,71 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
                         if let Some(text) = extract_chat_delta(&line) {
                             full_text.push_str(&text);
                             let delta_event = json!({
-                                "type": "response.content_part.delta",
+                                "type": "response.output_text.delta",
+                                "item_id": msg_id,
                                 "output_index": 0,
                                 "content_index": 0,
                                 "delta": text,
+                                "sequence_number": seq
                             });
+                            seq += 1;
                             yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!(
-                                "event: response.content_part.delta\ndata: {}\n\n",
+                                "event: response.output_text.delta\ndata: {}\n\n",
                                 serde_json::to_string(&delta_event).unwrap()
                             )));
                         }
                     }
                 }
-                Err(_) => break,
+                Err(e) => {
+                    let text = format!("\n\n[Gateway stream error: {e}]");
+                    full_text.push_str(&text);
+                    let delta_event = json!({
+                        "type": "response.output_text.delta",
+                        "item_id": msg_id,
+                        "output_index": 0,
+                        "content_index": 0,
+                        "delta": text,
+                        "sequence_number": seq
+                    });
+                    seq += 1;
+                    yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!(
+                        "event: response.output_text.delta\ndata: {}\n\n",
+                        serde_json::to_string(&delta_event).unwrap()
+                    )));
+                    break;
+                },
             }
         }
+
+        let text_done = json!({
+            "type": "response.output_text.done",
+            "item_id": msg_id,
+            "output_index": 0,
+            "content_index": 0,
+            "text": full_text,
+            "sequence_number": seq
+        });
+        seq += 1;
+        yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!(
+            "event: response.output_text.done\ndata: {}\n\n", serde_json::to_string(&text_done).unwrap()
+        )));
+
+        let part_done = json!({
+            "type": "response.content_part.done",
+            "item_id": msg_id,
+            "output_index": 0,
+            "content_index": 0,
+            "part": {
+                "type": "output_text",
+                "text": full_text,
+                "annotations": []
+            },
+            "sequence_number": seq
+        });
+        seq += 1;
+        yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!(
+            "event: response.content_part.done\ndata: {}\n\n", serde_json::to_string(&part_done).unwrap()
+        )));
 
         // 4. Emit response.output_item.done
         let item_done = json!({
@@ -260,11 +354,16 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
                     "annotations": []
                 }],
                 "status": "completed"
-            }
+            },
+            "sequence_number": seq
         });
+        seq += 1;
         yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!(
             "event: response.output_item.done\ndata: {}\n\n", serde_json::to_string(&item_done).unwrap()
         )));
+
+        let output_tokens = estimate_tokens(&full_text);
+        let usage = response_usage(0, output_tokens);
 
         // 5. Emit response.completed
         let completed = json!({
@@ -272,6 +371,7 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
             "response": {
                 "id": resp_id,
                 "object": "response",
+                "created_at": chrono::Utc::now().timestamp(),
                 "model": display,
                 "output": [{
                     "type": "message",
@@ -285,11 +385,9 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
                     "status": "completed"
                 }],
                 "status": "completed",
-                "usage": {
-                    "input_tokens": 0,
-                    "output_tokens": 0
-                }
-            }
+                "usage": usage
+            },
+            "sequence_number": seq
         });
         yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!(
             "event: response.completed\ndata: {}\n\n", serde_json::to_string(&completed).unwrap()
@@ -443,6 +541,11 @@ fn convert_sync_response(chat: &Value, model: &str, resp_id: &str, msg_id: &str)
     let content = chat["choices"][0]["message"]["content"].as_str().unwrap_or("");
     let input_tokens = chat["usage"]["prompt_tokens"].as_u64().unwrap_or(0);
     let output_tokens = chat["usage"]["completion_tokens"].as_u64().unwrap_or(0);
+    let total_tokens = chat["usage"]["total_tokens"].as_u64().unwrap_or(input_tokens + output_tokens);
+    let usage = response_usage(input_tokens, output_tokens).as_object().cloned().map(|mut usage| {
+        usage.insert("total_tokens".into(), json!(total_tokens));
+        Value::Object(usage)
+    }).unwrap_or_else(|| response_usage(input_tokens, output_tokens));
 
     json!({
         "id": resp_id,
@@ -460,20 +563,69 @@ fn convert_sync_response(chat: &Value, model: &str, resp_id: &str, msg_id: &str)
             }],
             "status": "completed"
         }],
-        "usage": {
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens
-        },
+        "usage": usage,
         "status": "completed"
     })
 }
 
+fn response_usage(input_tokens: u64, output_tokens: u64) -> Value {
+    json!({
+        "input_tokens": input_tokens,
+        "input_tokens_details": {
+            "cached_tokens": 0
+        },
+        "output_tokens": output_tokens,
+        "output_tokens_details": {
+            "reasoning_tokens": 0
+        },
+        "total_tokens": input_tokens + output_tokens
+    })
+}
+
+fn estimate_tokens(text: &str) -> u64 {
+    let words = text.split_whitespace().count() as u64;
+    words.max((text.chars().count() as u64 + 3) / 4)
+}
+
 fn extract_chat_delta(line: &str) -> Option<String> {
-    if !line.starts_with("data: ") { return None; }
-    let payload = line[6..].trim();
+    if !line.starts_with("data:") { return None; }
+    let payload = line[5..].trim();
     if payload.is_empty() || payload == "[DONE]" { return None; }
     let v: Value = serde_json::from_str(payload).ok()?;
-    v["choices"][0]["delta"]["content"].as_str().map(String::from)
+    if let Some(message) = v.get("error")
+        .and_then(|e| e.get("message"))
+        .and_then(|m| m.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        return Some(format!("\n\n[Upstream error: {message}]"));
+    }
+
+    let delta = &v["choices"][0]["delta"];
+    extract_text_from_delta(delta).or_else(|| {
+        v["choices"][0]["message"]["content"].as_str().map(String::from)
+    })
+}
+
+fn extract_text_from_delta(delta: &Value) -> Option<String> {
+    for key in ["content", "reasoning_content", "reasoning", "text"] {
+        if let Some(text) = delta.get(key).and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+            return Some(text.to_string());
+        }
+    }
+
+    delta.get("content")
+        .and_then(|v| v.as_array())
+        .map(|parts| {
+            parts.iter()
+                .filter_map(|part| {
+                    part.get("text")
+                        .or_else(|| part.get("content"))
+                        .and_then(|v| v.as_str())
+                })
+                .collect::<Vec<_>>()
+                .join("")
+        })
+        .filter(|text| !text.is_empty())
 }
 
 // ── Shared utilities ──
@@ -505,6 +657,16 @@ fn auth_headers(p: &Provider) -> Vec<(String, String)> {
         (p.auth_header.clone(), val),
         ("content-type".into(), "application/json".into()),
     ]
+}
+
+fn upstream_url(base_url: &str, endpoint: &str) -> String {
+    let base = base_url.trim_end_matches('/');
+    let endpoint = endpoint.trim_start_matches('/');
+    if base.ends_with("/v1") {
+        format!("{base}/{endpoint}")
+    } else {
+        format!("{base}/v1/{endpoint}")
+    }
 }
 
 fn verify_auth(headers: &HeaderMap, ctx: &Ctx) -> Result<(), Response> {
@@ -542,12 +704,32 @@ fn upstream_err<E: std::fmt::Display>(e: E) -> Response {
     (StatusCode::BAD_GATEWAY, Json(json!({"error":{"message":e.to_string(),"type":"upstream_error"}}))).into_response()
 }
 
+fn upstream_status_err(status: reqwest::StatusCode, body: String) -> Response {
+    let message = serde_json::from_str::<Value>(&body)
+        .ok()
+        .and_then(|v| {
+            v.get("error")
+                .and_then(|e| e.get("message"))
+                .and_then(|m| m.as_str())
+                .map(String::from)
+                .or_else(|| v.get("message").and_then(|m| m.as_str()).map(String::from))
+        })
+        .unwrap_or_else(|| {
+            if body.trim().is_empty() {
+                format!("Upstream returned HTTP {}", status.as_u16())
+            } else {
+                body
+            }
+        });
+    (StatusCode::BAD_GATEWAY, Json(json!({"error":{"message":message,"type":"upstream_error","status":status.as_u16()}}))).into_response()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{body::to_bytes, http, Router, routing::post};
+    use axum::{body::to_bytes, http};
     use tower::ServiceExt;
-    use crate::{database, models::{CreateProvider, CreateModelRoute}};
+    use crate::{database, models::CreateProvider};
 
     #[tokio::test]
     async fn test_codex_models_auth() {
@@ -618,6 +800,31 @@ mod tests {
         assert_eq!(resp["output"][0]["content"][0]["text"], "Hi there!");
         assert_eq!(resp["usage"]["input_tokens"], 10);
         assert_eq!(resp["usage"]["output_tokens"], 5);
+        assert_eq!(resp["usage"]["total_tokens"], 15);
         assert_eq!(resp["status"], "completed");
+    }
+
+    #[test]
+    fn test_extracts_provider_delta_variants() {
+        let content = r#"data: {"choices":[{"delta":{"content":"hello"}}]}"#;
+        let reasoning = r#"data: {"choices":[{"delta":{"reasoning_content":"thinking"}}]}"#;
+        let text = r#"data: {"choices":[{"delta":{"text":"plain"}}]}"#;
+
+        assert_eq!(extract_chat_delta(content).as_deref(), Some("hello"));
+        assert_eq!(extract_chat_delta(reasoning).as_deref(), Some("thinking"));
+        assert_eq!(extract_chat_delta(text).as_deref(), Some("plain"));
+        assert_eq!(extract_chat_delta("data: [DONE]"), None);
+    }
+
+    #[test]
+    fn test_upstream_url_accepts_root_or_v1_base() {
+        assert_eq!(
+            upstream_url("https://api.example.com", "chat/completions"),
+            "https://api.example.com/v1/chat/completions"
+        );
+        assert_eq!(
+            upstream_url("https://api.example.com/v1", "chat/completions"),
+            "https://api.example.com/v1/chat/completions"
+        );
     }
 }

@@ -1,7 +1,20 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
+pub struct ModelAlias {
+    pub id: String,
+    pub alias: String,
+    pub alias_type: String,  // "claude" or "codex"
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateModelAlias {
+    pub alias: String,
+    pub alias_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     pub auto_start_gateway: bool,
     pub auto_takeover_desktop: bool,
@@ -97,6 +110,17 @@ pub struct GatewayProfile {
     pub listen_host: String,
     pub listen_port: u16,
     pub auth_token: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CodexBindingInfo {
+    pub config_path: String,
+    pub config_exists: bool,
+    pub managed: bool,
+    pub model_provider: Option<String>,
+    pub model: Option<String>,
+    pub base_url: Option<String>,
+    pub backup_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

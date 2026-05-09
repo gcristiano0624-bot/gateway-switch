@@ -1,3 +1,4 @@
+mod codex_gateway;
 mod commands;
 mod database;
 mod desktop_binding;
@@ -75,6 +76,16 @@ pub fn run() {
             commands::check_provider_health,
             commands::export_config,
             commands::import_config,
+            commands::start_codex_gateway,
+            commands::stop_codex_gateway,
+            commands::get_codex_status,
+            commands::get_codex_profile,
+            commands::save_codex_profile,
+            commands::list_codex_routes,
+            commands::create_codex_route,
+            commands::update_codex_route,
+            commands::delete_codex_route,
+            commands::check_codex_health,
         ])
         .run(tauri::generate_context!())
         .expect("error running app");

@@ -1,7 +1,8 @@
 use std::{fs, time::Instant};
 use tauri::State;
 use crate::{
-    database, desktop_binding, gateway, models::*, settings, state::AppState,
+    codex_gateway, database, desktop_binding, gateway, models::*, settings,
+    state::{AppState, GatewayStatus},
 };
 
 #[tauri::command]
@@ -250,4 +251,78 @@ pub fn import_config(st: State<'_, AppState>, file_path: String) -> Result<Strin
     }
 
     Ok(format!("Imported from {}", file_path))
+}
+
+// =====================================================
+//  CODEX GATEWAY COMMANDS
+// =====================================================
+
+#[tauri::command]
+pub async fn start_codex_gateway(st: State<'_, AppState>) -> Result<String, String> {
+    codex_gateway::start(&st)
+}
+
+#[tauri::command]
+pub async fn stop_codex_gateway(st: State<'_, AppState>) -> Result<String, String> {
+    codex_gateway::stop(&st)
+}
+
+#[tauri::command]
+pub fn get_codex_status(st: State<'_, AppState>) -> Result<GatewayStatus, String> {
+    codex_gateway::status(&st)
+}
+
+#[tauri::command]
+pub fn get_codex_profile(st: State<'_, AppState>) -> Result<GatewayProfile, String> {
+    database::get_codex_profile(&st.db_path)
+}
+
+#[tauri::command]
+pub fn save_codex_profile(st: State<'_, AppState>, payload: GatewayProfile) -> Result<GatewayProfile, String> {
+    database::save_codex_profile(&st.db_path, &payload)?;
+    database::get_codex_profile(&st.db_path)
+}
+
+#[tauri::command]
+pub fn list_codex_routes(st: State<'_, AppState>) -> Result<Vec<CodexRoute>, String> {
+    database::list_codex_routes(&st.db_path)
+}
+
+#[tauri::command]
+pub fn create_codex_route(st: State<'_, AppState>, payload: CreateCodexRoute) -> Result<Vec<CodexRoute>, String> {
+    database::create_codex_route(&st.db_path, &payload)?;
+    database::list_codex_routes(&st.db_path)
+}
+
+#[tauri::command]
+pub fn update_codex_route(st: State<'_, AppState>, payload: UpdateCodexRoute) -> Result<Vec<CodexRoute>, String> {
+    database::update_codex_route(&st.db_path, &payload)?;
+    database::list_codex_routes(&st.db_path)
+}
+
+#[tauri::command]
+pub fn delete_codex_route(st: State<'_, AppState>, id: String) -> Result<Vec<CodexRoute>, String> {
+    database::delete_codex_route(&st.db_path, &id)?;
+    database::list_codex_routes(&st.db_path)
+}
+
+#[tauri::command]
+pub async fn check_codex_health(st: State<'_, AppState>) -> Result<HealthStatus, String> {
+    let profile = database::get_codex_profile(&st.db_path)?;
+    let url = format!("http://{}:{}/health", profile.listen_host, profile.listen_port);
+    let start = Instant::now();
+    match reqwest::get(&url).await {
+        Ok(r) => Ok(HealthStatus {
+            target: "codex-gateway".into(),
+            ok: r.status().is_success(),
+            message: format!("HTTP {}", r.status()),
+            latency_ms: Some(start.elapsed().as_millis() as u64),
+        }),
+        Err(e) => Ok(HealthStatus {
+            target: "codex-gateway".into(),
+            ok: false,
+            message: e.to_string(),
+            latency_ms: Some(start.elapsed().as_millis() as u64),
+        }),
+    }
 }

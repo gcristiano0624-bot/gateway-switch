@@ -9,7 +9,7 @@ use tokio::{sync::oneshot, task::JoinHandle};
 
 use crate::{database, settings};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct GatewayStatus {
     pub running: bool,
     pub status: String,
@@ -30,6 +30,8 @@ pub struct GatewayHandle {
 pub struct Runtime {
     pub gateway_status: Mutex<GatewayStatus>,
     pub gateway_handle: Mutex<Option<GatewayHandle>>,
+    pub codex_gateway_status: Mutex<GatewayStatus>,
+    pub codex_gateway_handle: Mutex<Option<GatewayHandle>>,
 }
 
 impl Runtime {
@@ -37,6 +39,8 @@ impl Runtime {
         Self {
             gateway_status: Mutex::new(GatewayStatus::default()),
             gateway_handle: Mutex::new(None),
+            codex_gateway_status: Mutex::new(GatewayStatus::default()),
+            codex_gateway_handle: Mutex::new(None),
         }
     }
 }

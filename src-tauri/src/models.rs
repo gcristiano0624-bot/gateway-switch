@@ -92,7 +92,7 @@ pub struct UpdateModelRoute {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GatewayProfile {
     pub listen_host: String,
     pub listen_port: u16,
@@ -118,4 +118,35 @@ pub struct HealthStatus {
     pub ok: bool,
     pub message: String,
     pub latency_ms: Option<u64>,
+}
+
+// ── Codex Types ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodexRoute {
+    pub id: String,
+    pub codex_model: String,
+    pub display_name: String,
+    pub provider_id: String,
+    pub upstream_model: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateCodexRoute {
+    pub id: String,
+    pub codex_model: String,
+    pub display_name: String,
+    pub provider_id: String,
+    pub upstream_model: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateCodexRoute {
+    pub id: String,
+    pub codex_model: String,
+    pub display_name: String,
+    pub provider_id: String,
+    pub upstream_model: String,
+    pub enabled: bool,
 }

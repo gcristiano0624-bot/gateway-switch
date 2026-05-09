@@ -49,6 +49,24 @@ pub fn initialize(db: &Path) -> Result<(), String> {
         INSERT INTO gateway_profile (id, listen_host, listen_port, auth_token)
         VALUES ('default', '127.0.0.1', 3456, 'gateway-switch-token')
         ON CONFLICT(id) DO NOTHING;
+        CREATE TABLE IF NOT EXISTS codex_routes (
+            id TEXT PRIMARY KEY,
+            codex_model TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            provider_id TEXT NOT NULL,
+            upstream_model TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS codex_profile (
+            id TEXT PRIMARY KEY CHECK (id = 'default'),
+            listen_host TEXT NOT NULL,
+            listen_port INTEGER NOT NULL,
+            auth_token TEXT NOT NULL
+        );
+        INSERT INTO codex_profile (id, listen_host, listen_port, auth_token)
+        VALUES ('default', '127.0.0.1', 3457, 'gateway-switch-token')
+        ON CONFLICT(id) DO NOTHING;
     "#).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -221,4 +239,78 @@ pub fn count_rows(db: &Path, table: &str) -> Result<i64, String> {
     let conn = open(db)?;
     conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
         .map_err(|e| e.to_string())
+}
+
+// ---- Codex Routes ----
+
+pub fn list_codex_routes(db: &Path) -> Result<Vec<CodexRoute>, String> {
+    let conn = open(db)?;
+    let mut stmt = conn.prepare(
+        "SELECT id, codex_model, display_name, provider_id, upstream_model, enabled FROM codex_routes ORDER BY created_at DESC"
+    ).map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |r| Ok(CodexRoute {
+        id: r.get(0)?,
+        codex_model: r.get(1)?,
+        display_name: r.get(2)?,
+        provider_id: r.get(3)?,
+        upstream_model: r.get(4)?,
+        enabled: r.get::<_, i64>(5)? == 1,
+    })).map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+pub fn create_codex_route(db: &Path, r: &CreateCodexRoute) -> Result<(), String> {
+    let conn = open(db)?;
+    let exists: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM providers WHERE id = ?1",
+        params![r.provider_id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    if exists == 0 {
+        return Err(format!("Provider '{}' not found", r.provider_id));
+    }
+    conn.execute(
+        "INSERT INTO codex_routes (id, codex_model, display_name, provider_id, upstream_model) VALUES (?1,?2,?3,?4,?5)",
+        params![r.id, r.codex_model, r.display_name, r.provider_id, r.upstream_model],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn update_codex_route(db: &Path, r: &UpdateCodexRoute) -> Result<(), String> {
+    let conn = open(db)?;
+    conn.execute(
+        "UPDATE codex_routes SET codex_model=?2, display_name=?3, provider_id=?4, upstream_model=?5, enabled=?6 WHERE id=?1",
+        params![r.id, r.codex_model, r.display_name, r.provider_id, r.upstream_model, if r.enabled {1} else {0}],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn delete_codex_route(db: &Path, id: &str) -> Result<(), String> {
+    let conn = open(db)?;
+    conn.execute("DELETE FROM codex_routes WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ---- Codex Profile ----
+
+pub fn get_codex_profile(db: &Path) -> Result<GatewayProfile, String> {
+    let conn = open(db)?;
+    conn.query_row(
+        "SELECT listen_host, listen_port, auth_token FROM codex_profile WHERE id = 'default'",
+        [],
+        |r| Ok(GatewayProfile {
+            listen_host: r.get(0)?,
+            listen_port: r.get(1)?,
+            auth_token: r.get(2)?,
+        }),
+    ).map_err(|e| e.to_string())
+}
+
+pub fn save_codex_profile(db: &Path, p: &GatewayProfile) -> Result<(), String> {
+    let conn = open(db)?;
+    conn.execute(
+        "UPDATE codex_profile SET listen_host=?1, listen_port=?2, auth_token=?3 WHERE id='default'",
+        params![p.listen_host, p.listen_port, p.auth_token],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
 }

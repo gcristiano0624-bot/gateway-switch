@@ -3,7 +3,22 @@ import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
 // ── Types ──
-type Page = "dashboard" | "providers" | "routes" | "desktop" | "logs" | "settings";
+type Page = "dashboard" | "providers" | "routes" | "codex" | "desktop" | "logs" | "settings";
+
+type CodexRoute = {
+  id: string;
+  codex_model: string;
+  display_name: string;
+  provider_id: string;
+  upstream_model: string;
+  enabled: boolean;
+};
+
+type CodexGatewayStatus = {
+  running: boolean;
+  status: string;
+  error: string | null;
+};
 
 type Status = {
   gateway_running: boolean;
@@ -263,6 +278,13 @@ function App() {
   const [success, setSuccess] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Codex state
+  const [codexRoutes, setCodexRoutes] = useState<CodexRoute[]>([]);
+  const [codexStatus, setCodexStatus] = useState<CodexGatewayStatus | null>(null);
+  const codexPort = 3457;
+  const [cForm, setCForm] = useState({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "" });
+  const [editingC, setEditingC] = useState<string | null>(null);
+
   // Provider form
   const [pForm, setPForm] = useState({ id: "", name: "", base_url: "", auth_header: "x-api-key", auth_scheme: "", api_key: "" });
   const [editingP, setEditingP] = useState<string | null>(null);
@@ -282,13 +304,15 @@ function App() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [s, p, r, d, l, cfg] = await Promise.all([
+      const [s, p, r, d, l, cfg, cs, cr] = await Promise.all([
         invoke<Status>("get_status"),
         invoke<Provider[]>("list_providers"),
         invoke<ModelRoute[]>("list_routes"),
         invoke<DesktopInfo>("get_desktop_info"),
         invoke<RequestLog[]>("list_logs"),
         invoke<Settings>("get_settings"),
+        invoke<CodexGatewayStatus>("get_codex_status"),
+        invoke<CodexRoute[]>("list_codex_routes"),
       ]);
       setStatus(s);
       setProviders(p);
@@ -296,6 +320,8 @@ function App() {
       setDesktop(d);
       setLogs(l);
       setSettings(cfg);
+      setCodexStatus(cs);
+      setCodexRoutes(cr);
     } catch (e) {
       setError(String(e));
     }
@@ -370,6 +396,31 @@ function App() {
     try { const p = await invoke<string>("export_config"); flash(`Exported to ${p}`); } catch (e) { flash(String(e), "error"); }
   };
 
+  // Codex actions
+  const startCodex = async () => { try { await invoke("start_codex_gateway"); await loadAll(); flash("Codex gateway started"); } catch (e) { flash(String(e), "error"); } };
+  const stopCodex = async () => { try { await invoke("stop_codex_gateway"); await loadAll(); flash("Codex gateway stopped"); } catch (e) { flash(String(e), "error"); } };
+  const saveCodexRoute = async () => {
+    try {
+      if (editingC) {
+        await invoke("update_codex_route", { payload: { ...cForm, enabled: true } });
+        flash("Codex route updated");
+      } else {
+        await invoke("create_codex_route", { payload: cForm });
+        flash("Codex route created");
+      }
+      setEditingC(null);
+      setCForm({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "" });
+      await loadAll();
+    } catch (e) { flash(String(e), "error"); }
+  };
+  const delCodexRoute = async (id: string) => {
+    try { await invoke("delete_codex_route", { id }); flash("Codex route deleted"); await loadAll(); } catch (e) { flash(String(e), "error"); }
+  };
+  const editCodexRoute = (r: CodexRoute) => {
+    setEditingC(r.id);
+    setCForm({ id: r.id, codex_model: r.codex_model, display_name: r.display_name, provider_id: r.provider_id, upstream_model: r.upstream_model });
+  };
+
   // =====================================================
   //  SIDEBAR
   // =====================================================
@@ -404,6 +455,11 @@ function App() {
           <IconShuffle />
           Routes
           {routes.length > 0 && <span className="nav-badge">{routes.length}</span>}
+        </button>
+        <button className={`nav-item ${page === "codex" ? "active" : ""}`} onClick={() => setPage("codex")}>
+          <IconTerminal />
+          Codex
+          {codexRoutes.length > 0 && <span className="nav-badge">{codexRoutes.length}</span>}
         </button>
         <button className={`nav-item ${page === "desktop" ? "active" : ""}`} onClick={() => setPage("desktop")}>
           <IconMonitor />
@@ -864,6 +920,138 @@ function App() {
   );
 
   // =====================================================
+  //  CODEX PAGE
+  // =====================================================
+  const CODEX_MODELS = ["gpt-4o", "gpt-4o-mini", "o3", "o4-mini", "o3-pro", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"];
+
+  const CodexPage = () => (
+    <div>
+      <div className="page-header">
+        <h1>Codex Gateway</h1>
+        <p>OpenAI Responses API → Chat Completions API converter for Codex CLI</p>
+      </div>
+
+      {/* Status + Quick Actions */}
+      <div className="two-col">
+        <div className="card">
+          <div className="card-title">Codex Gateway Status</div>
+          <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+            <span className="info-key">Status</span>
+            <span className="info-val">
+              <span className={`badge ${codexStatus?.running ? "badge-green" : "badge-gray"}`}>
+                {codexStatus?.running ? "Running" : "Stopped"}
+              </span>
+            </span>
+            <span className="info-key">Port</span>
+            <span className="info-val">{codexPort}</span>
+            <span className="info-key">Endpoint</span>
+            <span className="info-val">http://127.0.0.1:{codexPort}/v1/responses</span>
+          </div>
+          <div className="qa-buttons" style={{ marginTop: 16 }}>
+            {codexStatus?.running ? (
+              <button className="btn btn-danger" onClick={stopCodex}><IconStop /> Stop</button>
+            ) : (
+              <button className="btn btn-primary" onClick={startCodex}><IconPlay /> Start</button>
+            )}
+            <button className="btn" onClick={() => void loadAll()}><IconRefresh /> Refresh</button>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-title">Usage Instructions</div>
+          <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 12 }}>
+            Configure Codex CLI to use this gateway:
+          </p>
+          <div style={{ background: "#fafaf9", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: 12, fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.8 }}>
+            <div style={{ color: "var(--muted)" }}># Set environment variables</div>
+            <div>export OPENAI_BASE_URL=http://127.0.0.1:{codexPort}/v1</div>
+            <div>export OPENAI_API_KEY={settings?.auth_token || "gateway-switch-token"}</div>
+            <div style={{ marginTop: 8, color: "var(--muted)" }}># Then use Codex normally</div>
+            <div>codex "your prompt here"</div>
+          </div>
+          <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 10 }}>
+            Maps Codex model names (gpt-4o, o3, etc.) to your configured upstream providers.
+          </p>
+        </div>
+      </div>
+
+      {/* Add/Edit route form */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-title">{editingC ? "Edit Codex Route" : "Add Codex Route"}</div>
+        <div className="form-row">
+          <div className="form-field">
+            <label>Route ID</label>
+            <input value={cForm.id} disabled={!!editingC} onChange={e => setCForm({ ...cForm, id: e.target.value })} placeholder="e.g. gpt4o-deepseek" />
+          </div>
+          <div className="form-field">
+            <label>Codex Model</label>
+            <select value={cForm.codex_model} onChange={e => setCForm({ ...cForm, codex_model: e.target.value })}>
+              {CODEX_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div className="form-field">
+            <label>Display Name</label>
+            <input value={cForm.display_name} onChange={e => setCForm({ ...cForm, display_name: e.target.value })} placeholder="e.g. DeepSeek V3" />
+          </div>
+          <div className="form-field">
+            <label>Provider</label>
+            <select value={cForm.provider_id} onChange={e => setCForm({ ...cForm, provider_id: e.target.value })}>
+              <option value="">Select provider...</option>
+              {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div className="form-field">
+            <label>Upstream Model</label>
+            <input value={cForm.upstream_model} onChange={e => setCForm({ ...cForm, upstream_model: e.target.value })} placeholder="e.g. deepseek-chat" />
+          </div>
+        </div>
+        <div className="qa-buttons" style={{ marginTop: 16 }}>
+          <button className="btn btn-primary" onClick={saveCodexRoute}>
+            {editingC ? <><IconEdit /> Save</> : <><IconPlus /> Add Route</>}
+          </button>
+          {editingC && (
+            <button className="btn" onClick={() => {
+              setEditingC(null);
+              setCForm({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "" });
+            }}>Cancel</button>
+          )}
+        </div>
+      </div>
+
+      {/* Route cards */}
+      <div className="section-label">Active Codex Routes</div>
+      <div className="route-list" style={{ marginBottom: 20 }}>
+        {codexRoutes.length > 0 ? (
+          codexRoutes.map(r => (
+            <div key={r.id} className="route-item">
+              <div className="route-icon" style={{ background: "rgba(217,119,6,0.08)", color: "var(--amber)" }}>
+                {r.codex_model.slice(0, 3)}
+              </div>
+              <div className="route-info">
+                <div className="route-name">{r.codex_model}</div>
+                <div className="route-path">{r.display_name || r.upstream_model} via {r.provider_id}</div>
+              </div>
+              <span className={`route-status ${r.enabled ? "active" : "disabled"}`}>
+                {r.enabled ? "Active" : "Disabled"}
+              </span>
+              <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
+                <button className="btn" style={{ padding: "5px 8px" }} onClick={() => editCodexRoute(r)}><IconEdit /></button>
+                <button className="btn btn-danger" style={{ padding: "5px 8px" }} onClick={() => delCodexRoute(r.id)}><IconTrash /></button>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="empty-state">
+            <div className="empty-icon">--</div>
+            <h3>No Codex routes configured</h3>
+            <p>Add a route above to start mapping Codex models.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // =====================================================
   //  DESKTOP PAGE
   // =====================================================
   const DesktopPage = () => (
@@ -1119,6 +1307,7 @@ function App() {
       case "dashboard": return <DashboardPage />;
       case "providers": return <ProvidersPage />;
       case "routes": return <RoutesPage />;
+      case "codex": return <CodexPage />;
       case "desktop": return <DesktopPage />;
       case "logs": return <LogsPage />;
       case "settings": return <SettingsPage />;

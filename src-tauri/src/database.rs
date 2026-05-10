@@ -193,7 +193,7 @@ pub fn create_route(db: &Path, r: &CreateModelRoute) -> Result<(), String> {
     }
     conn.execute(
         "INSERT INTO model_routes (id, claude_alias, display_name, provider_id, upstream_model) VALUES (?1,?2,?3,?4,?5)",
-        params![r.id, r.claude_alias, r.display_name, r.provider_id, r.upstream_model],
+        params![r.id.trim(), r.claude_alias.trim(), r.display_name.trim(), r.provider_id.trim(), r.upstream_model.trim()],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -202,7 +202,7 @@ pub fn update_route(db: &Path, r: &UpdateModelRoute) -> Result<(), String> {
     let conn = open(db)?;
     conn.execute(
         "UPDATE model_routes SET claude_alias=?2, display_name=?3, provider_id=?4, upstream_model=?5, enabled=?6 WHERE id=?1",
-        params![r.id, r.claude_alias, r.display_name, r.provider_id, r.upstream_model, if r.enabled {1} else {0}],
+        params![r.id.trim(), r.claude_alias.trim(), r.display_name.trim(), r.provider_id.trim(), r.upstream_model.trim(), if r.enabled {1} else {0}],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -308,7 +308,7 @@ pub fn create_codex_route(db: &Path, r: &CreateCodexRoute) -> Result<(), String>
     }
     conn.execute(
         "INSERT INTO codex_routes (id, codex_model, display_name, provider_id, upstream_model) VALUES (?1,?2,?3,?4,?5)",
-        params![r.id, r.codex_model, r.display_name, r.provider_id, r.upstream_model],
+        params![r.id.trim(), r.codex_model.trim(), r.display_name.trim(), r.provider_id.trim(), r.upstream_model.trim()],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -317,7 +317,7 @@ pub fn update_codex_route(db: &Path, r: &UpdateCodexRoute) -> Result<(), String>
     let conn = open(db)?;
     conn.execute(
         "UPDATE codex_routes SET codex_model=?2, display_name=?3, provider_id=?4, upstream_model=?5, enabled=?6 WHERE id=?1",
-        params![r.id, r.codex_model, r.display_name, r.provider_id, r.upstream_model, if r.enabled {1} else {0}],
+        params![r.id.trim(), r.codex_model.trim(), r.display_name.trim(), r.provider_id.trim(), r.upstream_model.trim(), if r.enabled {1} else {0}],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }

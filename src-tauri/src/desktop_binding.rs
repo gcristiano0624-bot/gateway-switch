@@ -16,6 +16,10 @@ pub struct DesktopInfo {
     pub backup_path: Option<String>,
 }
 
+pub fn gateway_base_url(host: &str, port: u16) -> String {
+    format!("http://{host}:{port}")
+}
+
 pub fn inspect(home: &Path) -> Result<DesktopInfo, String> {
     let config_dir = home.join("Library/Application Support/Claude-3p/configLibrary");
     let entry = active_entry(&config_dir)?;
@@ -134,9 +138,9 @@ mod tests {
             "inferenceModels": [{"name": "old-model"}]
         })).unwrap();
 
-        let applied = apply(home, "http://127.0.0.1:3456/v1/messages", "x-api-key", "tok", &["claude-sonnet-4-6".into()]).unwrap();
+        let applied = apply(home, "http://127.0.0.1:3456", "x-api-key", "tok", &["claude-sonnet-4-6".into()]).unwrap();
         assert!(applied.managed);
-        assert_eq!(applied.base_url.as_deref(), Some("http://127.0.0.1:3456/v1/messages"));
+        assert_eq!(applied.base_url.as_deref(), Some("http://127.0.0.1:3456"));
         assert_eq!(applied.models, vec!["claude-sonnet-4-6"]);
 
         let restored = restore(home).unwrap();

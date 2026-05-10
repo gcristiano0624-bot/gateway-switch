@@ -121,7 +121,7 @@ const DEFAULT_CODEX_MODELS = ["gpt-4o", "gpt-4o-mini", "o3", "o4-mini", "o3-pro"
 
 const PROVIDER_PRESETS = [
   { id: "volcengine", name: "Volcano Engine", base_url: "https://ark.cn-beijing.volces.com/api/v3", auth_header: "Authorization", auth_scheme: "Bearer", logo: "V", color: "#ef4444", colorBg: "rgba(239,68,68,0.1)", shortUrl: "ark.cn-beijing.volces.com" },
-  { id: "xiaomimo", name: "XiaoMiMo", base_url: "https://api.xiaomimo.com/v1", auth_header: "x-api-key", auth_scheme: "", logo: "X", color: "#f59e0b", colorBg: "rgba(245,158,11,0.1)", shortUrl: "api.xiaomimo.com" },
+  { id: "xiaomimo", name: "XiaoMiMo", base_url: "https://api.xiaomimo.com/v1", auth_header: "Authorization", auth_scheme: "Bearer", logo: "X", color: "#f59e0b", colorBg: "rgba(245,158,11,0.1)", shortUrl: "api.xiaomimo.com" },
   { id: "openrouter", name: "OpenRouter", base_url: "https://openrouter.ai/api/v1", auth_header: "Authorization", auth_scheme: "Bearer", logo: "OR", color: "#6366f1", colorBg: "rgba(99,102,241,0.1)", shortUrl: "openrouter.ai" },
   { id: "deepseek", name: "DeepSeek", base_url: "https://api.deepseek.com/v1", auth_header: "Authorization", auth_scheme: "Bearer", logo: "DS", color: "#3b82f6", colorBg: "rgba(59,130,246,0.1)", shortUrl: "api.deepseek.com" },
   { id: "siliconflow", name: "SiliconFlow", base_url: "https://api.siliconflow.cn/v1", auth_header: "Authorization", auth_scheme: "Bearer", logo: "SF", color: "#8b5cf6", colorBg: "rgba(139,92,246,0.1)", shortUrl: "api.siliconflow.cn" },
@@ -949,8 +949,8 @@ function App() {
           </span>
           <span className="info-key">Port</span>
           <span className="info-val">{status?.gateway_port ?? settings?.listen_port ?? 3456}</span>
-          <span className="info-key">Endpoint</span>
-          <span className="info-val">http://127.0.0.1:{status?.gateway_port ?? settings?.listen_port ?? 3456}/v1/messages</span>
+          <span className="info-key">Desktop URL</span>
+          <span className="info-val">http://127.0.0.1:{status?.gateway_port ?? settings?.listen_port ?? 3456}</span>
         </div>
         <div className="qa-buttons" style={{ marginTop: 16 }}>
           {status?.gateway_running ? (
@@ -1302,7 +1302,7 @@ function App() {
             <span className="info-val">{desktop?.config_path ?? "-"}</span>
             <span className="info-key">Base URL</span>
             <span className="info-val">{desktop?.base_url ?? "Not set"}</span>
-            <span className="info-key">Auth Scheme</span>
+            <span className="info-key">Local Gateway Auth</span>
             <span className="info-val">{desktop?.auth_scheme ?? "Not set"}</span>
             <span className="info-key">Backup</span>
             <span className="info-val">{desktop?.backup_path ? "Available" : "None"}</span>

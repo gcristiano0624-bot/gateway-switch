@@ -48,7 +48,7 @@ pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                             .filter(|r| r.enabled).map(|r| r.claude_alias).collect();
                         let _ = crate::desktop_binding::apply(
                             &dirs::home_dir().unwrap_or_default(),
-                            &format!("http://{}:{}/v1/messages", p.listen_host, p.listen_port),
+                            &crate::desktop_binding::gateway_base_url(&p.listen_host, p.listen_port),
                             "x-api-key", &p.auth_token, &models,
                         );
                     }

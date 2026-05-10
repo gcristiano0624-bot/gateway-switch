@@ -21,7 +21,7 @@ Gateway Switch 是一个 macOS 桌面应用，用来把 Claude Desktop 和 Codex
 
 它解决两类问题：
 
-- **Claude Desktop**：Claude 会校验模型名，第三方模型不能直接伪装成 Claude 模型。Gateway Switch 提供本地 Anthropic Messages 网关，把 `claude-sonnet-4-6` 等别名映射到真实上游模型。
+- **Claude Desktop**：Claude 会校验模型名，第三方模型不能直接伪装成 Claude 模型。Gateway Switch 提供本地 Claude 网关，把 `claude-sonnet-4-6` 等别名映射到真实上游模型；上游可以是 Anthropic Messages 兼容接口，也可以是 OpenAI Chat Completions 兼容接口。
 - **Codex App**：Codex 使用 OpenAI Responses API，但很多第三方服务只支持 Chat Completions。Gateway Switch 提供本地 Responses 网关，把 Codex 请求转换为 `/v1/chat/completions`，再把响应转换回 Codex 可解析的 Responses 格式。
 
 Provider 是公共配置，Claude 和 Codex 各自拥有独立的路由和绑定流程。
@@ -35,6 +35,9 @@ Provider 是公共配置，Claude 和 Codex 各自拥有独立的路由和绑定
 - 新增 Codex Restore：恢复原始 OpenAI 登录/provider 配置，并停止 Codex Gateway。
 - 新增真实模型验证：Codex 页面和 Logs 可查看实际调用的 Provider 与 Upstream Model。
 - 新增 Claude Alias 和 Codex Model 的自定义添加/删除。
+- Claude Gateway 新增 Chat Completions fallback：当上游不支持 `/v1/messages` 时，自动改走 `/v1/chat/completions` 并转换回 Claude 可解析的 Messages 响应。
+- 修复 Claude Desktop 绑定地址重复拼接 `/v1/messages/v1/messages` 的问题。
+- 修复模型名首尾空白导致上游模型不匹配的问题。
 - 修复输入框输入一个字母后失焦的问题。
 - 修复 Provider Base URL 带 `/v1` 时重复拼接 `/v1/v1/...` 的问题。
 - Dashboard 改为纯仪表盘：只展示状态、最近调用、刷新和健康检查，不再承担启动/绑定动作。
@@ -60,6 +63,7 @@ Dashboard 不负责启动或绑定。启动和绑定都在对应产品页完成�
 - 启动/停止 Claude Gateway。
 - 绑定或恢复 Claude Desktop。
 - 支持 Anthropic Messages API 的流式和非流式转发。
+- 支持 OpenAI Chat Completions 上游的自动适配，适合小米等只提供 `/v1/chat/completions` 的 Provider。
 
 默认地址：
 
@@ -101,7 +105,7 @@ http://127.0.0.1:3457
 
 ### Claude Desktop 路由
 
-1. 打开 `Providers`，添加一个支持 Anthropic Messages API 的 Provider。
+1. 打开 `Providers`，添加一个 Provider。它可以支持 Anthropic Messages API，也可以支持 OpenAI Chat Completions。
 2. 打开 `Claude`，添加或选择 Claude Alias。
 3. 创建路由，填写真实上游模型名。
 4. 在 `Claude` 页面启动 Claude Gateway。
@@ -153,6 +157,19 @@ API Key: your-key
 ```
 
 `Auth Scheme` 为空时，Gateway Switch 会直接把 API Key 写入对应 header。
+
+注意：Claude Desktop 绑定里显示的 `Local Gateway Auth` / `x-api-key` 是 **Claude Desktop 到本机 Gateway Switch** 的认证方式；Provider 里的 `Authorization: Bearer ...` 是 **Gateway Switch 到第三方模型服务** 的认证方式。两者属于不同链路，不需要一致。
+
+---
+
+## Claude 与 Codex 的协议区别
+
+Claude 和 Codex 可以共用同一个 Provider/API Key，但它们不会共用同一个本地接口：
+
+- Claude 使用 `http://127.0.0.1:3456/v1/messages`，对外呈现 Anthropic Messages API。
+- Codex 使用 `http://127.0.0.1:3457/v1/responses`，对外呈现 OpenAI Responses API。
+
+当 Claude 路由连接到只支持 Chat Completions 的上游时，Gateway Switch 会先尝试 `/v1/messages`，如果上游不支持，再自动 fallback 到 `/v1/chat/completions`。
 
 ---
 
@@ -255,4 +272,3 @@ Codex App 配置：
 - Codex Gateway 需要上游支持 OpenAI Chat Completions API。
 - Codex 的可见思考过程取决于上游是否返回 reasoning 信息。
 - Codex 不同登录态/provider 下的历史会话由 Codex App 自己管理，Gateway Switch 无法强制合并。
-

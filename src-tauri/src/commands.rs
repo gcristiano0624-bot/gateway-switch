@@ -116,7 +116,7 @@ pub fn apply_binding(st: State<'_, AppState>) -> Result<desktop_binding::Desktop
     let models: Vec<String> = routes.into_iter().filter(|r| r.enabled).map(|r| r.claude_alias).collect();
     desktop_binding::apply(
         &dirs::home_dir().ok_or("no home")?,
-        &format!("http://{}:{}/v1/messages", profile.listen_host, profile.listen_port),
+        &desktop_binding::gateway_base_url(&profile.listen_host, profile.listen_port),
         "x-api-key", &profile.auth_token, &models,
     )
 }

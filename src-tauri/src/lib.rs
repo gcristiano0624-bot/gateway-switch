@@ -39,7 +39,7 @@ pub fn run() {
                             .filter(|r| r.enabled).map(|r| r.claude_alias).collect();
                         let _ = desktop_binding::apply(
                             &dirs::home_dir().unwrap_or_default(),
-                            &format!("http://{}:{}/v1/messages", profile.listen_host, profile.listen_port),
+                            &desktop_binding::gateway_base_url(&profile.listen_host, profile.listen_port),
                             "x-api-key", &profile.auth_token, &models,
                         );
                     }

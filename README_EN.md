@@ -21,7 +21,7 @@ Gateway Switch is a macOS desktop app that routes Claude Desktop and Codex App m
 
 It solves two related problems:
 
-- **Claude Desktop** validates Claude model IDs. Gateway Switch exposes local Claude aliases such as `claude-sonnet-4-6`, maps them to real upstream models, and forwards traffic through an Anthropic Messages compatible gateway.
+- **Claude Desktop** validates Claude model IDs. Gateway Switch exposes local Claude aliases such as `claude-sonnet-4-6`, maps them to real upstream models, and forwards traffic through a local Claude gateway. The upstream can be Anthropic Messages compatible or OpenAI Chat Completions compatible.
 - **Codex App** uses OpenAI Responses API, while many third-party providers only support Chat Completions. Gateway Switch exposes a local `/v1/responses` endpoint, converts Codex requests to `/v1/chat/completions`, then converts responses back into Responses format.
 
 Providers are shared. Claude and Codex have separate route and binding workflows.
@@ -35,6 +35,9 @@ Providers are shared. Claude and Codex have separate route and binding workflows
 - Added Codex restore flow for returning to the original OpenAI login/provider state.
 - Added real model verification on the Codex page and in Logs.
 - Added editable Claude aliases and Codex model names.
+- Added Claude Chat Completions fallback: when an upstream does not support `/v1/messages`, Gateway Switch automatically falls back to `/v1/chat/completions` and converts the result back to Claude Messages shape.
+- Fixed Claude Desktop binding that could duplicate `/v1/messages/v1/messages`.
+- Fixed leading/trailing whitespace in model names causing upstream model mismatches.
 - Fixed input focus loss after typing one character.
 - Fixed duplicated `/v1/v1/...` provider URL handling.
 - Reworked Dashboard into a pure status view with refresh and health checks only.
@@ -60,6 +63,7 @@ Dashboard does not start gateways or bind apps. Startup and binding live on the 
 - Start/stop Claude Gateway.
 - Bind or restore Claude Desktop.
 - Supports Anthropic Messages streaming and non-streaming forwarding.
+- Supports automatic adaptation for OpenAI Chat Completions upstreams, useful for providers that only expose `/v1/chat/completions`.
 
 Default address:
 
@@ -101,7 +105,7 @@ http://127.0.0.1:3457
 
 ### Claude Desktop Routing
 
-1. Open `Providers` and add a provider that supports Anthropic Messages API.
+1. Open `Providers` and add a provider. It can support Anthropic Messages API or OpenAI Chat Completions.
 2. Open `Claude` and add or select a Claude alias.
 3. Create a route and enter the real upstream model name.
 4. Start Claude Gateway from the `Claude` page.
@@ -153,6 +157,19 @@ API Key: your-key
 ```
 
 When `Auth Scheme` is empty, Gateway Switch sends the raw API key in the configured header.
+
+Note: `Local Gateway Auth` / `x-api-key` in the Claude Desktop binding is the auth method from **Claude Desktop to local Gateway Switch**. Provider auth such as `Authorization: Bearer ...` is the auth method from **Gateway Switch to the third-party model service**. They are separate links and do not need to match.
+
+---
+
+## Claude vs Codex Protocols
+
+Claude and Codex can share the same Provider/API key, but they do not share the same local protocol endpoint:
+
+- Claude uses `http://127.0.0.1:3456/v1/messages` and presents an Anthropic Messages API surface.
+- Codex uses `http://127.0.0.1:3457/v1/responses` and presents an OpenAI Responses API surface.
+
+When a Claude route points to a Chat Completions-only upstream, Gateway Switch first tries `/v1/messages`; if unsupported, it automatically falls back to `/v1/chat/completions`.
 
 ---
 
@@ -255,4 +272,3 @@ Codex App config:
 - Codex Gateway requires an OpenAI Chat Completions compatible upstream.
 - Visible Codex reasoning depends on whether the upstream returns reasoning data.
 - Codex conversation history across different login/provider states is controlled by Codex App, not Gateway Switch.
-

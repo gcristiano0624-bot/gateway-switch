@@ -642,7 +642,7 @@ fn resolve(db: &PathBuf, model: &str) -> Result<Route, String> {
     Ok(Route {
         display: route.codex_model,
         provider_id: provider.id.clone(),
-        upstream_model: route.upstream_model,
+        upstream_model: route.upstream_model.trim().to_string(),
         base_url: provider.base_url.trim_end_matches('/').to_string(),
         headers: auth_headers(&provider),
     })

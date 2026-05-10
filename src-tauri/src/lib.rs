@@ -1,5 +1,6 @@
 mod codex_gateway;
 mod codex_binding;
+mod claude_code_binding;
 mod commands;
 mod database;
 mod desktop_binding;
@@ -73,6 +74,9 @@ pub fn run() {
             commands::get_desktop_info,
             commands::apply_binding,
             commands::restore_binding,
+            commands::get_claude_code_info,
+            commands::apply_claude_code_binding,
+            commands::restore_claude_code_binding,
             commands::check_gateway_health,
             commands::check_provider_health,
             commands::export_config,

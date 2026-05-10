@@ -2,9 +2,9 @@
 
 # Gateway Switch
 
-**Claude Desktop 与 Codex App 的第三方模型路由网关**
+**Claude Desktop、Claude Code 与 Codex App 的第三方模型路由网关**
 
-[![Version](https://img.shields.io/badge/Version-1.3.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.5.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -17,31 +17,29 @@
 
 ## Gateway Switch 是什么？
 
-Gateway Switch 是一个 macOS 桌面应用，用来把 Claude Desktop 和 Codex App 的模型请求转发到第三方模型 API。
+Gateway Switch 是一个 macOS 桌面应用，用来把 Claude Desktop、Claude Code 和 Codex App 的模型请求转发到第三方模型 API。
 
-它解决两类问题：
+它解决三类问题：
 
 - **Claude Desktop**：Claude 会校验模型名，第三方模型不能直接伪装成 Claude 模型。Gateway Switch 提供本地 Claude 网关，把 `claude-sonnet-4-6` 等别名映射到真实上游模型；上游可以是 Anthropic Messages 兼容接口，也可以是 OpenAI Chat Completions 兼容接口。
+- **Claude Code**：Claude Code 可通过本地 Gateway Route 使用统一路由，也可以通过 Direct Provider 直接绑定支持 Anthropic 协议的第三方地址。
 - **Codex App**：Codex 使用 OpenAI Responses API，但很多第三方服务只支持 Chat Completions。Gateway Switch 提供本地 Responses 网关，把 Codex 请求转换为 `/v1/chat/completions`，再把响应转换回 Codex 可解析的 Responses 格式。
 
-Provider 是公共配置，Claude 和 Codex 各自拥有独立的路由和绑定流程。
+Provider 是公共配置，但 Base URL 按协议拆分。Codex 使用 OpenAI Base URL，Claude 与 Claude Code 优先使用 Anthropic Base URL，避免同一个地址被不同产品错误复用。
 
 ---
 
-## 1.3.0 更新重点
+## 1.5.0 更新重点
 
-- 新增 Codex Gateway：`/v1/responses` 到 `/v1/chat/completions` 的协议转换。
-- 新增 Codex App 一键绑定：自动写入 `~/.codex/config.toml`。
-- 新增 Codex Restore：恢复原始 OpenAI 登录/provider 配置，并停止 Codex Gateway。
-- 新增真实模型验证：Codex 页面和 Logs 可查看实际调用的 Provider 与 Upstream Model。
-- 新增 Claude Alias 和 Codex Model 的自定义添加/删除。
-- Claude Gateway 新增 Chat Completions fallback：当上游不支持 `/v1/messages` 时，自动改走 `/v1/chat/completions` 并转换回 Claude 可解析的 Messages 响应。
-- 修复 Claude Desktop 绑定地址重复拼接 `/v1/messages/v1/messages` 的问题。
-- 修复模型名首尾空白导致上游模型不匹配的问题。
-- 修复输入框输入一个字母后失焦的问题。
-- 修复 Provider Base URL 带 `/v1` 时重复拼接 `/v1/v1/...` 的问题。
-- Dashboard 改为纯仪表盘：只展示状态、最近调用、刷新和健康检查，不再承担启动/绑定动作。
-- 导航结构调整为 Dashboard、Products、Shared、System。
+- Provider 改为双协议地址：`OpenAI Base URL` 与 `Anthropic Base URL` 分开保存。
+- Claude Code 新增独立页面，支持 `Gateway Route` 与 `Direct Provider` 两种绑定模式。
+- Claude Code Direct Provider 只写入 Anthropic Base URL，并在缺少该地址时阻止绑定。
+- Claude Desktop 优先使用 Provider 的 Anthropic Base URL；缺失时仍可通过本地 Gateway fallback 到 Chat Completions。
+- Codex Gateway 固定使用 OpenAI Base URL，继续执行 Responses 到 Chat Completions 的转换。
+- XiaoMiMo 预设和旧数据迁移会自动补充 Anthropic 地址，适合 `mimo-v2.5` 等模型直接绑定。
+- Provider 表格、Claude Code 页面会同时展示 OpenAI 与 Anthropic 地址，降低误配概率。
+- UI 重新整理为更明亮、紧凑的 cc switch 风格，调整了配色、间距、按钮和卡片密度。
+- 版本统一更新为 `1.5.0`。
 
 ---
 
@@ -71,6 +69,13 @@ Dashboard 不负责启动或绑定。启动和绑定都在对应产品页完成�
 http://127.0.0.1:3456
 ```
 
+### Claude Code
+
+- 独立绑定 Claude Code，不影响 Claude Desktop。
+- `Gateway Route`：写入本地 Claude Gateway，适合统一路由和 Chat Completions fallback。
+- `Direct Provider`：直接写入 Provider 的 Anthropic Base URL、API Key 和模型名。
+- Direct Provider 适合已经提供 Anthropic 协议接口的服务，例如配置了 `https://.../anthropic` 的 XiaoMiMo。
+
 ### Codex
 
 - 管理 Codex Model 名称。
@@ -90,9 +95,9 @@ http://127.0.0.1:3457
 ### Providers
 
 - 统一管理第三方 Provider。
-- 支持 Base URL、Auth Header、Auth Scheme、API Key。
+- 支持 OpenAI Base URL、Anthropic Base URL、Auth Header、Auth Scheme、API Key。
 - 内置常见 Provider 预设。
-- Claude 和 Codex 共用 Provider，但路由彼此独立。
+- Claude、Claude Code 和 Codex 共用 Provider 身份与密钥，但按协议使用不同 Base URL。
 
 ### Logs
 
@@ -105,12 +110,22 @@ http://127.0.0.1:3457
 
 ### Claude Desktop 路由
 
-1. 打开 `Providers`，添加一个 Provider。它可以支持 Anthropic Messages API，也可以支持 OpenAI Chat Completions。
+1. 打开 `Providers`，添加一个 Provider。OpenAI 地址填 `/v1` 或等价 Chat Completions 地址；Anthropic 地址填 `/anthropic` 或等价 Messages 地址。
 2. 打开 `Claude`，添加或选择 Claude Alias。
 3. 创建路由，填写真实上游模型名。
 4. 在 `Claude` 页面启动 Claude Gateway。
 5. 在 `Claude` 页面绑定 Claude Desktop。
 6. 重启 Claude Desktop 后使用对应 Claude 模型。
+
+### Claude Code 绑定
+
+1. 打开 `Providers`，确认目标 Provider 已配置 Anthropic Base URL。
+2. 打开 `Claude Code`。
+3. 选择 `Direct Provider`，选择 Provider，并填写真实上游模型名，例如 `mimo-v2.5`。
+4. 点击 `Bind Claude Code`。
+5. 重启 Claude Code 或开启新会话后选择对应模型。
+
+如果 Provider 没有 Anthropic Base URL，请改用 `Gateway Route`，让本地 Gateway 负责协议转换。
 
 ### Codex App 路由
 
@@ -138,7 +153,16 @@ experimental_bearer_token = "gateway-switch-token"
 
 ---
 
-## Provider 认证怎么填？
+## Provider URL 与认证怎么填？
+
+协议地址建议：
+
+```text
+OpenAI Base URL: https://provider.example.com/v1
+Anthropic Base URL: https://provider.example.com/anthropic
+```
+
+Codex 只使用 OpenAI Base URL。Claude Code Direct Provider 只使用 Anthropic Base URL。
 
 常见组合：
 
@@ -162,11 +186,12 @@ API Key: your-key
 
 ---
 
-## Claude 与 Codex 的协议区别
+## Claude、Claude Code 与 Codex 的协议区别
 
-Claude 和 Codex 可以共用同一个 Provider/API Key，但它们不会共用同一个本地接口：
+三个产品可以共用同一个 Provider/API Key，但它们不应该共用同一个协议地址：
 
 - Claude 使用 `http://127.0.0.1:3456/v1/messages`，对外呈现 Anthropic Messages API。
+- Claude Code Direct Provider 使用 Provider 的 Anthropic Base URL。
 - Codex 使用 `http://127.0.0.1:3457/v1/responses`，对外呈现 OpenAI Responses API。
 
 当 Claude 路由连接到只支持 Chat Completions 的上游时，Gateway Switch 会先尝试 `/v1/messages`，如果上游不支持，再自动 fallback 到 `/v1/chat/completions`。
@@ -231,7 +256,7 @@ pnpm tauri build
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.3.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.5.0_aarch64.dmg
 ```
 
 ---
@@ -268,7 +293,8 @@ Codex App 配置：
 
 ## 已知限制
 
-- Claude Gateway 需要上游支持 Anthropic Messages API。
+- Claude Code Direct Provider 需要上游支持 Anthropic Messages API。
 - Codex Gateway 需要上游支持 OpenAI Chat Completions API。
+- Claude Gateway 的 fallback 依赖 OpenAI Chat Completions 兼容能力。
 - Codex 的可见思考过程取决于上游是否返回 reasoning 信息。
 - Codex 不同登录态/provider 下的历史会话由 Codex App 自己管理，Gateway Switch 无法强制合并。

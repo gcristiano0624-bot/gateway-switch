@@ -643,7 +643,7 @@ fn resolve(db: &PathBuf, model: &str) -> Result<Route, String> {
         display: route.codex_model,
         provider_id: provider.id.clone(),
         upstream_model: route.upstream_model.trim().to_string(),
-        base_url: provider.base_url.trim_end_matches('/').to_string(),
+        base_url: provider.openai_base_url.trim_end_matches('/').to_string(),
         headers: auth_headers(&provider),
     })
 }
@@ -738,6 +738,7 @@ mod tests {
         database::initialize(&db).unwrap();
         database::create_provider(&db, &CreateProvider {
             id: "p1".into(), name: "P".into(), base_url: "http://x".into(),
+            openai_base_url: None, anthropic_base_url: None,
             auth_header: "Authorization".into(), auth_scheme: Some("Bearer".into()), api_key: Some("k".into()),
         }).unwrap();
         database::create_codex_route(&db, &crate::models::CreateCodexRoute {

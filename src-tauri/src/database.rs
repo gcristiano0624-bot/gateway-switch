@@ -13,6 +13,8 @@ pub fn initialize(db: &Path) -> Result<(), String> {
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             base_url TEXT NOT NULL,
+            openai_base_url TEXT,
+            anthropic_base_url TEXT,
             auth_header TEXT NOT NULL DEFAULT 'x-api-key',
             auth_scheme TEXT,
             api_key TEXT,
@@ -74,6 +76,16 @@ pub fn initialize(db: &Path) -> Result<(), String> {
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
     "#).map_err(|e| e.to_string())?;
+    let _ = conn.execute("ALTER TABLE providers ADD COLUMN openai_base_url TEXT", []);
+    let _ = conn.execute("ALTER TABLE providers ADD COLUMN anthropic_base_url TEXT", []);
+    conn.execute(
+        "UPDATE providers SET openai_base_url = COALESCE(NULLIF(openai_base_url, ''), base_url)",
+        [],
+    ).map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE providers SET anthropic_base_url = 'https://token-plan-sgp.xiaomimimo.com/anthropic' WHERE (lower(id) IN ('xiaomi', 'xiaomimo') OR lower(name) LIKE '%xiaomimo%' OR lower(name) LIKE '%mimo%') AND (anthropic_base_url IS NULL OR anthropic_base_url = '')",
+        [],
+    ).map_err(|e| e.to_string())?;
     // Seed default claude aliases if table is empty
     {
         let conn = open(db)?;
@@ -112,39 +124,49 @@ fn open(db: &Path) -> Result<Connection, String> {
     Connection::open(db).map_err(|e| e.to_string())
 }
 
+fn normalize_empty(value: Option<&str>) -> Option<String> {
+    value.map(str::trim).filter(|s| !s.is_empty()).map(String::from)
+}
+
 // ---- Providers ----
 
 pub fn list_providers(db: &Path) -> Result<Vec<Provider>, String> {
     let conn = open(db)?;
     let mut stmt = conn.prepare(
-        "SELECT id, name, base_url, auth_header, auth_scheme, api_key, enabled FROM providers ORDER BY created_at DESC"
+        "SELECT id, name, base_url, COALESCE(NULLIF(openai_base_url, ''), base_url), NULLIF(anthropic_base_url, ''), auth_header, auth_scheme, api_key, enabled FROM providers ORDER BY created_at DESC"
     ).map_err(|e| e.to_string())?;
     let rows = stmt.query_map([], |r| Ok(Provider {
         id: r.get(0)?,
         name: r.get(1)?,
         base_url: r.get(2)?,
-        auth_header: r.get(3)?,
-        auth_scheme: r.get(4)?,
-        api_key: r.get(5)?,
-        enabled: r.get::<_, i64>(6)? == 1,
+        openai_base_url: r.get(3)?,
+        anthropic_base_url: r.get(4)?,
+        auth_header: r.get(5)?,
+        auth_scheme: r.get(6)?,
+        api_key: r.get(7)?,
+        enabled: r.get::<_, i64>(8)? == 1,
     })).map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
 pub fn create_provider(db: &Path, p: &CreateProvider) -> Result<(), String> {
     let conn = open(db)?;
+    let openai_base_url = p.openai_base_url.as_deref().filter(|s| !s.trim().is_empty()).unwrap_or(&p.base_url);
+    let anthropic_base_url = normalize_empty(p.anthropic_base_url.as_deref());
     conn.execute(
-        "INSERT INTO providers (id, name, base_url, auth_header, auth_scheme, api_key) VALUES (?1,?2,?3,?4,?5,?6)",
-        params![p.id, p.name, p.base_url, p.auth_header, p.auth_scheme, p.api_key],
+        "INSERT INTO providers (id, name, base_url, openai_base_url, anthropic_base_url, auth_header, auth_scheme, api_key) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
+        params![p.id.trim(), p.name.trim(), openai_base_url.trim(), openai_base_url.trim(), anthropic_base_url, p.auth_header.trim(), p.auth_scheme, p.api_key],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 pub fn update_provider(db: &Path, p: &UpdateProvider) -> Result<(), String> {
     let conn = open(db)?;
+    let openai_base_url = p.openai_base_url.as_deref().filter(|s| !s.trim().is_empty()).unwrap_or(&p.base_url);
+    let anthropic_base_url = normalize_empty(p.anthropic_base_url.as_deref());
     conn.execute(
-        "UPDATE providers SET name=?2, base_url=?3, auth_header=?4, auth_scheme=?5, api_key=?6, enabled=?7 WHERE id=?1",
-        params![p.id, p.name, p.base_url, p.auth_header, p.auth_scheme, p.api_key, if p.enabled {1} else {0}],
+        "UPDATE providers SET name=?2, base_url=?3, openai_base_url=?4, anthropic_base_url=?5, auth_header=?6, auth_scheme=?7, api_key=?8, enabled=?9 WHERE id=?1",
+        params![p.id.trim(), p.name.trim(), openai_base_url.trim(), openai_base_url.trim(), anthropic_base_url, p.auth_header.trim(), p.auth_scheme, p.api_key, if p.enabled {1} else {0}],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }

@@ -1,42 +1,37 @@
 # Gateway Switch Project Documentation
 
-Version: 1.3.0
+Version: 1.5.0
 
 This document is the single technical source of truth for Gateway Switch. It merges the former project architecture notes and the Codex Gateway notes into one maintained file.
 
 ## 1. Product Goal
 
-Gateway Switch is a macOS desktop app for routing Claude Desktop and Codex App traffic to third-party model providers.
+Gateway Switch is a macOS desktop app for routing Claude Desktop, Claude Code, and Codex App traffic to third-party model providers.
 
 The app solves two related but different protocol problems:
 
 1. Claude Desktop expects Anthropic Messages API semantics and validates Claude model names. Gateway Switch exposes Claude-compatible aliases, rewrites requests to the real upstream model, first tries an Anthropic Messages upstream, and can automatically fall back to an OpenAI Chat Completions upstream when the provider does not support `/v1/messages`.
-2. Codex App expects OpenAI Responses API semantics. Many third-party providers only support OpenAI Chat Completions. Gateway Switch exposes a local `/v1/responses` endpoint, converts Responses requests into Chat Completions requests, then converts sync and streaming Chat Completions responses back into Responses-shaped output.
+2. Claude Code can either use the local Claude Gateway or bind directly to an Anthropic-compatible provider endpoint through `~/.claude/settings.json`.
+3. Codex App expects OpenAI Responses API semantics. Many third-party providers only support OpenAI Chat Completions. Gateway Switch exposes a local `/v1/responses` endpoint, converts Responses requests into Chat Completions requests, then converts sync and streaming Chat Completions responses back into Responses-shaped output.
 
-The shared design goal is simple: providers are configured once, then product-specific pages decide how Claude or Codex should map model names to upstream models.
+The shared design goal is simple: providers share identity, auth header, auth scheme, and API key, but they do not share one universal Base URL. Provider URLs are split by protocol: OpenAI Base URL for Codex and Chat Completions fallback, Anthropic Base URL for Claude and Claude Code direct requests.
 
-## 2. Version 1.3.0 Scope
+## 2. Version 1.5.0 Scope
 
-Version 1.3.0 is the Codex-focused release.
+Version 1.5.0 is the protocol-split and Claude Code release.
 
 Main changes:
 
-- Added Codex App routing through a local Responses API gateway on port `3457`.
-- Added Responses-to-Chat-Completions request conversion.
-- Added Chat-Completions-to-Responses sync response conversion.
-- Added Chat-Completions-SSE-to-Responses-SSE streaming conversion.
-- Added Codex route management: `Codex Model -> Provider -> Upstream Model`.
-- Added editable Claude aliases and Codex model aliases.
-- Added Claude Chat Completions fallback for providers that only expose `/v1/chat/completions`.
-- Fixed Claude Desktop binding to write the gateway root URL instead of `/v1/messages`, avoiding duplicated `/v1/messages/v1/messages` requests.
-- Trimmed route fields before saving and before upstream dispatch to avoid invisible model-name mismatches.
-- Added Codex App binding into `~/.codex/config.toml`.
-- Added Codex restore logic for returning to the original OpenAI login/provider state.
-- Added duplicate `/v1` protection for provider Base URLs.
-- Added real upstream model verification through request logs and the Codex page.
-- Reworked navigation into Dashboard, Products, Shared Providers, and System.
-- Reworked Dashboard into status-only monitoring: status, refresh, and health checks.
-- Fixed input remounting that caused text fields to lose focus after each typed character.
+- Split Provider URL storage into `openai_base_url` and `anthropic_base_url`.
+- Added Claude Code binding support through `~/.claude/settings.json`.
+- Added Claude Code binding modes: Gateway Route and Direct Provider.
+- Direct Provider mode requires Anthropic Base URL and writes it to `ANTHROPIC_BASE_URL`.
+- Claude Gateway resolves Anthropic requests against Anthropic Base URL, then falls back to OpenAI Base URL for Chat Completions conversion.
+- Codex Gateway resolves upstreams against OpenAI Base URL only.
+- Added XiaoMiMo Anthropic URL preset and legacy migration for existing XiaoMiMo/MiMo providers.
+- Updated UI to show both protocol URLs and make Claude Code binding state visible.
+- Refreshed the frontend visual style with a brighter, tighter layout.
+- Versioned package metadata and release artifacts as `1.5.0`.
 
 ## 3. High-Level Architecture
 
@@ -45,6 +40,7 @@ Gateway Switch
 ├─ React UI
 │  ├─ Dashboard: status, health, recent traffic
 │  ├─ Claude: aliases, routes, Claude Desktop binding
+│  ├─ Claude Code: Gateway Route and Direct Provider binding
 │  ├─ Codex: models, routes, Codex App binding
 │  ├─ Providers: shared upstream provider registry
 │  ├─ Logs: request history and real upstream verification
@@ -70,6 +66,7 @@ Gateway Switch
 │  └─ request_logs
 └─ External Configs
    ├─ Claude Desktop configLibrary
+   ├─ ~/.claude/settings.json
    └─ ~/.codex/config.toml
 ```
 
@@ -102,6 +99,7 @@ Gateway Switch
 | `src-tauri/src/gateway.rs` | Claude/Anthropic-compatible gateway with Chat Completions fallback |
 | `src-tauri/src/codex_gateway.rs` | Codex Responses-compatible gateway and conversion layer |
 | `src-tauri/src/desktop_binding.rs` | Claude Desktop config read/apply/restore |
+| `src-tauri/src/claude_code_binding.rs` | Claude Code settings read/apply/restore |
 | `src-tauri/src/codex_binding.rs` | Codex config read/apply/restore |
 | `src-tauri/src/commands.rs` | Tauri IPC command implementations |
 | `src-tauri/src/settings.rs` | `settings.json` load/save |
@@ -134,6 +132,12 @@ Codex App config is managed at:
 ~/.codex/config.toml
 ```
 
+Claude Code settings are managed at:
+
+```text
+~/.claude/settings.json
+```
+
 Codex backups are written to:
 
 ```text
@@ -150,7 +154,9 @@ Fields:
 
 - `id`: stable provider ID.
 - `name`: display name.
-- `base_url`: provider root or versioned URL.
+- `base_url`: legacy compatibility field, currently stored as the OpenAI URL.
+- `openai_base_url`: OpenAI-compatible provider URL, used for Codex and Chat Completions fallback.
+- `anthropic_base_url`: Anthropic-compatible provider URL, used for Claude and Claude Code direct requests.
 - `auth_header`: usually `Authorization` or `x-api-key`.
 - `auth_scheme`: usually `Bearer`, or empty for raw key headers.
 - `api_key`: stored locally.
@@ -269,7 +275,7 @@ Claude Desktop /v1/messages
 -> Claude Desktop
 ```
 
-This keeps Anthropic-compatible providers working as before while allowing providers such as XiaoMiMo to be used from Claude Desktop.
+This keeps Anthropic-compatible providers working as before while allowing providers such as XiaoMiMo to be used from Claude Desktop through their OpenAI-compatible endpoint when needed.
 
 ### Auth
 
@@ -282,12 +288,19 @@ The app writes `x-api-key` into Claude Desktop binding by default. This is local
 
 ### Provider URL Handling
 
-The gateway appends the required endpoint to the configured provider Base URL. It also avoids double-appending `/v1`.
+The gateway appends the required endpoint to the protocol-specific provider URL. It also avoids double-appending `/v1`.
 
 Examples:
 
 - `https://api.example.com` + `messages` becomes `https://api.example.com/v1/messages`
 - `https://api.example.com/v1` + `messages` becomes `https://api.example.com/v1/messages`
+
+Resolution rules:
+
+- Claude Gateway Anthropic requests use `anthropic_base_url` when present.
+- Claude Gateway Chat Completions fallback uses `openai_base_url`.
+- Codex Gateway always uses `openai_base_url`.
+- Claude Code Direct Provider requires `anthropic_base_url`.
 
 ### Streaming
 
@@ -322,7 +335,55 @@ Binding writes fields such as:
 
 Restore uses the latest backup created before Gateway Switch took over.
 
-## 10. Codex Gateway
+## 10. Claude Code Binding
+
+Claude Code binding reads and writes:
+
+```text
+~/.claude/settings.json
+```
+
+Gateway Route mode writes the local Claude Gateway:
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:3456",
+    "ANTHROPIC_AUTH_TOKEN": "gateway-switch-token",
+    "ANTHROPIC_MODEL": "claude-sonnet-4-6"
+  },
+  "gatewaySwitchClaudeCode": {
+    "managedBy": "Gateway Switch",
+    "mode": "gateway"
+  }
+}
+```
+
+Direct Provider mode writes the selected provider's Anthropic Base URL:
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://token-plan-sgp.xiaomimimo.com/anthropic",
+    "ANTHROPIC_AUTH_TOKEN": "<provider-api-key>",
+    "ANTHROPIC_MODEL": "mimo-v2.5"
+  },
+  "gatewaySwitchClaudeCode": {
+    "managedBy": "Gateway Switch",
+    "mode": "direct-provider"
+  }
+}
+```
+
+Direct Provider is intentionally strict. If the selected provider has no Anthropic Base URL, the app refuses to bind. This prevents Claude Code from sending Anthropic requests to an OpenAI `/v1` endpoint, which can surface as model-not-found errors inside Claude Code.
+
+Restore uses the latest backup under:
+
+```text
+~/.claude/gateway-switch-backups/
+```
+
+## 11. Codex Gateway
 
 ### Endpoint Surface
 
@@ -426,7 +487,7 @@ Common upstream errors:
 - 429: provider quota or rate limit.
 - 5xx: provider outage.
 
-## 11. Codex App Binding
+## 12. Codex App Binding
 
 Binding writes to:
 
@@ -460,7 +521,7 @@ Important fields:
 
 Restore returns to the latest unmanaged backup. If no clean backup exists, Gateway Switch removes its managed `gateway-switch` config block while preserving unrelated Codex config sections.
 
-## 12. Reasoning Behavior With Third-Party Models
+## 13. Reasoning Behavior With Third-Party Models
 
 Gateway Switch does not add or remove model reasoning ability. It only converts protocol shape.
 
@@ -473,7 +534,7 @@ Fast responses are normal when:
 - The provider returns only final text.
 - The model does not expose visible reasoning over Chat Completions.
 
-## 13. Verifying The Real Model
+## 14. Verifying The Real Model
 
 The recommended verification path is:
 
@@ -490,35 +551,36 @@ The important log fields are:
 - `Status`: whether the upstream call succeeded.
 - `Duration`: response time.
 
-## 14. Project History And Context Limits
+## 15. Project History And Context Limits
 
 Gateway Switch preserves local config sections such as `[projects...]` when binding or restoring Codex. This preserves project trust and local config as much as possible.
 
 Codex App conversation history, account state, and provider-specific cloud state are controlled by Codex itself. Switching between OpenAI login and a local Gateway provider can show different conversation lists. Gateway Switch cannot force different Codex account/provider states to share one conversation database unless Codex App exposes that capability.
 
-## 15. Frontend UX Model
+## 16. Frontend UX Model
 
 Navigation is grouped as:
 
 - Dashboard: status only, refresh, health checks, recent traffic.
-- Products: Claude and Codex product-specific setup.
+- Products: Claude, Claude Code, and Codex product-specific setup.
 - Shared: Providers, reused by both products.
 - System: Logs and Settings.
 
-Dashboard intentionally does not perform binding or gateway startup in version 1.3.0. Startup and binding live on the product page they affect:
+Dashboard intentionally does not perform binding or gateway startup. Startup and binding live on the product page they affect:
 
 - Claude page: Claude route setup and Claude Desktop binding.
+- Claude Code page: Claude Code Gateway Route or Direct Provider binding.
 - Codex page: Codex route setup and Codex App binding.
 
 This prevents confusion between the Claude gateway and Codex gateway.
 
-## 16. Input Focus Bug Fix
+## 17. Input Focus Bug Fix
 
 The app originally rendered page functions as nested React components, which changed component identity on every parent render. That caused input fields to remount after typing one character, losing focus.
 
 The fix is to call internal page functions directly in the content switch instead of rendering them as nested component tags. This keeps input elements stable during state updates.
 
-## 17. Tauri IPC Commands
+## 18. Tauri IPC Commands
 
 Provider and route commands:
 
@@ -552,6 +614,9 @@ Binding commands:
 - `get_desktop_info`
 - `apply_binding`
 - `restore_binding`
+- `get_claude_code_info`
+- `apply_claude_code_binding`
+- `restore_claude_code_binding`
 - `get_codex_binding_info`
 - `apply_codex_binding`
 - `restore_codex_binding`
@@ -567,7 +632,7 @@ Health and settings commands:
 - `import_config`
 - `list_logs`
 
-## 18. Build And Release
+## 19. Build And Release
 
 Development:
 
@@ -599,10 +664,10 @@ macOS artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.3.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.5.0_aarch64.dmg
 ```
 
-## 19. Release Checklist
+## 20. Release Checklist
 
 - Frontend build passes.
 - Rust tests pass.
@@ -613,13 +678,16 @@ src-tauri/target/release/bundle/dmg/Gateway Switch_1.3.0_aarch64.dmg
 - Codex streaming response completes with `response.completed`.
 - Logs show requested model, provider, and real upstream model.
 - Claude Desktop binding creates a backup and can restore.
+- Claude Code Gateway Route binding creates a backup and can restore.
+- Claude Code Direct Provider binding uses Anthropic Base URL.
 - Codex binding creates a backup and can restore.
 - DMG version matches `package.json`, `Cargo.toml`, and `tauri.conf.json`.
 
-## 20. Known Limitations
+## 21. Known Limitations
 
-- Claude Gateway requires an Anthropic Messages-compatible upstream.
+- Claude Code Direct Provider requires an Anthropic Messages-compatible upstream.
 - Codex Gateway requires a Chat Completions-compatible upstream.
+- Claude Gateway fallback requires a Chat Completions-compatible upstream.
 - Codex visible reasoning depends on what the upstream model/provider returns.
 - Gateway Switch cannot merge Codex cloud/account conversation history across provider states.
 - API keys are stored locally for convenience; the app is designed for local personal use.

@@ -1,7 +1,7 @@
 use std::{fs, time::Instant};
 use tauri::State;
 use crate::{
-    codex_binding, codex_gateway, database, desktop_binding, gateway, models::*, settings,
+    claude_code_binding, codex_binding, codex_gateway, database, desktop_binding, gateway, models::*, settings,
     state::{AppState, GatewayStatus},
 };
 
@@ -128,6 +128,50 @@ pub fn restore_binding(st: State<'_, AppState>) -> Result<desktop_binding::Deskt
 }
 
 #[tauri::command]
+pub fn get_claude_code_info(st: State<'_, AppState>) -> Result<ClaudeCodeInfo, String> {
+    let _ = st;
+    claude_code_binding::inspect(&dirs::home_dir().ok_or("no home")?)
+}
+
+#[tauri::command]
+pub async fn apply_claude_code_binding(st: State<'_, AppState>, payload: ClaudeCodeBindPayload) -> Result<ClaudeCodeInfo, String> {
+    match payload.mode.as_str() {
+        "gateway" => {
+            let profile = database::get_profile(&st.db_path)?;
+            let _ = gateway::start(&st);
+            claude_code_binding::apply_gateway(
+                &dirs::home_dir().ok_or("no home")?,
+                &desktop_binding::gateway_base_url(&profile.listen_host, profile.listen_port),
+                &profile.auth_token,
+                &payload.model,
+            )
+        }
+        "provider" => {
+            let provider_id = payload.provider_id.as_deref().ok_or("Choose a provider")?;
+            let provider = database::list_providers(&st.db_path)?
+                .into_iter()
+                .find(|p| p.id == provider_id)
+                .ok_or_else(|| format!("Provider '{provider_id}' not found"))?;
+            claude_code_binding::apply_provider(
+                &dirs::home_dir().ok_or("no home")?,
+                provider.anthropic_base_url.as_deref().ok_or("This provider does not have an Anthropic Base URL for Claude Code Direct Provider mode")?,
+                &provider.auth_header,
+                provider.auth_scheme.as_deref(),
+                provider.api_key.as_deref().unwrap_or_default(),
+                payload.upstream_model.as_deref().unwrap_or(&payload.model),
+            )
+        }
+        _ => Err("Unknown Claude Code binding mode".into()),
+    }
+}
+
+#[tauri::command]
+pub fn restore_claude_code_binding(st: State<'_, AppState>) -> Result<ClaudeCodeInfo, String> {
+    let _ = st;
+    claude_code_binding::restore(&dirs::home_dir().ok_or("no home")?)
+}
+
+#[tauri::command]
 pub async fn check_gateway_health(st: State<'_, AppState>) -> Result<HealthStatus, String> {
     let profile = database::get_profile(&st.db_path)?;
     let url = format!("http://{}:{}/health", profile.listen_host, profile.listen_port);
@@ -153,7 +197,7 @@ pub async fn check_provider_health(st: State<'_, AppState>, id: String) -> Resul
     let providers = database::list_providers(&st.db_path)?;
     let p = providers.into_iter().find(|p| p.id == id).ok_or("Provider not found")?;
     let client = reqwest::Client::new();
-    let mut req = client.get(upstream_url(&p.base_url, "models"));
+    let mut req = client.get(upstream_url(&p.openai_base_url, "models"));
     req = req.header("content-type", "application/json");
     if let Some(key) = p.api_key.as_deref().filter(|s| !s.is_empty()) {
         let mut val = key.to_string();
@@ -207,6 +251,8 @@ pub fn import_config(st: State<'_, AppState>, file_path: String) -> Result<Strin
                 if existing.iter().any(|e| e.id == id) {
                     let _ = database::update_provider(&st.db_path, &UpdateProvider {
                         id: id.into(), name: name.into(), base_url: url.into(),
+                        openai_base_url: p.get("openai_base_url").and_then(|v| v.as_str()).map(Into::into),
+                        anthropic_base_url: p.get("anthropic_base_url").and_then(|v| v.as_str()).map(Into::into),
                         auth_header: p.get("auth_header").and_then(|v| v.as_str()).unwrap_or("x-api-key").into(),
                         auth_scheme: p.get("auth_scheme").and_then(|v| v.as_str()).map(Into::into),
                         api_key: p.get("api_key").and_then(|v| v.as_str()).map(Into::into),
@@ -215,6 +261,8 @@ pub fn import_config(st: State<'_, AppState>, file_path: String) -> Result<Strin
                 } else {
                     let _ = database::create_provider(&st.db_path, &CreateProvider {
                         id: id.into(), name: name.into(), base_url: url.into(),
+                        openai_base_url: p.get("openai_base_url").and_then(|v| v.as_str()).map(Into::into),
+                        anthropic_base_url: p.get("anthropic_base_url").and_then(|v| v.as_str()).map(Into::into),
                         auth_header: p.get("auth_header").and_then(|v| v.as_str()).unwrap_or("x-api-key").into(),
                         auth_scheme: p.get("auth_scheme").and_then(|v| v.as_str()).map(Into::into),
                         api_key: p.get("api_key").and_then(|v| v.as_str()).map(Into::into),

@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
 // ── Types ──
-type Page = "dashboard" | "claude" | "codex" | "providers" | "logs" | "settings";
+type Page = "dashboard" | "claude" | "claudeCode" | "codex" | "providers" | "logs" | "settings";
 
 type CodexRoute = {
   id: string;
@@ -49,6 +49,8 @@ type Provider = {
   id: string;
   name: string;
   base_url: string;
+  openai_base_url: string;
+  anthropic_base_url: string | null;
   auth_header: string;
   auth_scheme: string | null;
   api_key: string | null;
@@ -71,6 +73,16 @@ type DesktopInfo = {
   base_url: string | null;
   auth_scheme: string | null;
   models: string[];
+  backup_path: string | null;
+};
+
+type ClaudeCodeInfo = {
+  config_path: string;
+  config_exists: boolean;
+  managed: boolean;
+  base_url: string | null;
+  model: string | null;
+  auth_env: string | null;
   backup_path: string | null;
 };
 
@@ -120,12 +132,12 @@ const DEFAULT_CLAUDE_ALIASES = [
 const DEFAULT_CODEX_MODELS = ["gpt-4o", "gpt-4o-mini", "o3", "o4-mini", "o3-pro", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"];
 
 const PROVIDER_PRESETS = [
-  { id: "volcengine", name: "Volcano Engine", base_url: "https://ark.cn-beijing.volces.com/api/v3", auth_header: "Authorization", auth_scheme: "Bearer", logo: "V", color: "#ef4444", colorBg: "rgba(239,68,68,0.1)", shortUrl: "ark.cn-beijing.volces.com" },
-  { id: "xiaomimo", name: "XiaoMiMo", base_url: "https://api.xiaomimo.com/v1", auth_header: "Authorization", auth_scheme: "Bearer", logo: "X", color: "#f59e0b", colorBg: "rgba(245,158,11,0.1)", shortUrl: "api.xiaomimo.com" },
-  { id: "openrouter", name: "OpenRouter", base_url: "https://openrouter.ai/api/v1", auth_header: "Authorization", auth_scheme: "Bearer", logo: "OR", color: "#6366f1", colorBg: "rgba(99,102,241,0.1)", shortUrl: "openrouter.ai" },
-  { id: "deepseek", name: "DeepSeek", base_url: "https://api.deepseek.com/v1", auth_header: "Authorization", auth_scheme: "Bearer", logo: "DS", color: "#3b82f6", colorBg: "rgba(59,130,246,0.1)", shortUrl: "api.deepseek.com" },
-  { id: "siliconflow", name: "SiliconFlow", base_url: "https://api.siliconflow.cn/v1", auth_header: "Authorization", auth_scheme: "Bearer", logo: "SF", color: "#8b5cf6", colorBg: "rgba(139,92,246,0.1)", shortUrl: "api.siliconflow.cn" },
-  { id: "custom", name: "Custom", base_url: "", auth_header: "x-api-key", auth_scheme: "", logo: "+", color: "#64748b", colorBg: "rgba(100,116,139,0.1)", shortUrl: "Add your own provider" },
+  { id: "volcengine", name: "Volcano Engine", openai_base_url: "https://ark.cn-beijing.volces.com/api/v3", anthropic_base_url: "", auth_header: "Authorization", auth_scheme: "Bearer", logo: "V", color: "#ef4444", colorBg: "rgba(239,68,68,0.1)", shortUrl: "ark.cn-beijing.volces.com" },
+  { id: "xiaomimo", name: "XiaoMiMo", openai_base_url: "https://token-plan-sgp.xiaomimimo.com/v1", anthropic_base_url: "https://token-plan-sgp.xiaomimimo.com/anthropic", auth_header: "Authorization", auth_scheme: "Bearer", logo: "X", color: "#f59e0b", colorBg: "rgba(245,158,11,0.1)", shortUrl: "xiaomimimo.com" },
+  { id: "openrouter", name: "OpenRouter", openai_base_url: "https://openrouter.ai/api/v1", anthropic_base_url: "", auth_header: "Authorization", auth_scheme: "Bearer", logo: "OR", color: "#6366f1", colorBg: "rgba(99,102,241,0.1)", shortUrl: "openrouter.ai" },
+  { id: "deepseek", name: "DeepSeek", openai_base_url: "https://api.deepseek.com/v1", anthropic_base_url: "", auth_header: "Authorization", auth_scheme: "Bearer", logo: "DS", color: "#3b82f6", colorBg: "rgba(59,130,246,0.1)", shortUrl: "api.deepseek.com" },
+  { id: "siliconflow", name: "SiliconFlow", openai_base_url: "https://api.siliconflow.cn/v1", anthropic_base_url: "", auth_header: "Authorization", auth_scheme: "Bearer", logo: "SF", color: "#8b5cf6", colorBg: "rgba(139,92,246,0.1)", shortUrl: "api.siliconflow.cn" },
+  { id: "custom", name: "Custom", openai_base_url: "", anthropic_base_url: "", auth_header: "x-api-key", auth_scheme: "", logo: "+", color: "#64748b", colorBg: "rgba(100,116,139,0.1)", shortUrl: "Add your own provider" },
 ];
 
 // ── Helpers ──
@@ -290,6 +302,7 @@ function App() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [routes, setRoutes] = useState<ModelRoute[]>([]);
   const [desktop, setDesktop] = useState<DesktopInfo | null>(null);
+  const [claudeCode, setClaudeCode] = useState<ClaudeCodeInfo | null>(null);
   const [logs, setLogs] = useState<RequestLog[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
@@ -310,9 +323,14 @@ function App() {
   const codexPort = 3457;
   const [cForm, setCForm] = useState({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "" });
   const [editingC, setEditingC] = useState<string | null>(null);
+  const [ccMode, setCcMode] = useState<"gateway" | "provider">("gateway");
+  const [ccModel, setCcModel] = useState("claude-sonnet-4-6");
+  const [ccProviderId, setCcProviderId] = useState("");
+  const [ccUpstreamModel, setCcUpstreamModel] = useState("");
 
   // Provider form
-  const [pForm, setPForm] = useState({ id: "", name: "", base_url: "", auth_header: "x-api-key", auth_scheme: "", api_key: "" });
+  const emptyProviderForm = { id: "", name: "", base_url: "", openai_base_url: "", anthropic_base_url: "", auth_header: "x-api-key", auth_scheme: "", api_key: "" };
+  const [pForm, setPForm] = useState(emptyProviderForm);
   const [editingP, setEditingP] = useState<string | null>(null);
 
   // Route form
@@ -334,11 +352,12 @@ function App() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [s, p, r, d, l, cfg, cs, cr, cb, ca, cma] = await Promise.all([
+      const [s, p, r, d, cc, l, cfg, cs, cr, cb, ca, cma] = await Promise.all([
         invoke<Status>("get_status"),
         invoke<Provider[]>("list_providers"),
         invoke<ModelRoute[]>("list_routes"),
         invoke<DesktopInfo>("get_desktop_info"),
+        invoke<ClaudeCodeInfo>("get_claude_code_info"),
         invoke<RequestLog[]>("list_logs"),
         invoke<Settings>("get_settings"),
         invoke<CodexGatewayStatus>("get_codex_status"),
@@ -351,6 +370,7 @@ function App() {
       setProviders(p);
       setRoutes(r);
       setDesktop(d);
+      setClaudeCode(cc);
       setLogs(l);
       setSettings(cfg);
       setCodexStatus(cs);
@@ -377,6 +397,11 @@ function App() {
     if (!codexBindModel && firstModel) setCodexBindModel(firstModel);
   }, [codexBindModel, codexModelOptions, codexRoutes]);
 
+  useEffect(() => {
+    const firstClaudeModel = routes.find(r => r.enabled)?.claude_alias ?? claudeAliasOptions[0] ?? "";
+    if (!ccModel && firstClaudeModel) setCcModel(firstClaudeModel);
+  }, [ccModel, claudeAliasOptions, routes]);
+
   // ---- Actions ----
   const startGw = async () => { try { await invoke("start_gateway"); await loadAll(); flash("Gateway started"); } catch (e) { flash(String(e), "error"); } };
   const stopGw = async () => { try { await invoke("stop_gateway"); await loadAll(); flash("Gateway stopped"); } catch (e) { flash(String(e), "error"); } };
@@ -384,6 +409,40 @@ function App() {
   const checkCodexHealth = async () => { try { const h = await invoke<Health>("check_codex_health"); setCodexHealth(h); } catch (e) { flash(String(e), "error"); } };
   const bindDesktop = async () => { try { await invoke("apply_binding"); await loadAll(); flash("Desktop bound"); } catch (e) { flash(String(e), "error"); } };
   const restoreDesktop = async () => { try { await invoke("restore_binding"); await loadAll(); flash("Desktop restored"); } catch (e) { flash(String(e), "error"); } };
+  const bindClaudeCode = async () => {
+    try {
+      if (ccMode === "provider") {
+        const provider = providers.find(p => p.id === ccProviderId);
+        if (!provider) {
+          flash("Choose a provider for Direct Provider mode", "error");
+          return;
+        }
+        if (!provider.anthropic_base_url) {
+          flash("Direct Provider mode needs an Anthropic Base URL on the selected provider", "error");
+          return;
+        }
+        if (!ccUpstreamModel.trim()) {
+          flash("Enter the real upstream model name for Claude Code", "error");
+          return;
+        }
+      }
+      const payload = ccMode === "gateway"
+        ? { mode: "gateway", model: ccModel }
+        : { mode: "provider", model: ccUpstreamModel, provider_id: ccProviderId, upstream_model: ccUpstreamModel };
+      const info = await invoke<ClaudeCodeInfo>("apply_claude_code_binding", { payload });
+      setClaudeCode(info);
+      await loadAll();
+      flash("Claude Code bound");
+    } catch (e) { flash(String(e), "error"); }
+  };
+  const restoreClaudeCode = async () => {
+    try {
+      const info = await invoke<ClaudeCodeInfo>("restore_claude_code_binding");
+      setClaudeCode(info);
+      await loadAll();
+      flash("Claude Code restored");
+    } catch (e) { flash(String(e), "error"); }
+  };
 
   // Provider CRUD
   const saveProvider = async () => {
@@ -396,7 +455,7 @@ function App() {
         flash("Provider created");
       }
       setEditingP(null);
-      setPForm({ id: "", name: "", base_url: "", auth_header: "x-api-key", auth_scheme: "", api_key: "" });
+      setPForm(emptyProviderForm);
       await loadAll();
     } catch (e) { flash(String(e), "error"); }
   };
@@ -405,7 +464,7 @@ function App() {
   };
   const editProvider = (p: Provider) => {
     setEditingP(p.id);
-    setPForm({ id: p.id, name: p.name, base_url: p.base_url, auth_header: p.auth_header, auth_scheme: p.auth_scheme ?? "", api_key: p.api_key ?? "" });
+    setPForm({ id: p.id, name: p.name, base_url: p.openai_base_url, openai_base_url: p.openai_base_url, anthropic_base_url: p.anthropic_base_url ?? "", auth_header: p.auth_header, auth_scheme: p.auth_scheme ?? "", api_key: p.api_key ?? "" });
   };
 
   // Route CRUD
@@ -539,7 +598,7 @@ function App() {
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.3.0</div>
+          <div className="brand-sub">v1.5.0</div>
         </div>
       </div>
 
@@ -557,6 +616,10 @@ function App() {
           <IconShuffle />
           Claude
           {routes.length > 0 && <span className="nav-badge">{routes.length}</span>}
+        </button>
+        <button className={`nav-item ${page === "claudeCode" ? "active" : ""}`} onClick={() => setPage("claudeCode")}>
+          <IconTerminal />
+          Claude Code
         </button>
         <button className={`nav-item ${page === "codex" ? "active" : ""}`} onClick={() => setPage("codex")}>
           <IconTerminal />
@@ -602,7 +665,7 @@ function App() {
     <div>
       <div className="page-header">
         <h1>Dashboard</h1>
-        <p>Product gateway overview and quick controls</p>
+        <p>Read-only product gateway overview</p>
       </div>
 
       {/* KPI Row */}
@@ -638,8 +701,8 @@ function App() {
             <IconMonitor />
           </div>
           <div className="kpi-info">
-            <div className="kpi-label">Bindings</div>
-            {desktop?.managed || codexBinding?.managed ? (
+            <div className="kpi-label">App Bindings</div>
+            {desktop?.managed || codexBinding?.managed || claudeCode?.managed ? (
               <span className="kpi-badge blue"><span className="dot" /> Managed</span>
             ) : (
               <span className="kpi-badge muted"><span className="dot" /> Unmanaged</span>
@@ -668,7 +731,7 @@ function App() {
 
       <div className="two-col">
         <div className="card">
-          <div className="card-title">Claude Control</div>
+          <div className="card-title">Claude</div>
           <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
             <span className="info-key">Gateway</span>
             <span className="info-val">
@@ -678,12 +741,10 @@ function App() {
             </span>
             <span className="info-key">Binding</span>
             <span className="info-val">{desktop?.managed ? "Claude Desktop uses Gateway Switch" : "Claude Desktop is unmanaged"}</span>
+            <span className="info-key">Claude Code</span>
+            <span className="info-val">{claudeCode?.managed ? `${claudeCode.model ?? "model"} via ${claudeCode.base_url ?? "Gateway"}` : "Claude Code is unmanaged"}</span>
             <span className="info-key">Last Call</span>
             <span className="info-val">{latestClaudeLog ? `${latestClaudeLog.upstream_model} via ${latestClaudeLog.provider_id}` : "No traffic yet"}</span>
-          </div>
-          <div className="qa-buttons">
-            <button className="btn" onClick={checkHealth}><IconZap /> Check Health</button>
-            <button className="btn" onClick={() => void loadAll()}><IconRefresh /> Refresh</button>
           </div>
 
           {health && (
@@ -709,7 +770,7 @@ function App() {
         </div>
 
         <div className="card">
-          <div className="card-title">Codex Control</div>
+          <div className="card-title">Codex</div>
           <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
             <span className="info-key">Gateway</span>
             <span className="info-val">
@@ -721,10 +782,6 @@ function App() {
             <span className="info-val">{codexBinding?.managed ? `Codex App uses ${codexBinding.model ?? "Gateway Switch"}` : "Codex App uses OpenAI login"}</span>
             <span className="info-key">Last Call</span>
             <span className="info-val">{latestCodexLog ? `${latestCodexLog.upstream_model} via ${latestCodexLog.provider_id}` : "No traffic yet"}</span>
-          </div>
-          <div className="qa-buttons">
-            <button className="btn" onClick={checkCodexHealth}><IconZap /> Check Health</button>
-            <button className="btn" onClick={() => void loadAll()}><IconRefresh /> Refresh</button>
           </div>
           {codexHealth && (
             <div className="health-row">
@@ -746,12 +803,7 @@ function App() {
           return (
             <div
               key={preset.id}
-              className="provider-card"
-              onClick={() => {
-                setPage("providers");
-                setEditingP(null);
-                setPForm({ id: preset.id, name: preset.name, base_url: preset.base_url, auth_header: preset.auth_header, auth_scheme: preset.auth_scheme, api_key: "" });
-              }}
+              className="provider-card read-only"
             >
               <div className="provider-logo" style={{ background: preset.colorBg, color: preset.color }}>
                 {preset.logo}
@@ -775,7 +827,7 @@ function App() {
     <div>
       <div className="page-header">
         <h1>Providers</h1>
-        <p>Manage your Anthropic-compatible upstream services</p>
+        <p>Share credentials across products, with protocol-specific base URLs for OpenAI and Anthropic clients</p>
       </div>
 
       {/* Preset grid */}
@@ -789,7 +841,7 @@ function App() {
               className="provider-card"
               onClick={() => {
                 setEditingP(null);
-                setPForm({ id: preset.id, name: preset.name, base_url: preset.base_url, auth_header: preset.auth_header, auth_scheme: preset.auth_scheme, api_key: "" });
+                setPForm({ id: preset.id, name: preset.name, base_url: preset.openai_base_url, openai_base_url: preset.openai_base_url, anthropic_base_url: preset.anthropic_base_url, auth_header: preset.auth_header, auth_scheme: preset.auth_scheme, api_key: "" });
               }}
             >
               <div className="provider-logo" style={{ background: preset.colorBg, color: preset.color }}>
@@ -818,8 +870,12 @@ function App() {
             <input value={pForm.name} onChange={e => setPForm({ ...pForm, name: e.target.value })} placeholder="e.g. Volcano Engine" />
           </div>
           <div className="form-field">
-            <label>Base URL</label>
-            <input value={pForm.base_url} onChange={e => setPForm({ ...pForm, base_url: e.target.value })} placeholder="https://..." />
+            <label>OpenAI Base URL</label>
+            <input value={pForm.openai_base_url} onChange={e => setPForm({ ...pForm, base_url: e.target.value, openai_base_url: e.target.value })} placeholder="https://.../v1" />
+          </div>
+          <div className="form-field">
+            <label>Anthropic Base URL</label>
+            <input value={pForm.anthropic_base_url} onChange={e => setPForm({ ...pForm, anthropic_base_url: e.target.value })} placeholder="https://.../anthropic" />
           </div>
           <div className="form-field">
             <label>Auth Header</label>
@@ -841,7 +897,7 @@ function App() {
           {editingP && (
             <button className="btn" onClick={() => {
               setEditingP(null);
-              setPForm({ id: "", name: "", base_url: "", auth_header: "x-api-key", auth_scheme: "", api_key: "" });
+              setPForm(emptyProviderForm);
             }}>Cancel</button>
           )}
         </div>
@@ -853,7 +909,8 @@ function App() {
           <thead>
             <tr>
               <th>Provider</th>
-              <th>Base URL</th>
+              <th>OpenAI URL</th>
+              <th>Anthropic URL</th>
               <th>Auth</th>
               <th>Status</th>
               <th>Actions</th>
@@ -863,7 +920,14 @@ function App() {
             {providers.map(p => (
               <tr key={p.id}>
                 <td style={{ fontWeight: 600 }}>{p.name}</td>
-                <td style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--muted)" }}>{p.base_url}</td>
+                <td><span className="url-cell">{p.openai_base_url}</span></td>
+                <td>
+                  {p.anthropic_base_url ? (
+                    <span className="url-cell">{p.anthropic_base_url}</span>
+                  ) : (
+                    <span className="muted-pill">Not configured</span>
+                  )}
+                </td>
                 <td><span className="badge badge-blue">{p.auth_header}</span></td>
                 <td><span className={`badge ${p.enabled ? "badge-green" : "badge-gray"}`}>{p.enabled ? "Active" : "Disabled"}</span></td>
                 <td>
@@ -876,7 +940,7 @@ function App() {
             ))}
             {providers.length === 0 && (
               <tr>
-                <td colSpan={5}>
+                <td colSpan={6}>
                   <div className="empty-state">
                     <div className="empty-icon">--</div>
                     <h3>No providers configured</h3>
@@ -1089,6 +1153,127 @@ function App() {
     </div>
   );
 
+  const ClaudeCodePage = () => {
+    const selectedProvider = providers.find(p => p.id === ccProviderId);
+    const gatewayRouteOptions = routes.length > 0 ? routes.filter(r => r.enabled).map(r => r.claude_alias) : claudeAliasOptions;
+    const directProviderReady = ccMode === "provider" && !!selectedProvider?.anthropic_base_url && !!ccUpstreamModel.trim();
+
+    return (
+      <div>
+        <div className="page-header">
+          <h1>Claude Code</h1>
+          <p>Bind Claude Code independently from Claude Desktop</p>
+        </div>
+
+        <div className="two-col">
+          <div className="card">
+            <div className="card-title">Claude Code Binding</div>
+            <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+              <span className="info-key">Config</span>
+              <span className="info-val">{claudeCode?.config_path ?? "~/.claude/settings.json"}</span>
+              <span className="info-key">Status</span>
+              <span className="info-val">
+                <span className={`badge ${claudeCode?.managed ? "badge-green" : "badge-gray"}`}>
+                  {claudeCode?.managed ? "Managed by Gateway Switch" : "Not bound"}
+                </span>
+              </span>
+              <span className="info-key">Base URL</span>
+              <span className="info-val">{claudeCode?.base_url ?? "Not set"}</span>
+              <span className="info-key">Model</span>
+              <span className="info-val">{claudeCode?.model ?? "Not set"}</span>
+              <span className="info-key">Auth Env</span>
+              <span className="info-val">{claudeCode?.auth_env ?? "Not set"}</span>
+              <span className="info-key">Backup</span>
+              <span className="info-val">{claudeCode?.backup_path ? "Available" : "None"}</span>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-title">Connection Mode</div>
+            <div className="mode-switch">
+              <button className={`mode-option ${ccMode === "gateway" ? "active" : ""}`} onClick={() => setCcMode("gateway")}>
+                <IconShuffle />
+                <span>Gateway Route</span>
+              </button>
+              <button className={`mode-option ${ccMode === "provider" ? "active" : ""}`} onClick={() => setCcMode("provider")}>
+                <IconSun />
+                <span>Direct Provider</span>
+              </button>
+            </div>
+
+            {ccMode === "gateway" ? (
+              <div className="binding-actions" style={{ marginTop: 16 }}>
+                <label>Claude Code model</label>
+                <select value={ccModel} onChange={e => setCcModel(e.target.value)}>
+                  {Array.from(new Set(gatewayRouteOptions)).map(model => (
+                    <option key={model} value={model}>{model}</option>
+                  ))}
+                </select>
+                <p>Claude Code will use the local Claude Gateway at `http://127.0.0.1:{status?.gateway_port ?? settings?.listen_port ?? 3456}`. This supports your configured Claude routes, including Chat Completions fallback for providers such as XiaoMiMo.</p>
+              </div>
+            ) : (
+              <div className="binding-actions" style={{ marginTop: 16 }}>
+                <label>Provider</label>
+                <select value={ccProviderId} onChange={e => {
+                  const providerId = e.target.value;
+                  setCcProviderId(providerId);
+                  const route = routes.find(r => r.provider_id === providerId);
+                  if (route && !ccUpstreamModel) setCcUpstreamModel(route.upstream_model);
+                }}>
+                  <option value="">Select provider...</option>
+                  {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                {selectedProvider && (
+                  <div className="protocol-preview">
+                    <div>
+                      <span>OpenAI</span>
+                      <code>{selectedProvider.openai_base_url}</code>
+                    </div>
+                    <div className={selectedProvider.anthropic_base_url ? "" : "missing"}>
+                      <span>Anthropic</span>
+                      <code>{selectedProvider.anthropic_base_url || "Required for Direct Provider"}</code>
+                    </div>
+                  </div>
+                )}
+                <label>Upstream model</label>
+                <input value={ccUpstreamModel} onChange={e => setCcUpstreamModel(e.target.value)} placeholder="e.g. claude-sonnet-4-5" />
+                <p>Direct Provider writes the provider's Anthropic Base URL and API key into Claude Code. Use Gateway Route when a provider only supports OpenAI Chat Completions.</p>
+                {selectedProvider && (
+                  <div className="route-flow">
+                    <span>{selectedProvider.name}</span>
+                    <IconArrowRight />
+                    <span>{selectedProvider.anthropic_base_url || "Missing Anthropic URL"}</span>
+                    <IconArrowRight />
+                    <span><b>{ccUpstreamModel || "model"}</b></span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="qa-buttons" style={{ marginTop: 16, marginBottom: 0 }}>
+              <button className="btn btn-primary" onClick={bindClaudeCode} disabled={ccMode === "provider" && !directProviderReady}><IconLink /> Bind Claude Code</button>
+              <button className="btn" onClick={restoreClaudeCode} disabled={!claudeCode?.managed && !claudeCode?.backup_path}><IconUnlink /> Restore</button>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-title">Runtime Environment</div>
+          <div className="note-grid">
+            <div>
+              <strong>Gateway Route</strong>
+              <p>Writes `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, and `ANTHROPIC_MODEL` into `~/.claude/settings.json`. Claude Desktop binding is not touched.</p>
+            </div>
+            <div>
+              <strong>Direct Provider</strong>
+              <p>Writes `ANTHROPIC_BASE_URL` from the provider's Anthropic URL. The OpenAI URL is reserved for Codex and Chat Completions fallback.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // =====================================================
   //  CODEX PAGE
   // =====================================================
@@ -1121,8 +1306,18 @@ function App() {
             ) : (
               <button className="btn btn-primary" onClick={startCodex}><IconPlay /> Start</button>
             )}
+            <button className="btn" onClick={checkCodexHealth}><IconZap /> Check Health</button>
             <button className="btn" onClick={() => void loadAll()}><IconRefresh /> Refresh</button>
           </div>
+          {codexHealth && (
+            <div className="health-row">
+              <span className="health-label">Codex</span>
+              <div className="health-bar-track">
+                <div className={`health-bar-fill ${codexHealth.ok ? "" : "err"}`} style={{ width: codexHealth.ok ? "100%" : "0%" }} />
+              </div>
+              <span className={`health-text ${codexHealth.ok ? "ok" : "err"}`}>{codexHealth.message}</span>
+            </div>
+          )}
         </div>
 
         <div className="card">
@@ -1538,6 +1733,7 @@ function App() {
     switch (page) {
       case "dashboard": return DashboardPage();
       case "claude": return ClaudePage();
+      case "claudeCode": return ClaudeCodePage();
       case "codex": return CodexPage();
       case "providers": return ProvidersPage();
       case "logs": return LogsPage();

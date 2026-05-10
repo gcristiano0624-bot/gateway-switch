@@ -49,6 +49,8 @@ pub struct Provider {
     pub id: String,
     pub name: String,
     pub base_url: String,
+    pub openai_base_url: String,
+    pub anthropic_base_url: Option<String>,
     pub auth_header: String,
     pub auth_scheme: Option<String>,
     pub api_key: Option<String>,
@@ -60,6 +62,8 @@ pub struct CreateProvider {
     pub id: String,
     pub name: String,
     pub base_url: String,
+    pub openai_base_url: Option<String>,
+    pub anthropic_base_url: Option<String>,
     pub auth_header: String,
     pub auth_scheme: Option<String>,
     pub api_key: Option<String>,
@@ -70,6 +74,8 @@ pub struct UpdateProvider {
     pub id: String,
     pub name: String,
     pub base_url: String,
+    pub openai_base_url: Option<String>,
+    pub anthropic_base_url: Option<String>,
     pub auth_header: String,
     pub auth_scheme: Option<String>,
     pub api_key: Option<String>,
@@ -121,6 +127,25 @@ pub struct CodexBindingInfo {
     pub model: Option<String>,
     pub base_url: Option<String>,
     pub backup_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ClaudeCodeInfo {
+    pub config_path: String,
+    pub config_exists: bool,
+    pub managed: bool,
+    pub base_url: Option<String>,
+    pub model: Option<String>,
+    pub auth_env: Option<String>,
+    pub backup_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClaudeCodeBindPayload {
+    pub mode: String,
+    pub model: String,
+    pub provider_id: Option<String>,
+    pub upstream_model: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

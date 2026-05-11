@@ -1,6 +1,6 @@
 # Gateway Switch Project Documentation
 
-Version: 1.6.1
+Version: 1.6.2
 
 This document is the single technical source of truth for Gateway Switch. It merges the former project architecture notes and the Codex Gateway notes into one maintained file.
 
@@ -9,7 +9,7 @@ This document is the single technical source of truth for Gateway Switch. It mer
 If another AI receives this repository, start here:
 
 - Product: macOS Tauri app that routes Claude Desktop, Claude Code, and Codex App to third-party model providers.
-- Current version: `1.6.1`.
+- Current version: `1.6.2`.
 - Main frontend: `src/App.tsx` and `src/App.css`.
 - Main backend: `src-tauri/src/*.rs`.
 - Claude gateway: `src-tauri/src/gateway.rs`, local Anthropic Messages surface on `127.0.0.1:3456`.
@@ -20,7 +20,7 @@ If another AI receives this repository, start here:
 - Bindings: Claude Desktop in `desktop_binding.rs`, Claude Code in `claude_code_binding.rs`, Codex in `codex_binding.rs`.
 - Local data: `~/Library/Application Support/Gateway Switch/`.
 - Build: `PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build` when `cargo` is not already on `PATH`.
-- Latest verified tests: `pnpm build` and `cargo test`, 23 Rust tests passing after 1.6.1 Codex compatibility work.
+- Latest verified tests: `pnpm build` and `cargo test`, 23 Rust tests passing after 1.6.2 Codex conversation stall fix.
 
 The design intent is to make third-party models less likely to degrade Claude/Codex behavior by normalizing protocol shapes, repairing common tool-call failures, redacting secrets, exposing provider capability profiles, and adding safety/diagnostic gates around agent-like workflows.
 
@@ -36,7 +36,28 @@ The app solves two related but different protocol problems:
 
 The shared design goal is simple: providers share identity, auth header, auth scheme, and API key, but they do not share one universal Base URL. Provider URLs are split by protocol: OpenAI Base URL for Codex and Chat Completions fallback, Anthropic Base URL for Claude and Claude Code direct requests.
 
-## 2. Version 1.6.1 Scope
+## 2. Version 1.6.2 Scope
+
+Version 1.6.2 fixes the Codex conversation stall problem when routing through third-party Chat Completions models.
+
+Main changes:
+
+- Fixed Codex conversation stall: when third-party models (DeepSeek, MiMo, Qwen, etc.) describe planned actions in text ("Let me read the file...") without emitting structured `tool_calls`, Codex treats the turn as complete and stops. The gateway now detects this pattern via `has_action_description()` and automatically retries the upstream request with `tool_choice: "required"` to force tool invocation.
+- Added `extract_finish_reason()` to parse `finish_reason` from Chat Completions SSE streaming data. Truncated responses (`"length"`) now emit `status: "incomplete"` with `incomplete_details.reason: "max_output_tokens"` instead of misleading `"completed"`.
+- Added 120-second stream timeout via `tokio::time::timeout` in the `process_chat_stream!` macro to prevent indefinite waits when upstream providers hang or stop sending data.
+- Enhanced system prompt: when tools are present in the request, the gateway now injects a stronger prompt that explicitly lists available tool names and instructs the model to use `tool_calls` instead of describing actions in text.
+- Stream errors now set `response.completed` status to `"failed"` instead of `"completed"`, and log `finish_reason` information for post-mortem diagnostics.
+- Refactored the streaming handler into a `process_chat_stream!` macro that is reused for both the initial attempt and the retry with `tool_choice: "required"`.
+- Request body is cloned before the first `.send()` so the retry can re-send without re-parsing.
+- Versioned package metadata and release artifacts as `1.6.2`.
+
+Verification for 1.6.2:
+
+- `pnpm build`: passed.
+- `cargo test`: passed, 23 tests.
+- `cargo clippy`: no new warnings introduced by the streaming changes.
+
+## 3. Version 1.6.1 Scope
 
 Version 1.6.1 is the AI handoff and Codex agent reliability release.
 

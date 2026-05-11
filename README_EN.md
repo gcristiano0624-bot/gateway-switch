@@ -4,7 +4,7 @@
 
 **Third-party model router for Claude Desktop, Claude Code, and Codex App**
 
-[![Version](https://img.shields.io/badge/Version-1.6.1-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.6.2-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -28,6 +28,16 @@ It solves three related problems:
 Providers are shared, but protocol URLs are separate. Codex uses the OpenAI Base URL. Claude and Claude Code prefer the Anthropic Base URL so one provider URL is not accidentally reused by incompatible clients.
 
 ---
+
+## Version 1.6.2 Highlights
+
+- **Core fix: Codex conversation stall.** When third-party models (DeepSeek, MiMo, Qwen, etc.) describe actions in text ("Let me read the file...") instead of emitting structured `tool_calls`, Codex treats the turn as complete and stops. The gateway now detects this pattern and automatically retries the upstream request with `tool_choice: "required"` to force tool invocation.
+- Added `finish_reason` detection: when upstream returns `finish_reason: "length"` (truncated output), `response.completed` now correctly sets `status: "incomplete"` instead of `"completed"`, letting Codex know the response was cut short.
+- Added stream timeout (120 seconds): when the upstream provider hangs or sends no data for too long, the gateway no longer waits indefinitely — it disconnects and reports a timeout error.
+- Enhanced system prompt: when tools are present, injects a stronger bilingual system prompt that lists available tool names and instructs the model to use `tool_calls` instead of describing actions in text.
+- Stream errors no longer appear as normal completions: when the upstream stream breaks, `response.completed` sets `status: "failed"` and logs the `finish_reason` for diagnostics.
+- App version is now `1.6.2`.
+- Latest verification: `pnpm build` passed and `cargo test` passed with `23 passed`.
 
 ## Version 1.6.1 Highlights
 

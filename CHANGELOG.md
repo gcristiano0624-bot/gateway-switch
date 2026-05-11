@@ -2,6 +2,18 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.6.2 - 2026-05-11
+
+- Fixed Codex conversation stall: when third-party models describe planned actions in text without emitting `tool_calls`, the gateway now detects this pattern via `has_action_description()` and automatically retries with `tool_choice: "required"` to force tool invocation.
+- Added `extract_finish_reason()` to parse `finish_reason` from Chat Completions SSE streams. Truncated responses (`"length"`) now emit `status: "incomplete"` with `incomplete_details.reason: "max_output_tokens"`.
+- Added 120-second stream timeout via `tokio::time::timeout` to prevent indefinite waits when upstream providers hang.
+- Enhanced system prompt: when tools are present, the gateway now injects a stronger prompt that lists available tool names and explicitly instructs the model to use `tool_calls` instead of describing actions in text.
+- Stream errors now set `response.completed` status to `"failed"` instead of `"completed"`, and log `finish_reason` for diagnostics.
+- Refactored streaming handler into `process_chat_stream!` macro for code reuse between initial attempt and retry.
+- Cloned request body before first `.send()` to enable retry without re-parsing.
+- Updated version to `1.6.2` across `package.json`, `Cargo.toml`, `tauri.conf.json`.
+- Verification: `pnpm build` passed; `cargo test` passed with 23 tests.
+
 ## 1.6.1 - 2026-05-11
 
 - Fixed browser/Vite preview for non-Tauri environments by loading mock Gateway, Claude, Codex, Provider, and log data instead of calling Tauri IPC.

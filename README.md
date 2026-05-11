@@ -4,7 +4,7 @@
 
 **Claude Desktop、Claude Code 与 Codex App 的第三方模型路由网关**
 
-[![Version](https://img.shields.io/badge/Version-1.6.1-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.6.2-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -28,6 +28,16 @@ Gateway Switch 是一个 macOS 桌面应用，用来把 Claude Desktop、Claude 
 Provider 是公共配置，但 Base URL 按协议拆分。Codex 使用 OpenAI Base URL，Claude 与 Claude Code 优先使用 Anthropic Base URL，避免同一个地址被不同产品错误复用。
 
 ---
+
+## 1.6.2 更新重点
+
+- **核心修复：Codex 对话中断问题。** 当第三方模型（DeepSeek、MiMo、Qwen 等）在有 tools 可用时只生成文本描述（如"我来读取文件..."）而不调用工具，Codex 会认为本轮结束导致对话中断。现在 Gateway 会自动检测这种情况并用 `tool_choice: "required"` 重试上游请求，强制模型调用工具。
+- 新增 `finish_reason` 检测：当上游返回 `finish_reason: "length"`（输出被截断）时，`response.completed` 会正确设置 `status: "incomplete"` 而非 `"completed"`，让 Codex 知道响应不完整。
+- 新增流超时机制（120 秒）：上游 Provider 挂起或长时间无数据时，Gateway 不再无限等待，会主动断开并报告超时错误。
+- 增强系统提示：当请求包含 tools 时，注入更强的中英文系统提示，明确列出可用工具名称，要求模型必须通过 `tool_calls` 执行操作而非仅用文本描述。
+- 流错误不再伪装为正常完成：上游流中断时，`response.completed` 会设置 `status: "failed"` 并在日志中记录 `finish_reason` 信息。
+- 版本统一更新为 `1.6.2`。
+- 最新验证：`pnpm build` 通过，`cargo test` 通过，Rust 单测 `23 passed`。
 
 ## 1.6.1 更新重点
 

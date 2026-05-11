@@ -714,7 +714,7 @@ function App() {
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.6.1</div>
+          <div className="brand-sub">v1.6.2</div>
         </div>
       </div>
 

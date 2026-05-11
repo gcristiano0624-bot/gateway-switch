@@ -13,7 +13,7 @@ use bytes::Bytes;
 use futures_util::StreamExt;
 use reqwest::Client;
 use serde_json::{json, Value};
-use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
+use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle, time::Duration};
 use uuid::Uuid;
 
 use crate::{
@@ -104,6 +104,8 @@ pub fn status(st: &AppState) -> Result<GatewayStatus, String> {
     st.runtime.codex_gateway_status.lock().map(|s| s.clone()).map_err(|_| "lock".into())
 }
 
+const STREAM_TIMEOUT_SECS: u64 = 120;
+
 fn build_router(ctx: Ctx) -> Router {
     Router::new()
         .route("/health", get(health))
@@ -152,7 +154,8 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
     let is_stream = body.get("stream").and_then(|v| v.as_bool()).unwrap_or(true);
 
     // Convert Responses API request → Chat Completions request
-    let chat_req = convert_request(&body, &route.upstream_model);
+    let body_ref = body.clone();
+    let chat_req = convert_request(&body_ref, &route.upstream_model);
 
     // Forward to upstream provider's Chat Completions endpoint.
     let resp = ctx.client.post(upstream_url(&route.base_url, "chat/completions"))
@@ -206,13 +209,19 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
     // Streaming: convert Chat Completions SSE → Responses API SSE
     let display = route.display.clone();
     let provider_id = route.provider_id.clone();
-    let upstream_model = route.upstream_model.clone();
+    let upstream_model_name = route.upstream_model.clone();
+    let base_url = route.base_url.clone();
+    let auth_headers = route.headers.clone();
     let log_req_id = req_id.clone();
     let db = ctx.db.clone();
+    let client = ctx.client.clone();
     let body_stream = resp.bytes_stream();
+    let has_tools_in_req = chat_req.get("tools").and_then(|v| v.as_array()).map(|a| !a.is_empty()).unwrap_or(false);
 
     let sse = stream! {
         let mut seq: i64 = 0;
+        let timeout_dur = Duration::from_secs(STREAM_TIMEOUT_SECS);
+
         // 1. Emit response.created
         let created_event = json!({
             "type": "response.created",
@@ -271,16 +280,49 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
         let mut full_text = String::new();
         let mut tool_items: std::collections::HashMap<i64, StreamingToolCall> = std::collections::HashMap::new();
         let mut next_output_index: i64 = 1;
-        let mut buf = String::new();
-        tokio::pin!(body_stream);
-        while let Some(item) = body_stream.next().await {
-            match item {
-                Ok(chunk) => {
-                    buf.push_str(&String::from_utf8_lossy(&chunk));
-                    while let Some(pos) = buf.find('\n') {
-                        let line = buf[..pos].to_string();
-                        buf = buf[pos + 1..].to_string();
-                        if let Some(text) = extract_chat_delta(&line) {
+        let mut finish_reason: Option<String> = None;
+        let mut stream_error = false;
+
+        // Process a single SSE stream with timeout and finish_reason tracking
+        macro_rules! process_chat_stream {
+            ($stream:expr) => {{
+                let mut buf = String::new();
+                let mut stream = Box::pin($stream);
+                loop {
+                    match tokio::time::timeout(timeout_dur, stream.next()).await {
+                        Ok(Some(Ok(chunk))) => {
+                            buf.push_str(&String::from_utf8_lossy(&chunk));
+                            while let Some(pos) = buf.find('\n') {
+                                let line = buf[..pos].to_string();
+                                buf = buf[pos + 1..].to_string();
+                                if let Some(text) = extract_chat_delta(&line) {
+                                    full_text.push_str(&text);
+                                    let delta_event = json!({
+                                        "type": "response.output_text.delta",
+                                        "item_id": msg_id,
+                                        "output_index": 0,
+                                        "content_index": 0,
+                                        "delta": text,
+                                        "sequence_number": seq
+                                    });
+                                    seq += 1;
+                                    yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!(
+                                        "event: response.output_text.delta\ndata: {}\n\n",
+                                        serde_json::to_string(&delta_event).unwrap()
+                                    )));
+                                }
+                                if let Some(reason) = extract_finish_reason(&line) {
+                                    finish_reason = Some(reason);
+                                }
+                                let tool_events = response_tool_delta_events(&line, &mut tool_items, &mut next_output_index, &mut seq);
+                                for (event_name, event_body) in tool_events {
+                                    yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(sse_event(event_name, &event_body)));
+                                }
+                            }
+                        }
+                        Ok(Some(Err(e))) => {
+                            stream_error = true;
+                            let text = format!("\n\n[Gateway stream error: {e}]");
                             full_text.push_str(&text);
                             let delta_event = json!({
                                 "type": "response.output_text.delta",
@@ -295,34 +337,72 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
                                 "event: response.output_text.delta\ndata: {}\n\n",
                                 serde_json::to_string(&delta_event).unwrap()
                             )));
+                            break;
                         }
-                        let tool_events = response_tool_delta_events(&line, &mut tool_items, &mut next_output_index, &mut seq);
-                        for (event_name, event_body) in tool_events {
-                            yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(sse_event(event_name, &event_body)));
+                        Ok(None) => break,
+                        Err(_) => {
+                            stream_error = true;
+                            let text = "\n\n[Gateway: upstream stream timeout]";
+                            full_text.push_str(text);
+                            let delta_event = json!({
+                                "type": "response.output_text.delta",
+                                "item_id": msg_id,
+                                "output_index": 0,
+                                "content_index": 0,
+                                "delta": text,
+                                "sequence_number": seq
+                            });
+                            seq += 1;
+                            yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!(
+                                "event: response.output_text.delta\ndata: {}\n\n",
+                                serde_json::to_string(&delta_event).unwrap()
+                            )));
+                            break;
                         }
                     }
                 }
-                Err(e) => {
-                    let text = format!("\n\n[Gateway stream error: {e}]");
-                    full_text.push_str(&text);
-                    let delta_event = json!({
-                        "type": "response.output_text.delta",
-                        "item_id": msg_id,
-                        "output_index": 0,
-                        "content_index": 0,
-                        "delta": text,
-                        "sequence_number": seq
-                    });
-                    seq += 1;
-                    yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!(
-                        "event: response.output_text.delta\ndata: {}\n\n",
-                        serde_json::to_string(&delta_event).unwrap()
-                    )));
-                    break;
-                },
+            }};
+        }
+
+        // First attempt: process the initial upstream stream
+        process_chat_stream!(body_stream);
+
+        // Check if we should retry with tool_choice: "required"
+        // This handles the case where the model described actions in text
+        // but failed to emit structured tool_calls.
+        if has_tools_in_req && tool_items.is_empty() && !stream_error {
+            let should_retry = match finish_reason.as_deref() {
+                Some("stop") | Some("length") | None => has_action_description(&full_text),
+                _ => false,
+            };
+            if should_retry {
+                let mut retry_req = chat_req.clone();
+                retry_req["tool_choice"] = json!("required");
+                if let Some(msgs) = retry_req.get_mut("messages").and_then(|v| v.as_array_mut()) {
+                    msgs.insert(0, json!({
+                        "role": "system",
+                        "content": "You MUST call the provided tools now. Do NOT describe planned actions in text. Emit tool_calls immediately."
+                    }));
+                }
+                let retry_headers = to_headers(&auth_headers).unwrap_or_default();
+                match client.post(upstream_url(&base_url, "chat/completions"))
+                    .headers(retry_headers)
+                    .json(&retry_req)
+                    .send().await
+                {
+                    Ok(retry_resp) if retry_resp.status().is_success() => {
+                        finish_reason = None;
+                        let retry_stream = retry_resp.bytes_stream();
+                        process_chat_stream!(retry_stream);
+                    }
+                    _ => {
+                        full_text.push_str("\n\n[Gateway: tool-call retry failed]");
+                    }
+                }
             }
         }
 
+        // 4. Emit text done and content part done
         let text_done = json!({
             "type": "response.output_text.done",
             "item_id": msg_id,
@@ -353,9 +433,11 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
             "event: response.content_part.done\ndata: {}\n\n", serde_json::to_string(&part_done).unwrap()
         )));
 
+        // 5. Emit tool call events
         let mut tool_outputs = Vec::new();
         let mut sorted_tools: Vec<StreamingToolCall> = tool_items.into_values().collect();
         sorted_tools.sort_by_key(|t| t.output_index);
+        let has_tool_calls = !sorted_tools.is_empty();
         for tool in sorted_tools {
             let arguments = compatibility::repair_json_object(&tool.arguments)
                 .map(|v| v.to_string())
@@ -389,9 +471,7 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
             yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(sse_event("response.output_item.done", &item_done)));
         }
 
-        // 4. Emit response.output_item.done for the assistant message after tool calls.
-        // Some Codex clients treat the first completed message as the end of the
-        // turn, so tool calls must be fully closed before the narrative message.
+        // 6. Emit response.output_item.done for assistant message after tool calls
         let item_done = json!({
             "type": "response.output_item.done",
             "output_index": 0,
@@ -413,6 +493,7 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
             "event: response.output_item.done\ndata: {}\n\n", serde_json::to_string(&item_done).unwrap()
         )));
 
+        // 7. Emit response.completed with proper status
         let output_tokens = estimate_tokens(&full_text);
         let usage = response_usage(0, output_tokens);
         let mut output = vec![json!({
@@ -428,29 +509,46 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
         })];
         output.extend(tool_outputs);
 
-        // 5. Emit response.completed
+        let resp_status = if stream_error {
+            "failed"
+        } else if finish_reason.as_deref() == Some("length") && !has_tool_calls {
+            "incomplete"
+        } else {
+            "completed"
+        };
+
+        let mut resp_body = json!({
+            "id": resp_id,
+            "object": "response",
+            "created_at": chrono::Utc::now().timestamp(),
+            "model": display,
+            "output": output,
+            "status": resp_status,
+            "usage": usage
+        });
+        if resp_status == "incomplete" {
+            resp_body["incomplete_details"] = json!({"reason": "max_output_tokens"});
+        }
+
         let completed = json!({
             "type": "response.completed",
-            "response": {
-                "id": resp_id,
-                "object": "response",
-                "created_at": chrono::Utc::now().timestamp(),
-                "model": display,
-                "output": output,
-                "status": "completed",
-                "usage": usage
-            },
+            "response": resp_body,
             "sequence_number": seq
         });
         yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!(
             "event: response.completed\ndata: {}\n\n", serde_json::to_string(&completed).unwrap()
         )));
 
+        let error_summary = if stream_error {
+            Some(format!("stream_error: finish_reason={:?}", finish_reason))
+        } else {
+            None
+        };
         let _ = database::insert_log(&db, &RequestLog {
             request_id: log_req_id, claude_alias: display,
-            provider_id, upstream_model, status_code: Some(status.as_u16()),
+            provider_id, upstream_model: upstream_model_name, status_code: Some(status.as_u16()),
             duration_ms: Some(started.elapsed().as_millis() as u64),
-            is_stream: true, error_summary: None, created_at: String::new(),
+            is_stream: true, error_summary, created_at: String::new(),
         });
     };
 
@@ -461,6 +559,35 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
 }
 
 // ── Request/Response Conversion ──
+
+fn tools_array_from_body(body: &Value) -> Vec<Value> {
+    body.get("tools")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn has_action_description(text: &str) -> bool {
+    let patterns = [
+        "我来", "我将", "让我", "接下来", "现在我", "我需要", "我应该",
+        "我去", "我要", "先让我", "先我", "我先",
+        "I'll ", "I'll\n", "Let me ", "I will ", "Now I'll ",
+        "I'm going to ", "I need to ", "I should ", "Going to ",
+        "I'll now ", "I'll first ", "Let's ",
+    ];
+    let lower = text.to_lowercase();
+    patterns.iter().any(|p| lower.contains(&p.to_lowercase()))
+}
+
+fn extract_finish_reason(line: &str) -> Option<String> {
+    if !line.starts_with("data:") { return None; }
+    let payload = line[5..].trim();
+    if payload.is_empty() || payload == "[DONE]" { return None; }
+    let v: Value = serde_json::from_str(payload).ok()?;
+    v["choices"][0]["finish_reason"].as_str()
+        .or_else(|| v["choices"][0]["delta"]["finish_reason"].as_str())
+        .map(String::from)
+}
 
 fn convert_request(body: &Value, upstream_model: &str) -> Value {
     let mut messages: Vec<Value> = Vec::new();
@@ -474,9 +601,27 @@ fn convert_request(body: &Value, upstream_model: &str) -> Value {
 
     let has_tools = body.get("tools").and_then(|v| v.as_array()).map(|v| !v.is_empty()).unwrap_or(false);
     if has_tools {
+        let tool_names: Vec<String> = tools_array_from_body(body)
+            .iter()
+            .filter_map(|t| t.get("name").and_then(|v| v.as_str()).map(String::from))
+            .collect();
+        let tool_list = if tool_names.is_empty() {
+            String::from("the provided tools")
+        } else {
+            format!("[{}]", tool_names.join(", "))
+        };
         messages.push(json!({
             "role": "system",
-            "content": "Gateway Switch compatibility note: when the task requires reading files, running commands, editing code, or checking project state, you must call the provided tools using structured tool_calls. Do not merely say you will inspect, analyze, read, run, edit, or verify something unless you also emit the corresponding tool call."
+            "content": format!(
+                "CRITICAL: You have access to tools: {tool_list}. \
+                 When you need to perform any action — read a file, run a command, edit code, \
+                 search files, check project state, write content, or interact with the system — \
+                 you MUST emit structured tool_calls. \
+                 NEVER say 'I will ...', 'Let me ...', 'I need to ...' without also emitting \
+                 the corresponding tool_call in the same response. \
+                 Text descriptions of planned actions without tool_calls are ALWAYS wrong. \
+                 Call the tool first, then explain what you did afterward."
+            )
         }));
     }
 

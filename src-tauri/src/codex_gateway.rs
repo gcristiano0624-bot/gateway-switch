@@ -353,7 +353,45 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
             "event: response.content_part.done\ndata: {}\n\n", serde_json::to_string(&part_done).unwrap()
         )));
 
-        // 4. Emit response.output_item.done
+        let mut tool_outputs = Vec::new();
+        let mut sorted_tools: Vec<StreamingToolCall> = tool_items.into_values().collect();
+        sorted_tools.sort_by_key(|t| t.output_index);
+        for tool in sorted_tools {
+            let arguments = compatibility::repair_json_object(&tool.arguments)
+                .map(|v| v.to_string())
+                .unwrap_or(tool.arguments);
+            let args_done = json!({
+                "type": "response.function_call_arguments.done",
+                "item_id": tool.item_id,
+                "output_index": tool.output_index,
+                "arguments": arguments,
+                "sequence_number": seq
+            });
+            seq += 1;
+            yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(sse_event("response.function_call_arguments.done", &args_done)));
+
+            let item = json!({
+                "type": "function_call",
+                "id": tool.item_id,
+                "call_id": tool.call_id,
+                "name": tool.name,
+                "arguments": arguments,
+                "status": "completed"
+            });
+            let item_done = json!({
+                "type": "response.output_item.done",
+                "output_index": tool.output_index,
+                "item": item,
+                "sequence_number": seq
+            });
+            seq += 1;
+            tool_outputs.push(item);
+            yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(sse_event("response.output_item.done", &item_done)));
+        }
+
+        // 4. Emit response.output_item.done for the assistant message after tool calls.
+        // Some Codex clients treat the first completed message as the end of the
+        // turn, so tool calls must be fully closed before the narrative message.
         let item_done = json!({
             "type": "response.output_item.done",
             "output_index": 0,
@@ -374,39 +412,6 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
         yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!(
             "event: response.output_item.done\ndata: {}\n\n", serde_json::to_string(&item_done).unwrap()
         )));
-
-        let mut tool_outputs = Vec::new();
-        let mut sorted_tools: Vec<StreamingToolCall> = tool_items.into_values().collect();
-        sorted_tools.sort_by_key(|t| t.output_index);
-        for tool in sorted_tools {
-            let args_done = json!({
-                "type": "response.function_call_arguments.done",
-                "item_id": tool.item_id,
-                "output_index": tool.output_index,
-                "arguments": tool.arguments,
-                "sequence_number": seq
-            });
-            seq += 1;
-            yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(sse_event("response.function_call_arguments.done", &args_done)));
-
-            let item = json!({
-                "type": "function_call",
-                "id": tool.item_id,
-                "call_id": tool.call_id,
-                "name": tool.name,
-                "arguments": tool.arguments,
-                "status": "completed"
-            });
-            let item_done = json!({
-                "type": "response.output_item.done",
-                "output_index": tool.output_index,
-                "item": item,
-                "sequence_number": seq
-            });
-            seq += 1;
-            tool_outputs.push(item);
-            yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(sse_event("response.output_item.done", &item_done)));
-        }
 
         let output_tokens = estimate_tokens(&full_text);
         let usage = response_usage(0, output_tokens);
@@ -467,6 +472,14 @@ fn convert_request(body: &Value, upstream_model: &str) -> Value {
         }
     }
 
+    let has_tools = body.get("tools").and_then(|v| v.as_array()).map(|v| !v.is_empty()).unwrap_or(false);
+    if has_tools {
+        messages.push(json!({
+            "role": "system",
+            "content": "Gateway Switch compatibility note: when the task requires reading files, running commands, editing code, or checking project state, you must call the provided tools using structured tool_calls. Do not merely say you will inspect, analyze, read, run, edit, or verify something unless you also emit the corresponding tool call."
+        }));
+    }
+
     // 2. input → messages
     if let Some(input) = body.get("input").and_then(|v| v.as_str()) {
         if !input.is_empty() {
@@ -492,6 +505,7 @@ fn convert_request(body: &Value, upstream_model: &str) -> Value {
                     let arguments = item.get("arguments").and_then(|v| v.as_str()).unwrap_or("{}");
                     messages.push(json!({
                         "role": "assistant",
+                        "content": "",
                         "tool_calls": [{
                             "id": call_id,
                             "type": "function",
@@ -541,6 +555,9 @@ fn convert_request(body: &Value, upstream_model: &str) -> Value {
             }).collect();
             if !converted_tools.is_empty() {
                 chat_req["tools"] = json!(converted_tools);
+                if body.get("tool_choice").is_none() {
+                    chat_req["tool_choice"] = json!("auto");
+                }
             }
         }
     }
@@ -1038,6 +1055,41 @@ mod tests {
         assert_eq!(extract_chat_delta(reasoning).as_deref(), Some("thinking"));
         assert_eq!(extract_chat_delta(text).as_deref(), Some("plain"));
         assert_eq!(extract_chat_delta("data: [DONE]"), None);
+    }
+
+    #[test]
+    fn test_codex_request_adds_tool_call_guardrail() {
+        let responses_req = json!({
+            "model": "gpt-4o",
+            "input": "Inspect the repository",
+            "tools": [{
+                "type": "function",
+                "name": "exec_command",
+                "description": "Run a command",
+                "parameters": {"type": "object"}
+            }],
+            "stream": true
+        });
+
+        let chat_req = convert_request(&responses_req, "mimo-v2.5-pro");
+        assert_eq!(chat_req["tool_choice"], "auto");
+        assert_eq!(chat_req["messages"][0]["role"], "system");
+        assert!(chat_req["messages"][0]["content"].as_str().unwrap().contains("structured tool_calls"));
+        assert_eq!(chat_req["tools"][0]["function"]["name"], "exec_command");
+    }
+
+    #[test]
+    fn test_streaming_tool_arguments_are_repaired() {
+        let mut tool_items = std::collections::HashMap::new();
+        let mut output_index = 1;
+        let mut seq = 0;
+        let line = r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"apply_patch","arguments":"{path:\"src/main.rs\",}"}}]}}]}"#;
+
+        let events = response_tool_delta_events(line, &mut tool_items, &mut output_index, &mut seq);
+        assert_eq!(events.len(), 2);
+        let tool = tool_items.get(&0).unwrap();
+        let repaired = compatibility::repair_json_object(&tool.arguments).unwrap();
+        assert_eq!(repaired["path"], "src/main.rs");
     }
 
     #[test]

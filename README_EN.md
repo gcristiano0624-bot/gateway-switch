@@ -4,7 +4,7 @@
 
 **Third-party model router for Claude Desktop, Claude Code, and Codex App**
 
-[![Version](https://img.shields.io/badge/Version-1.6.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.6.1-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -28,6 +28,17 @@ It solves three related problems:
 Providers are shared, but protocol URLs are separate. Codex uses the OpenAI Base URL. Claude and Claude Code prefer the Anthropic Base URL so one provider URL is not accidentally reused by incompatible clients.
 
 ---
+
+## Version 1.6.1 Highlights
+
+- Fixed blank browser previews caused by missing Tauri `invoke()` internals. The Vite browser preview now loads mock data outside Tauri so AI agents and developers can inspect the UI.
+- Reduced full-state polling from 3 seconds to 12 seconds and pause polling while the page is hidden.
+- Improved Codex Gateway agent compatibility for third-party Chat Completions models: when Codex provides tools, converted requests now instruct the model to emit structured `tool_calls` and default to `tool_choice: "auto"`.
+- Fixed streaming Responses event ordering for Codex tool calls so clients do not treat a completed assistant message as the end of the turn before tool calls are closed.
+- Added JSON repair for streaming tool-call arguments, improving execution reliability for providers that emit loose JSON.
+- Added `CLAUDE.md` with project directory, command, and preview notes for future AI handoffs.
+- App version is now `1.6.1`.
+- Latest verification: `pnpm build` passed and `cargo test` passed with `23 passed`.
 
 ## Version 1.6.0 Highlights
 
@@ -265,7 +276,7 @@ Artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.1_aarch64.dmg
 ```
 
 ---

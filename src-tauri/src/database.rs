@@ -296,6 +296,7 @@ pub fn list_logs(db: &Path, limit: usize) -> Result<Vec<RequestLog>, String> {
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
+#[allow(dead_code)]
 pub fn count_rows(db: &Path, table: &str) -> Result<i64, String> {
     let conn = open(db)?;
     conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))

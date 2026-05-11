@@ -4,7 +4,7 @@
 
 **Claude Desktop、Claude Code 与 Codex App 的第三方模型路由网关**
 
-[![Version](https://img.shields.io/badge/Version-1.6.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.6.1-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -28,6 +28,17 @@ Gateway Switch 是一个 macOS 桌面应用，用来把 Claude Desktop、Claude 
 Provider 是公共配置，但 Base URL 按协议拆分。Codex 使用 OpenAI Base URL，Claude 与 Claude Code 优先使用 Anthropic Base URL，避免同一个地址被不同产品错误复用。
 
 ---
+
+## 1.6.1 更新重点
+
+- 修复 Vite 浏览器预览下 Tauri `invoke()` 不存在导致的空白页问题：非 Tauri 环境会自动加载 mock 数据，方便 AI Agent 和开发者验证 UI。
+- 将全量状态轮询从 3 秒调整为 12 秒，并在页面不可见时暂停，降低 IPC 与数据库读取压力。
+- 增强 Codex Gateway 对第三方 Chat Completions 模型的 agent 兼容性：当 Codex 提供 tools 时，转换请求会明确要求模型输出结构化 `tool_calls`，并默认设置 `tool_choice: "auto"`。
+- 修复 Codex 流式 Responses 事件中工具调用完成顺序，避免客户端先看到普通 assistant message 完成后误判任务结束。
+- 对流式工具调用参数增加 JSON repair，提升小米 MiMo 等第三方模型输出宽松 JSON 时的可执行性。
+- 新增 `CLAUDE.md`，明确本项目目录、构建命令和预览限制，减少后续 AI 从错误目录反复执行命令。
+- 版本统一更新为 `1.6.1`。
+- 最新验证：`pnpm build` 通过，`cargo test` 通过，Rust 单测 `23 passed`。
 
 ## 1.6.0 更新重点
 
@@ -265,7 +276,7 @@ pnpm tauri build
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.1_aarch64.dmg
 ```
 
 ---

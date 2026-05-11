@@ -47,9 +47,11 @@ impl Runtime {
 
 #[derive(Clone)]
 pub struct AppState {
+    #[allow(dead_code)]
     pub data_dir: PathBuf,
     pub db_path: PathBuf,
     pub settings_path: PathBuf,
+    #[allow(dead_code)]
     pub logs_dir: PathBuf,
     pub backups_dir: PathBuf,
     pub runtime: Arc<Runtime>,

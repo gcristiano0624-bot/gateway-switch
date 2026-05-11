@@ -140,6 +140,109 @@ const PROVIDER_PRESETS = [
   { id: "custom", name: "Custom", openai_base_url: "", anthropic_base_url: "", auth_header: "x-api-key", auth_scheme: "", logo: "+", color: "#64748b", colorBg: "rgba(100,116,139,0.1)", shortUrl: "Add your own provider" },
 ];
 
+const POLL_INTERVAL_MS = 12_000;
+const isTauriRuntime = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+const MOCK_STATUS: Status = {
+  gateway_running: false,
+  gateway_port: 3456,
+  binding_active: false,
+  provider_count: 2,
+  route_count: 3,
+};
+
+const MOCK_CODEX_STATUS: CodexGatewayStatus = {
+  running: false,
+  status: "browser-preview",
+  error: null,
+};
+
+const MOCK_PROVIDERS: Provider[] = [
+  {
+    id: "xiaomimo",
+    name: "XiaoMiMo",
+    base_url: "https://token-plan-sgp.xiaomimimo.com/v1",
+    openai_base_url: "https://token-plan-sgp.xiaomimimo.com/v1",
+    anthropic_base_url: "https://token-plan-sgp.xiaomimimo.com/anthropic",
+    auth_header: "Authorization",
+    auth_scheme: "Bearer",
+    api_key: null,
+    enabled: true,
+  },
+  {
+    id: "openrouter",
+    name: "OpenRouter",
+    base_url: "https://openrouter.ai/api/v1",
+    openai_base_url: "https://openrouter.ai/api/v1",
+    anthropic_base_url: null,
+    auth_header: "Authorization",
+    auth_scheme: "Bearer",
+    api_key: null,
+    enabled: true,
+  },
+];
+
+const MOCK_ROUTES: ModelRoute[] = [
+  { id: "sonnet", claude_alias: "claude-sonnet-4-6", display_name: "Claude Sonnet", provider_id: "xiaomimo", upstream_model: "mimo-v2.5-pro", enabled: true },
+  { id: "opus", claude_alias: "claude-opus-4-7", display_name: "Claude Opus", provider_id: "openrouter", upstream_model: "anthropic/claude-opus-4.1", enabled: true },
+];
+
+const MOCK_CODEX_ROUTES: CodexRoute[] = [
+  { id: "codex-mimo", codex_model: "gpt-5.2", display_name: "Codex via MiMo", provider_id: "xiaomimo", upstream_model: "mimo-v2.5-pro", enabled: true },
+];
+
+const MOCK_SETTINGS: Settings = {
+  auto_start_gateway: true,
+  auto_takeover_desktop: false,
+  listen_host: "127.0.0.1",
+  listen_port: 3456,
+  auth_token: "gateway-switch-token",
+};
+
+const MOCK_DESKTOP: DesktopInfo = {
+  config_path: "~/.claude/config.json",
+  config_exists: true,
+  managed: false,
+  base_url: "http://127.0.0.1:3456",
+  auth_scheme: "Bearer",
+  models: DEFAULT_CLAUDE_ALIASES.slice(0, 4),
+  backup_path: null,
+};
+
+const MOCK_CLAUDE_CODE: ClaudeCodeInfo = {
+  config_path: "~/.claude/settings.json",
+  config_exists: true,
+  managed: false,
+  base_url: "http://127.0.0.1:3456",
+  model: "claude-sonnet-4-6",
+  auth_env: "ANTHROPIC_AUTH_TOKEN",
+  backup_path: null,
+};
+
+const MOCK_CODEX_BINDING: CodexBindingInfo = {
+  config_path: "~/.codex/config.toml",
+  config_exists: true,
+  managed: false,
+  model_provider: "gateway-switch",
+  model: "gpt-5.2",
+  base_url: "http://127.0.0.1:3457/v1",
+  backup_path: null,
+};
+
+const MOCK_LOGS: RequestLog[] = [
+  {
+    request_id: "preview-1",
+    claude_alias: "gpt-5.2",
+    provider_id: "xiaomimo",
+    upstream_model: "mimo-v2.5-pro",
+    status_code: 200,
+    duration_ms: 1840,
+    is_stream: true,
+    error_summary: null,
+    created_at: "browser preview",
+  },
+];
+
 // ── Helpers ──
 function getModelFamily(alias: string): string {
   if (alias.includes("opus")) return "opus";
@@ -157,12 +260,6 @@ function getModelAbbrev(alias: string): string {
 }
 
 // ── Inline SVG Icons ──
-const IconLayers = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" />
-  </svg>
-);
-
 const IconGrid = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
@@ -351,6 +448,22 @@ function App() {
   };
 
   const loadAll = useCallback(async () => {
+    if (!isTauriRuntime) {
+      setStatus(MOCK_STATUS);
+      setProviders(MOCK_PROVIDERS);
+      setRoutes(MOCK_ROUTES);
+      setDesktop(MOCK_DESKTOP);
+      setClaudeCode(MOCK_CLAUDE_CODE);
+      setLogs(MOCK_LOGS);
+      setSettings(MOCK_SETTINGS);
+      setCodexStatus(MOCK_CODEX_STATUS);
+      setCodexRoutes(MOCK_CODEX_ROUTES);
+      setCodexBinding(MOCK_CODEX_BINDING);
+      setClaudeAliases(DEFAULT_CLAUDE_ALIASES.map((alias, index) => ({ id: `mock-claude-${index}`, alias, alias_type: "claude", created_at: null })));
+      setCodexAliases(DEFAULT_CODEX_MODELS.map((alias, index) => ({ id: `mock-codex-${index}`, alias, alias_type: "codex", created_at: null })));
+      return;
+    }
+
     try {
       const [s, p, r, d, cc, l, cfg, cs, cr, cb, ca, cma] = await Promise.all([
         invoke<Status>("get_status"),
@@ -387,8 +500,8 @@ function App() {
 
   useEffect(() => {
     const id = window.setInterval(() => {
-      void loadAll();
-    }, 3000);
+      if (!document.hidden) void loadAll();
+    }, POLL_INTERVAL_MS);
     return () => window.clearInterval(id);
   }, [loadAll]);
 
@@ -594,11 +707,14 @@ function App() {
     <aside className="sidebar">
       <div className="sidebar-brand">
         <div className="brand-icon">
-          <IconLayers />
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c3.86 0 7 3.14 7 7s-3.14 7-7 7-7-3.14-7-7 3.14-7 7-7z" fill="currentColor" opacity="0.3"/>
+            <path d="M12 4C7.58 4 4 7.58 4 12s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm3.5 10.5h-3v3a1 1 0 11-2 0v-3h-3a1 1 0 110-2h3v-3a1 1 0 112 0v3h3a1 1 0 110 2z" fill="currentColor"/>
+          </svg>
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.5.0</div>
+          <div className="brand-sub">v1.6.1</div>
         </div>
       </div>
 
@@ -1571,13 +1687,13 @@ function App() {
         </div>
 
         <div className="qa-buttons" style={{ marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", background: "#fff", flex: 1, maxWidth: 320 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", border: "1px solid var(--border)", borderRadius: "var(--radius-xs)", background: "var(--surface)", flex: 1, maxWidth: 360 }}>
             <IconSearch />
             <input
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search logs..."
-              style={{ border: "none", outline: "none", fontSize: 13, flex: 1, background: "transparent", fontFamily: "inherit", color: "var(--fg)" }}
+              style={{ border: "none", outline: "none", fontSize: 13, flex: 1, background: "transparent", fontFamily: "inherit", color: "var(--fg)", minWidth: 0 }}
             />
           </div>
           <button className="btn" onClick={() => void loadAll()}>
@@ -1616,8 +1732,8 @@ function App() {
                   </td>
                   <td>{l.duration_ms ? `${l.duration_ms}ms` : "-"}</td>
                   {filteredLogs.some(lg => lg.error_summary) && (
-                    <td style={{ fontSize: 12, color: "var(--red)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {l.error_summary || "-"}
+                    <td style={{ fontSize: 12, color: "var(--red)", maxWidth: 200 }}>
+                      <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", wordBreak: "normal" }}>{l.error_summary || "-"}</span>
                     </td>
                   )}
                 </tr>
@@ -1700,7 +1816,7 @@ function App() {
                     value={importPath}
                     onChange={e => setImportPath(e.target.value)}
                     placeholder="/path/to/config.json"
-                    style={{ flex: 1, padding: "7px 12px", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", fontSize: 13, outline: "none", fontFamily: "var(--font-mono)" }}
+                    style={{ flex: 1, padding: "8px 12px", border: "1px solid var(--border)", borderRadius: "var(--radius-xs)", fontSize: 13, outline: "none", fontFamily: "var(--font-mono)", minWidth: 0, background: "var(--surface)", color: "var(--fg)" }}
                   />
                   <button className="btn" onClick={doImport}><IconUpload /> Import</button>
                 </div>
@@ -1712,11 +1828,11 @@ function App() {
                 </p>
                 <button className="btn" onClick={doExport}><IconDownload /> Export to File</button>
               </div>
-              <div style={{ padding: 14, background: "#f8fafc", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg)", marginBottom: 4 }}>Data Storage</div>
-                <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6 }}>
+              <div style={{ padding: 16, background: "var(--bg)", borderRadius: "var(--radius-xs)", border: "1px solid var(--border)" }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", marginBottom: 6 }}>Data Storage</div>
+                <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.6 }}>
                   All data is stored under:<br />
-                  <code style={{ fontSize: 11, fontFamily: "var(--font-mono)" }}>~/Library/Application Support/Gateway Switch/</code>
+                  <code style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>~/Library/Application Support/Gateway Switch/</code>
                 </div>
               </div>
             </div>

@@ -2,6 +2,7 @@ mod codex_gateway;
 mod codex_binding;
 mod claude_code_binding;
 mod commands;
+mod compatibility;
 mod database;
 mod desktop_binding;
 mod gateway;
@@ -61,6 +62,16 @@ pub fn run() {
             commands::save_settings,
             commands::get_profile,
             commands::list_providers,
+            commands::list_provider_capabilities,
+            commands::get_runtime_feature_report,
+            commands::run_compatibility_benchmark,
+            commands::validate_patch_payload,
+            commands::check_command_safety,
+            commands::check_mcp_path_safety,
+            commands::detect_fake_action_text,
+            commands::compress_context_payload,
+            commands::recover_agent_state_payload,
+            commands::export_diagnostics,
             commands::create_provider,
             commands::update_provider,
             commands::delete_provider,

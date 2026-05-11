@@ -1,6 +1,7 @@
 use std::path::Path;
 use chrono::Utc;
 use rusqlite::{params, Connection};
+use crate::compatibility;
 use crate::models::*;
 
 pub fn initialize(db: &Path) -> Result<(), String> {
@@ -155,7 +156,7 @@ pub fn create_provider(db: &Path, p: &CreateProvider) -> Result<(), String> {
     let anthropic_base_url = normalize_empty(p.anthropic_base_url.as_deref());
     conn.execute(
         "INSERT INTO providers (id, name, base_url, openai_base_url, anthropic_base_url, auth_header, auth_scheme, api_key) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
-        params![p.id.trim(), p.name.trim(), openai_base_url.trim(), openai_base_url.trim(), anthropic_base_url, p.auth_header.trim(), p.auth_scheme, p.api_key],
+        params![p.id.trim(), p.name.trim(), p.base_url.trim(), openai_base_url.trim(), anthropic_base_url, p.auth_header.trim(), p.auth_scheme, p.api_key],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -166,7 +167,7 @@ pub fn update_provider(db: &Path, p: &UpdateProvider) -> Result<(), String> {
     let anthropic_base_url = normalize_empty(p.anthropic_base_url.as_deref());
     conn.execute(
         "UPDATE providers SET name=?2, base_url=?3, openai_base_url=?4, anthropic_base_url=?5, auth_header=?6, auth_scheme=?7, api_key=?8, enabled=?9 WHERE id=?1",
-        params![p.id.trim(), p.name.trim(), openai_base_url.trim(), openai_base_url.trim(), anthropic_base_url, p.auth_header.trim(), p.auth_scheme, p.api_key, if p.enabled {1} else {0}],
+        params![p.id.trim(), p.name.trim(), p.base_url.trim(), openai_base_url.trim(), anthropic_base_url, p.auth_header.trim(), p.auth_scheme, p.api_key, if p.enabled {1} else {0}],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -263,13 +264,14 @@ pub fn save_profile(db: &Path, p: &GatewayProfile) -> Result<(), String> {
 
 pub fn insert_log(db: &Path, log: &RequestLog) -> Result<(), String> {
     let conn = open(db)?;
+    let error_summary = log.error_summary.as_deref().map(compatibility::redact_log_summary);
     conn.execute(
         "INSERT INTO request_logs (id, request_id, claude_alias, provider_id, upstream_model, status_code, duration_ms, is_stream, error_summary, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
         params![
             log.request_id, log.request_id, log.claude_alias, log.provider_id,
             log.upstream_model, log.status_code.map(|v| v as i64),
             log.duration_ms.map(|v| v as i64), if log.is_stream {1} else {0},
-            log.error_summary, Utc::now().to_rfc3339()
+            error_summary, Utc::now().to_rfc3339()
         ],
     ).map_err(|e| e.to_string())?;
     Ok(())

@@ -1,7 +1,7 @@
 use std::{fs, time::Instant};
 use tauri::State;
 use crate::{
-    claude_code_binding, codex_binding, codex_gateway, database, desktop_binding, gateway, models::*, settings,
+    claude_code_binding, codex_binding, codex_gateway, compatibility, database, desktop_binding, gateway, models::*, settings,
     state::{AppState, GatewayStatus},
 };
 
@@ -45,6 +45,87 @@ pub fn get_profile(st: State<'_, AppState>) -> Result<GatewayProfile, String> {
 #[tauri::command]
 pub fn list_providers(st: State<'_, AppState>) -> Result<Vec<Provider>, String> {
     database::list_providers(&st.db_path)
+}
+
+#[tauri::command]
+pub fn list_provider_capabilities(st: State<'_, AppState>) -> Result<Vec<serde_json::Value>, String> {
+    Ok(database::list_providers(&st.db_path)?
+        .iter()
+        .map(compatibility::provider_capability_json)
+        .collect())
+}
+
+#[tauri::command]
+pub fn get_runtime_feature_report() -> compatibility::RuntimeFeatureReport {
+    compatibility::runtime_feature_report()
+}
+
+#[tauri::command]
+pub fn run_compatibility_benchmark(st: State<'_, AppState>) -> Result<Vec<serde_json::Value>, String> {
+    Ok(database::list_providers(&st.db_path)?
+        .iter()
+        .map(|p| serde_json::json!({
+            "provider": p.id,
+            "anthropic": compatibility::benchmark_provider(p),
+            "codex": compatibility::codex_capability_profile(p)
+        }))
+        .collect())
+}
+
+#[tauri::command]
+pub fn validate_patch_payload(patch: String) -> Result<compatibility::PatchValidationResult, String> {
+    let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+    Ok(compatibility::validate_patch(&patch, &cwd))
+}
+
+#[tauri::command]
+pub fn check_command_safety(command: String) -> compatibility::SafetyDecision {
+    compatibility::command_safety(&command)
+}
+
+#[tauri::command]
+pub fn check_mcp_path_safety(path: String) -> Result<compatibility::SafetyDecision, String> {
+    let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+    Ok(compatibility::mcp_path_safety(&path, &cwd))
+}
+
+#[tauri::command]
+pub fn detect_fake_action_text(text: String) -> serde_json::Value {
+    serde_json::json!({
+        "fake_tool_call": compatibility::detect_fake_tool_call(&text),
+        "fake_action": compatibility::detect_fake_action(&text)
+    })
+}
+
+#[tauri::command]
+pub fn compress_context_payload(messages: Vec<serde_json::Value>, max_items: usize) -> serde_json::Value {
+    compatibility::compress_context(&messages, max_items)
+}
+
+#[tauri::command]
+pub fn recover_agent_state_payload(history: Vec<serde_json::Value>) -> compatibility::AgentTaskState {
+    compatibility::recover_agent_state(&history)
+}
+
+#[tauri::command]
+pub fn export_diagnostics(st: State<'_, AppState>) -> Result<String, String> {
+    let providers = database::list_providers(&st.db_path)?;
+    let routes = database::list_routes(&st.db_path)?;
+    let codex_routes = database::list_codex_routes(&st.db_path)?;
+    let logs = database::list_logs(&st.db_path, 500)?;
+    let bundle = serde_json::json!({
+        "generated_at": chrono::Utc::now().to_rfc3339(),
+        "runtime_features": compatibility::runtime_feature_report(),
+        "provider_capabilities": providers.iter().map(compatibility::provider_capability_json).collect::<Vec<_>>(),
+        "benchmarks": providers.iter().map(|p| serde_json::json!({"provider": p.id, "benchmark": compatibility::benchmark_provider(p)})).collect::<Vec<_>>(),
+        "providers": providers,
+        "routes": routes,
+        "codex_routes": codex_routes,
+        "logs": logs
+    });
+    let path = st.backups_dir.join(format!("diagnostics-{}.json", chrono::Utc::now().timestamp_millis()));
+    fs::write(&path, serde_json::to_string_pretty(&bundle).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    Ok(path.display().to_string())
 }
 
 #[tauri::command]

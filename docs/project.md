@@ -1,8 +1,28 @@
 # Gateway Switch Project Documentation
 
-Version: 1.5.0
+Version: 1.6.0
 
 This document is the single technical source of truth for Gateway Switch. It merges the former project architecture notes and the Codex Gateway notes into one maintained file.
+
+## 0. AI Handoff Summary
+
+If another AI receives this repository, start here:
+
+- Product: macOS Tauri app that routes Claude Desktop, Claude Code, and Codex App to third-party model providers.
+- Current version: `1.6.0`.
+- Main frontend: `src/App.tsx` and `src/App.css`.
+- Main backend: `src-tauri/src/*.rs`.
+- Claude gateway: `src-tauri/src/gateway.rs`, local Anthropic Messages surface on `127.0.0.1:3456`.
+- Codex gateway: `src-tauri/src/codex_gateway.rs`, local OpenAI Responses surface on `127.0.0.1:3457`.
+- Runtime compatibility layer: `src-tauri/src/compatibility.rs`.
+- Database and migrations: `src-tauri/src/database.rs`.
+- Tauri command bridge: `src-tauri/src/commands.rs` and command registration in `src-tauri/src/lib.rs`.
+- Bindings: Claude Desktop in `desktop_binding.rs`, Claude Code in `claude_code_binding.rs`, Codex in `codex_binding.rs`.
+- Local data: `~/Library/Application Support/Gateway Switch/`.
+- Build: `PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build` when `cargo` is not already on `PATH`.
+- Latest verified tests: `cargo test --manifest-path src-tauri/Cargo.toml`, 21 tests passing after 1.6.0 runtime compatibility work.
+
+The design intent is to make third-party models less likely to degrade Claude/Codex behavior by normalizing protocol shapes, repairing common tool-call failures, redacting secrets, exposing provider capability profiles, and adding safety/diagnostic gates around agent-like workflows.
 
 ## 1. Product Goal
 
@@ -16,22 +36,25 @@ The app solves two related but different protocol problems:
 
 The shared design goal is simple: providers share identity, auth header, auth scheme, and API key, but they do not share one universal Base URL. Provider URLs are split by protocol: OpenAI Base URL for Codex and Chat Completions fallback, Anthropic Base URL for Claude and Claude Code direct requests.
 
-## 2. Version 1.5.0 Scope
+## 2. Version 1.6.0 Scope
 
-Version 1.5.0 is the protocol-split and Claude Code release.
+Version 1.6.0 is the runtime compatibility release.
 
 Main changes:
 
-- Split Provider URL storage into `openai_base_url` and `anthropic_base_url`.
-- Added Claude Code binding support through `~/.claude/settings.json`.
-- Added Claude Code binding modes: Gateway Route and Direct Provider.
-- Direct Provider mode requires Anthropic Base URL and writes it to `ANTHROPIC_BASE_URL`.
-- Claude Gateway resolves Anthropic requests against Anthropic Base URL, then falls back to OpenAI Base URL for Chat Completions conversion.
-- Codex Gateway resolves upstreams against OpenAI Base URL only.
-- Added XiaoMiMo Anthropic URL preset and legacy migration for existing XiaoMiMo/MiMo providers.
-- Updated UI to show both protocol URLs and make Claude Code binding state visible.
-- Refreshed the frontend visual style with a brighter, tighter layout.
-- Versioned package metadata and release artifacts as `1.5.0`.
+- Added `compatibility.rs`, a runtime compatibility layer for provider profiling, JSON repair, fake tool/action detection, safety gates, patch validation, context compression, agent recovery, benchmark reports, and diagnostics support.
+- Added Provider Capability Profile and Codex Capability Profile.
+- Claude and Codex health responses now expose provider capabilities.
+- Claude tool-call conversion now repairs malformed JSON arguments when possible.
+- Claude SSE rewriting can mark likely fake tool-call text with `gateway_warning`.
+- Codex Responses conversion now handles string `input`, sync `function_call` output items, and streaming function-call argument events.
+- Logs redact common secrets before writing `request_logs.error_summary`.
+- Stream logs preserve the original request ID instead of creating a new one at stream completion.
+- Provider create/update now preserves `base_url` instead of overwriting it with `openai_base_url`.
+- Added Tauri commands for runtime features, compatibility benchmark, command/path safety, patch validation, fake action detection, context compression, agent recovery, and diagnostics export.
+- Versioned package metadata and release artifacts as `1.6.0`.
+
+Version 1.5.0 was the protocol-split and Claude Code release. Its core behavior remains: providers store separate `openai_base_url` and `anthropic_base_url`, Claude Code supports Gateway Route and Direct Provider modes, Claude Gateway falls back to Chat Completions when needed, and Codex Gateway uses OpenAI Base URL for Responses-to-Chat conversion.
 
 ## 3. High-Level Architecture
 
@@ -52,10 +75,17 @@ Gateway Switch
 │  ├─ Alias CRUD
 │  ├─ Gateway lifecycle commands
 │  ├─ Desktop binding commands
-│  └─ Health/log/settings commands
+│  ├─ Health/log/settings commands
+│  └─ Runtime compatibility commands
 ├─ Rust Gateways
 │  ├─ Claude Gateway: :3456, Anthropic Messages surface with Chat Completions fallback
 │  └─ Codex Gateway: :3457, OpenAI Responses compatible
+├─ Runtime Compatibility Layer
+│  ├─ Provider/Codex capability profiles
+│  ├─ Tool-call repair and fake action detection
+│  ├─ MCP path, shell command, and patch safety gates
+│  ├─ Context compression and long-task state recovery
+│  └─ Benchmarks and diagnostics
 ├─ SQLite
 │  ├─ providers
 │  ├─ model_routes
@@ -96,6 +126,7 @@ Gateway Switch
 | `src-tauri/src/state.rs` | App state, runtime gateway handles, data paths |
 | `src-tauri/src/models.rs` | Shared data models for providers, routes, logs, settings |
 | `src-tauri/src/database.rs` | SQLite initialization and CRUD |
+| `src-tauri/src/compatibility.rs` | 1.6.0 runtime compatibility layer: capability profiles, safety gates, repair, diagnostics |
 | `src-tauri/src/gateway.rs` | Claude/Anthropic-compatible gateway with Chat Completions fallback |
 | `src-tauri/src/codex_gateway.rs` | Codex Responses-compatible gateway and conversion layer |
 | `src-tauri/src/desktop_binding.rs` | Claude Desktop config read/apply/restore |
@@ -154,7 +185,7 @@ Fields:
 
 - `id`: stable provider ID.
 - `name`: display name.
-- `base_url`: legacy compatibility field, currently stored as the OpenAI URL.
+- `base_url`: legacy compatibility field preserved for older config/import paths. Since 1.6.0 it is no longer overwritten by `openai_base_url`.
 - `openai_base_url`: OpenAI-compatible provider URL, used for Codex and Chat Completions fallback.
 - `anthropic_base_url`: Anthropic-compatible provider URL, used for Claude and Claude Code direct requests.
 - `auth_header`: usually `Authorization` or `x-api-key`.
@@ -229,6 +260,8 @@ Fields:
 - `created_at`: timestamp.
 
 Logs are the primary way to verify which model was actually called.
+
+Since 1.6.0, error summaries are passed through the Secret Redaction Engine before insertion. Common OpenAI/Anthropic keys, GitHub tokens, JWT-like strings, AWS access keys, and PEM blocks are replaced with redacted placeholders.
 
 ## 8. Claude Gateway
 
@@ -464,6 +497,8 @@ For streaming, Gateway Switch emits Responses-compatible SSE events:
 - `response.output_text.done`
 - `response.content_part.done`
 - `response.output_item.done`
+- `response.function_call_arguments.delta`
+- `response.function_call_arguments.done`
 - `response.completed`
 
 Provider delta variants supported:
@@ -487,7 +522,137 @@ Common upstream errors:
 - 429: provider quota or rate limit.
 - 5xx: provider outage.
 
-## 12. Codex App Binding
+## 12. Runtime Compatibility Layer
+
+Runtime compatibility code lives in:
+
+```text
+src-tauri/src/compatibility.rs
+```
+
+This module is intentionally independent from the UI. It contains reusable logic that can be used by the current gateways and by future MCP/shell/agent execution entry points.
+
+### Provider Capability Profile
+
+`provider_capability_profile` and `provider_capability_json` infer provider behavior from provider metadata:
+
+- Messages API support
+- Chat Completions support
+- Responses support
+- Tool Use support
+- Vision support
+- Reasoning support
+- Streaming support
+- System prompt support
+- Estimated max context
+- JSON stability
+- Tool-call accuracy
+- Long-context stability
+
+Claude and Codex `/health` include these capability profiles so other tools can inspect current runtime readiness without opening the UI.
+
+### Codex Capability Profile
+
+`codex_capability_profile` maps provider behavior into Codex-oriented capability flags:
+
+- Chat
+- Code Edit
+- Patch
+- Tool Call
+- Shell Loop
+- Long Task
+
+This is a backend capability model. The current UI does not yet render a full capability matrix, but Tauri commands expose the data.
+
+### Tool Call Repair
+
+`repair_json_object` repairs common malformed tool-call argument payloads:
+
+- extracts the JSON object from surrounding prose
+- quotes unquoted object keys
+- converts single quotes to double quotes
+- removes trailing commas
+
+Claude tool-call conversion uses this repair layer when converting Chat Completions `tool_calls` into Anthropic `tool_use` blocks. Codex sync tool-call conversion also normalizes function-call arguments through this layer.
+
+### Fake Tool/Fake Action Detection
+
+`detect_fake_tool_call` and `detect_fake_action` detect text such as:
+
+- "I called the tool"
+- "I read the file"
+- "I ran the command"
+- "我已经调用..."
+- "我已经修改..."
+
+Claude SSE rewrite can attach `gateway_warning` when a text delta looks like fake tool-use text without an actual tool block. The app also exposes a Tauri command for checking arbitrary text.
+
+### MCP Path Safety
+
+`mcp_path_safety` blocks paths that should not be exposed to future MCP/file execution flows:
+
+- `.env`
+- `.ssh`
+- private key names such as `id_rsa` and `id_ed25519`
+- token/cookie-like paths
+- path traversal
+- absolute paths outside the workspace root
+
+### Command Safety Gate
+
+`command_safety` blocks high-risk shell patterns:
+
+- `rm -rf`
+- `sudo`
+- recursive chmod
+- `curl | bash` and similar install pipes
+- global package installs
+- direct system path mutation
+
+The current app does not include a shell executor. This gate exists so future shell execution paths do not start from a blank safety model.
+
+### Patch Validator And Repair
+
+`validate_patch` checks patch text for:
+
+- recognizable file headers
+- unsafe paths
+- missing hunks
+- malformed `---` / `+++` headers
+
+`repair_patch_headers` can repair common diff header drift by adding `a/` and `b/` prefixes.
+
+### Context Compression And Agent Recovery
+
+`compress_context` implements a sliding-window compression strategy with tool-state pinning. It preserves recent messages and tool-related messages while summarizing older context.
+
+`recover_agent_state` reconstructs a lightweight state object:
+
+- plan
+- files touched
+- commands run
+- errors seen
+- patches applied
+- next action
+
+This is meant to reduce long task drift when an agent resumes work after losing context.
+
+### Benchmark And Diagnostics
+
+`benchmark_provider` returns coarse grades for:
+
+- Chat
+- Tool Use
+- MCP
+- Artifacts
+- Long Context
+- Responses Compatibility
+- Patch Quality
+- Agent Recovery
+
+`export_diagnostics` writes a JSON bundle to the app backups directory. The bundle includes runtime feature status, provider capabilities, benchmark output, providers, routes, Codex routes, and recent logs.
+
+## 13. Codex App Binding
 
 Binding writes to:
 
@@ -521,7 +686,7 @@ Important fields:
 
 Restore returns to the latest unmanaged backup. If no clean backup exists, Gateway Switch removes its managed `gateway-switch` config block while preserving unrelated Codex config sections.
 
-## 13. Reasoning Behavior With Third-Party Models
+## 14. Reasoning Behavior With Third-Party Models
 
 Gateway Switch does not add or remove model reasoning ability. It only converts protocol shape.
 
@@ -534,7 +699,7 @@ Fast responses are normal when:
 - The provider returns only final text.
 - The model does not expose visible reasoning over Chat Completions.
 
-## 14. Verifying The Real Model
+## 15. Verifying The Real Model
 
 The recommended verification path is:
 
@@ -551,13 +716,13 @@ The important log fields are:
 - `Status`: whether the upstream call succeeded.
 - `Duration`: response time.
 
-## 15. Project History And Context Limits
+## 16. Project History And Context Limits
 
 Gateway Switch preserves local config sections such as `[projects...]` when binding or restoring Codex. This preserves project trust and local config as much as possible.
 
 Codex App conversation history, account state, and provider-specific cloud state are controlled by Codex itself. Switching between OpenAI login and a local Gateway provider can show different conversation lists. Gateway Switch cannot force different Codex account/provider states to share one conversation database unless Codex App exposes that capability.
 
-## 16. Frontend UX Model
+## 17. Frontend UX Model
 
 Navigation is grouped as:
 
@@ -574,13 +739,13 @@ Dashboard intentionally does not perform binding or gateway startup. Startup and
 
 This prevents confusion between the Claude gateway and Codex gateway.
 
-## 17. Input Focus Bug Fix
+## 18. Input Focus Bug Fix
 
 The app originally rendered page functions as nested React components, which changed component identity on every parent render. That caused input fields to remount after typing one character, losing focus.
 
 The fix is to call internal page functions directly in the content switch instead of rendering them as nested component tags. This keeps input elements stable during state updates.
 
-## 18. Tauri IPC Commands
+## 19. Tauri IPC Commands
 
 Provider and route commands:
 
@@ -632,7 +797,20 @@ Health and settings commands:
 - `import_config`
 - `list_logs`
 
-## 19. Build And Release
+Runtime compatibility commands:
+
+- `list_provider_capabilities`
+- `get_runtime_feature_report`
+- `run_compatibility_benchmark`
+- `validate_patch_payload`
+- `check_command_safety`
+- `check_mcp_path_safety`
+- `detect_fake_action_text`
+- `compress_context_payload`
+- `recover_agent_state_payload`
+- `export_diagnostics`
+
+## 20. Build And Release
 
 Development:
 
@@ -664,26 +842,58 @@ macOS artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.5.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.0_aarch64.dmg
 ```
 
-## 20. Release Checklist
+## 21. Release Checklist
 
 - Frontend build passes.
-- Rust tests pass.
+- Rust tests pass. Latest 1.6.0 verification: 21 tests passed.
 - Claude Gateway health check passes.
 - Codex Gateway health check passes.
 - Claude route can rewrite model request and response fields.
 - Codex route can convert Responses to Chat Completions and back.
+- Codex route can convert Chat Completions tool calls to Responses `function_call` items.
 - Codex streaming response completes with `response.completed`.
+- Runtime compatibility tests pass for JSON repair, secret redaction, safety gates, patch repair, context compression, and agent state recovery.
 - Logs show requested model, provider, and real upstream model.
+- Logs redact sensitive error summaries.
 - Claude Desktop binding creates a backup and can restore.
 - Claude Code Gateway Route binding creates a backup and can restore.
 - Claude Code Direct Provider binding uses Anthropic Base URL.
 - Codex binding creates a backup and can restore.
 - DMG version matches `package.json`, `Cargo.toml`, and `tauri.conf.json`.
 
-## 21. Known Limitations
+## 22. PRD Coverage Map
+
+The 1.6.0 implementation covers the vNext PRD as follows:
+
+| PRD item | Status in 1.6.0 | Main implementation |
+| --- | --- | --- |
+| Provider Capability Profile | Implemented | `compatibility.rs`, `/health`, `list_provider_capabilities` |
+| Anthropic Protocol Adapter | Implemented for current gateway surface | `gateway.rs` |
+| SSE Event Compatibility | Implemented for Claude and Codex stream conversion | `gateway.rs`, `codex_gateway.rs` |
+| Tool Call Repair Layer | Implemented for JSON argument repair | `compatibility.rs`, gateway conversions |
+| Fake Tool Call Detector | Implemented as detection/warning layer | `compatibility.rs`, `rewrite_sse` |
+| MCP Security Sandbox | Implemented as path safety gate | `compatibility.rs`, Tauri command |
+| Secret Redaction Engine | Implemented for logs/diagnostics | `compatibility.rs`, `database.rs` |
+| Compatibility Benchmark Suite | Implemented as provider benchmark report | `compatibility.rs`, Tauri command |
+| Context Compression Layer | Implemented as sliding window with tool-state pinning | `compatibility.rs`, Tauri command |
+| Provider Fallback Engine | Implemented for Claude Messages to Chat Completions fallback | `gateway.rs` |
+| Observability & Diagnostics | Implemented logs plus diagnostic JSON export | `database.rs`, `commands.rs` |
+| Responses API Compatibility Layer | Implemented for current Codex gateway surface | `codex_gateway.rs` |
+| Responses ↔ ChatCompletions Adapter | Implemented sync and streaming conversion | `codex_gateway.rs` |
+| Codex Capability Profile | Implemented backend profile | `compatibility.rs` |
+| Patch Validator | Implemented backend validator | `compatibility.rs`, Tauri command |
+| Patch Repair Engine | Implemented diff header repair | `compatibility.rs` |
+| Fake Action Detector | Implemented backend detector | `compatibility.rs`, Tauri command |
+| Command Safety Gate | Implemented backend gate | `compatibility.rs`, Tauri command |
+| Long Task State Tracker | Implemented state reconstruction helper | `compatibility.rs`, Tauri command |
+| Multi-Step Agent Recovery | Implemented recovery anchor helper | `compatibility.rs` |
+| Shell Execution Sandbox | Implemented safety gate, no shell executor exists yet | `compatibility.rs` |
+| Responses Runtime Benchmark | Implemented as benchmark report | `compatibility.rs` |
+
+## 23. Known Limitations
 
 - Claude Code Direct Provider requires an Anthropic Messages-compatible upstream.
 - Codex Gateway requires a Chat Completions-compatible upstream.
@@ -691,3 +901,4 @@ src-tauri/target/release/bundle/dmg/Gateway Switch_1.5.0_aarch64.dmg
 - Codex visible reasoning depends on what the upstream model/provider returns.
 - Gateway Switch cannot merge Codex cloud/account conversation history across provider states.
 - API keys are stored locally for convenience; the app is designed for local personal use.
+- 1.6.0 includes MCP, shell, and patch safety gates, but the current app does not include a real MCP executor or shell executor. Future execution entry points should reuse these gates before touching the filesystem or process environment.

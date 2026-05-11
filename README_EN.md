@@ -4,7 +4,7 @@
 
 **Third-party model router for Claude Desktop, Claude Code, and Codex App**
 
-[![Version](https://img.shields.io/badge/Version-1.5.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.6.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -29,17 +29,17 @@ Providers are shared, but protocol URLs are separate. Codex uses the OpenAI Base
 
 ---
 
-## Version 1.5.0 Highlights
+## Version 1.6.0 Highlights
 
-- Providers now store separate `OpenAI Base URL` and `Anthropic Base URL` values.
-- Added an independent Claude Code page with `Gateway Route` and `Direct Provider` binding modes.
-- Claude Code Direct Provider writes only the provider's Anthropic Base URL and blocks binding when it is missing.
-- Claude Desktop prefers the provider's Anthropic Base URL, with local Gateway fallback to Chat Completions when needed.
-- Codex Gateway always uses OpenAI Base URL and keeps converting Responses requests to Chat Completions.
-- XiaoMiMo presets and legacy data migration now include the Anthropic endpoint for models such as `mimo-v2.5`.
-- Provider and Claude Code screens now show both protocol URLs to reduce misconfiguration.
-- Refreshed the UI with a brighter, tighter cc switch-inspired style.
-- App version is now `1.5.0`.
+- Upgraded the backend from a forwarding layer into an Anthropic-compatible and Responses-compatible runtime compatibility layer.
+- Added Provider Capability Profile and Codex Capability Profile for Chat, Tool Use, Vision, Reasoning, Long Context, Responses, and Patch readiness.
+- Claude Gateway now repairs malformed tool-call JSON and can warn about fake tool-call text in Anthropic SSE output.
+- Codex Gateway now supports string `input`, sync `function_call` output items, and streaming function-call argument events.
+- Added Secret Redaction Engine for API keys, GitHub tokens, JWTs, PEM blocks, and log summaries.
+- Added runtime safety and diagnostics: Command Safety Gate, MCP Path Safety, Patch Validator/Patch Repair, Fake Action Detector, Context Compression, Long Task State Tracker, Agent Recovery, Compatibility Benchmark, and Diagnostics Export.
+- Fixed stream request-id logging so one request can be traced through provider, real upstream model, duration, and errors.
+- Fixed provider persistence so `base_url` is no longer overwritten by `openai_base_url`.
+- App version is now `1.6.0`.
 
 ---
 
@@ -103,6 +103,15 @@ http://127.0.0.1:3457
 
 - View request time, requested model, provider, real upstream model, status code, and duration.
 - Use logs to verify which model was actually called.
+- Error summaries are redacted before storage to avoid saving API keys or tokens.
+
+### Runtime Compatibility
+
+- Provider/Codex capability profiles and compatibility benchmarks.
+- Tool-call JSON repair and fake tool/action detection.
+- MCP path safety, command safety, patch validation, and patch repair.
+- Context compression, long-task state recovery, and diagnostics export.
+- These capabilities live mainly in `src-tauri/src/compatibility.rs` and are exposed through Tauri commands.
 
 ---
 
@@ -256,7 +265,7 @@ Artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.5.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.0_aarch64.dmg
 ```
 
 ---
@@ -296,5 +305,6 @@ Codex App config:
 - Claude Code Direct Provider requires an Anthropic Messages compatible upstream.
 - Codex Gateway requires an OpenAI Chat Completions compatible upstream.
 - Claude Gateway fallback requires OpenAI Chat Completions compatibility.
+- Version 1.6.0 includes MCP/Shell/Patch safety gates, but the current app does not include a real MCP or shell executor. Future execution entry points should reuse these gates.
 - Visible Codex reasoning depends on whether the upstream returns reasoning data.
 - Codex conversation history across different login/provider states is controlled by Codex App, not Gateway Switch.

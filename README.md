@@ -4,7 +4,7 @@
 
 **Claude Desktop、Claude Code 与 Codex App 的第三方模型路由网关**
 
-[![Version](https://img.shields.io/badge/Version-1.5.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.6.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -29,17 +29,17 @@ Provider 是公共配置，但 Base URL 按协议拆分。Codex 使用 OpenAI Ba
 
 ---
 
-## 1.5.0 更新重点
+## 1.6.0 更新重点
 
-- Provider 改为双协议地址：`OpenAI Base URL` 与 `Anthropic Base URL` 分开保存。
-- Claude Code 新增独立页面，支持 `Gateway Route` 与 `Direct Provider` 两种绑定模式。
-- Claude Code Direct Provider 只写入 Anthropic Base URL，并在缺少该地址时阻止绑定。
-- Claude Desktop 优先使用 Provider 的 Anthropic Base URL；缺失时仍可通过本地 Gateway fallback 到 Chat Completions。
-- Codex Gateway 固定使用 OpenAI Base URL，继续执行 Responses 到 Chat Completions 的转换。
-- XiaoMiMo 预设和旧数据迁移会自动补充 Anthropic 地址，适合 `mimo-v2.5` 等模型直接绑定。
-- Provider 表格、Claude Code 页面会同时展示 OpenAI 与 Anthropic 地址，降低误配概率。
-- UI 重新整理为更明亮、紧凑的 cc switch 风格，调整了配色、间距、按钮和卡片密度。
-- 版本统一更新为 `1.5.0`。
+- 升级为 Anthropic-compatible + Responses-compatible 的运行时兼容层，不再只是简单 API forwarding。
+- 新增 Provider Capability Profile 与 Codex Capability Profile，用于判断 Chat、Tool Use、Vision、Reasoning、Long Context、Responses、Patch 等能力。
+- Claude Gateway 增强 Anthropic Messages 与 Chat Completions fallback 的工具调用兼容，支持 tool arguments JSON repair 与 fake tool-call warning。
+- Codex Gateway 增强 Responses API 兼容，支持字符串 `input`、同步 `function_call`、流式 function-call arguments events。
+- 新增 Secret Redaction Engine，请求日志写入前会脱敏 API key、GitHub token、JWT、PEM 等敏感信息。
+- 新增运行时安全与诊断能力：Command Safety Gate、MCP Path Safety、Patch Validator/Patch Repair、Fake Action Detector、Context Compression、Long Task State Tracker、Agent Recovery、Compatibility Benchmark、Diagnostics Export。
+- 修复流式日志 request id 追踪，便于把一次请求的 provider、真实模型、耗时和错误串起来。
+- 修复 Provider 保存时 `base_url` 被 `openai_base_url` 覆盖的问题。
+- 版本统一更新为 `1.6.0`。
 
 ---
 
@@ -103,6 +103,15 @@ http://127.0.0.1:3457
 
 - 查看请求时间、请求模型、Provider、真实上游模型、状态码、耗时。
 - 用于确认底层到底调用了哪个模型。
+- 错误摘要会自动脱敏，避免 API Key 或 Token 进入日志。
+
+### Runtime Compatibility
+
+- Provider/Codex 能力画像与兼容性 benchmark。
+- Tool call JSON repair 与 fake tool/action 检测。
+- MCP 路径安全、命令安全、Patch 校验与修复。
+- 上下文压缩、长任务状态恢复、诊断包导出。
+- 这些能力主要在 Rust 后端的 `src-tauri/src/compatibility.rs` 中实现，并通过 Tauri commands 暴露。
 
 ---
 
@@ -256,7 +265,7 @@ pnpm tauri build
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.5.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.0_aarch64.dmg
 ```
 
 ---
@@ -296,5 +305,6 @@ Codex App 配置：
 - Claude Code Direct Provider 需要上游支持 Anthropic Messages API。
 - Codex Gateway 需要上游支持 OpenAI Chat Completions API。
 - Claude Gateway 的 fallback 依赖 OpenAI Chat Completions 兼容能力。
+- 1.6.0 已提供 MCP/Shell/Patch 安全 gate，但项目当前没有真实 MCP 或 Shell 执行器；后续新增执行入口时应复用这些 gate。
 - Codex 的可见思考过程取决于上游是否返回 reasoning 信息。
 - Codex 不同登录态/provider 下的历史会话由 Codex App 自己管理，Gateway Switch 无法强制合并。

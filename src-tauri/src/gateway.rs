@@ -17,7 +17,7 @@ use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
 use uuid::Uuid;
 
 use crate::{
-    database,
+    compatibility, database,
     models::{GatewayProfile, Provider, RequestLog},
     state::{AppState, GatewayHandle, GatewayStatus},
 };
@@ -117,13 +117,19 @@ fn build_router(ctx: Ctx) -> Router {
 }
 
 async fn health(State(ctx): State<Ctx>) -> impl IntoResponse {
+    let providers = database::list_providers(&ctx.db).unwrap_or_default();
+    let capabilities: Vec<Value> = providers
+        .iter()
+        .filter(|p| p.enabled)
+        .map(compatibility::provider_capability_json)
+        .collect();
     let models: Vec<String> = database::list_routes(&ctx.db)
         .unwrap_or_default()
         .into_iter()
         .filter(|r| r.enabled)
         .map(|r| r.claude_alias)
         .collect();
-    Json(json!({ "ok": true, "listen": format!("{}:{}", ctx.profile.listen_host, ctx.profile.listen_port), "models": models }))
+    Json(json!({ "ok": true, "listen": format!("{}:{}", ctx.profile.listen_host, ctx.profile.listen_port), "models": models, "capabilities": capabilities }))
 }
 
 async fn list_models(State(ctx): State<Ctx>, headers: HeaderMap) -> Result<Json<Value>, Response> {
@@ -212,6 +218,7 @@ async fn messages(State(ctx): State<Ctx>, headers: HeaderMap, Json(body): Json<V
     let display = route.display.clone();
     let provider_id = route.provider_id.clone();
     let upstream_model = route.upstream_model.clone();
+    let log_req_id = req_id.clone();
     let db = ctx.db.clone();
     let body_stream = resp.bytes_stream();
     let sse = stream! {
@@ -234,7 +241,7 @@ async fn messages(State(ctx): State<Ctx>, headers: HeaderMap, Json(body): Json<V
             yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(rewrite_sse(&buf, &display)));
         }
         let _ = database::insert_log(&db, &RequestLog {
-            request_id: Uuid::new_v4().to_string(), claude_alias: display,
+            request_id: log_req_id, claude_alias: display,
             provider_id, upstream_model, status_code: Some(status.as_u16()),
             duration_ms: Some(started.elapsed().as_millis() as u64),
             is_stream: true, error_summary: None, created_at: String::new(),
@@ -300,6 +307,7 @@ async fn chat_completion_fallback(
     let display = route.display.clone();
     let provider_id = route.provider_id.clone();
     let upstream_model = route.upstream_model.clone();
+    let log_req_id = req_id.clone();
     let db = ctx.db.clone();
     let body_stream = resp.bytes_stream();
     let sse = stream! {
@@ -381,7 +389,7 @@ async fn chat_completion_fallback(
         yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!("event: message_stop\ndata: {}\n\n", serde_json::to_string(&message_stop).unwrap())));
 
         let _ = database::insert_log(&db, &RequestLog {
-            request_id: Uuid::new_v4().to_string(), claude_alias: display,
+            request_id: log_req_id, claude_alias: display,
             provider_id, upstream_model, status_code: Some(status.as_u16()),
             duration_ms: Some(started.elapsed().as_millis() as u64),
             is_stream: true, error_summary: None, created_at: String::new(),
@@ -616,7 +624,7 @@ fn chat_tool_calls_to_anthropic(message: &Value) -> Vec<Value> {
                 let function = call.get("function")?;
                 let name = function.get("name").and_then(|v| v.as_str())?;
                 let arguments = function.get("arguments").and_then(|v| v.as_str()).unwrap_or("{}");
-                let input = serde_json::from_str::<Value>(arguments).unwrap_or_else(|_| json!({}));
+                let input = compatibility::repair_json_object(arguments).unwrap_or_else(|_| json!({}));
                 Some(json!({"type":"tool_use","id":id,"name":name,"input":input}))
             }).collect()
         })
@@ -724,10 +732,11 @@ fn estimate_tokens(text: &str) -> u64 {
 
 fn body_preview(bytes: &Bytes) -> String {
     let text = String::from_utf8_lossy(bytes).trim().to_string();
-    if text.chars().count() > 300 {
-        format!("{}...", text.chars().take(300).collect::<String>())
+    let redacted = compatibility::redact_secrets(&text);
+    if redacted.chars().count() > 300 {
+        format!("{}...", redacted.chars().take(300).collect::<String>())
     } else {
-        text
+        redacted
     }
 }
 
@@ -771,6 +780,11 @@ fn rewrite_sse(line: &str, model: &str) -> String {
     match serde_json::from_str::<Value>(payload) {
         Ok(mut v) => {
             rewrite_model(&mut v, model);
+            if let Some(text) = v.pointer("/delta/text").and_then(|t| t.as_str()) {
+                if compatibility::detect_fake_tool_call(text) {
+                    v["gateway_warning"] = json!("Possible fake tool call text without a tool_use block");
+                }
+            }
             format!("data: {}\n", serde_json::to_string(&v).unwrap_or_else(|_| payload.to_string()))
         }
         Err(_) => line.to_string(),

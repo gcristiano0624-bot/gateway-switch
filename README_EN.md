@@ -2,7 +2,9 @@
 
 # Gateway Switch
 
-**Third-party model router for Claude Desktop, Claude Code, and Codex App**
+**Runtime compatibility gateway for Claude Desktop, Claude Code, and Codex App**
+
+> Gateway Switch is not just a model router. It is a **runtime compatibility layer** that sits between AI-native desktop applications and third-party model providers, bridging protocol gaps, repairing malformed tool calls, enforcing safety boundaries, and degrading gracefully when upstream providers misbehave.
 
 [![Version](https://img.shields.io/badge/Version-1.6.2-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
@@ -26,6 +28,117 @@ It solves three related problems:
 - **Codex App** uses OpenAI Responses API, while many third-party providers only support Chat Completions. Gateway Switch exposes a local `/v1/responses` endpoint, converts Codex requests to `/v1/chat/completions`, then converts responses back into Responses format.
 
 Providers are shared, but protocol URLs are separate. Codex uses the OpenAI Base URL. Claude and Claude Code prefer the Anthropic Base URL so one provider URL is not accidentally reused by incompatible clients.
+
+---
+
+## Architecture & Engineering
+
+Gateway Switch is built in **Rust + React/Tauri** with ~2,700 lines of backend Rust code. Beyond simple request forwarding, it implements a comprehensive runtime compatibility layer that makes third-party models work reliably with AI-native clients that expect specific protocol semantics.
+
+### Multi-Protocol Runtime Conversion
+
+Gateway Switch bridges **three distinct API surfaces** with bidirectional conversion:
+
+```
+Claude Desktop ──→ Anthropic Messages API ──→ Gateway ──→ Upstream provider
+                                                  ↓
+                                    Anthropic Messages  (preferred)
+                                    Chat Completions    (automatic fallback)
+
+Claude Code ────→ Anthropic Messages API ──→ Gateway ──→ Anthropic Base URL
+
+Codex App ──────→ OpenAI Responses API ──→ Gateway ──→ UpAI Chat Completions
+```
+
+The Claude gateway performs **automatic protocol fallback**: it first tries the Anthropic Messages endpoint on the upstream provider. If the provider does not support `/v1/messages` (common with Chinese mainland providers like XiaoMiMo), the gateway transparently converts the request to OpenAI Chat Completions format, sends it to the provider's `/v1/chat/completions` endpoint, and converts the response back — all invisible to Claude Desktop.
+
+The Codex gateway handles the **Responses API ↔ Chat Completions** conversion, including streaming SSE event remapping (`response.created`, `response.output_text.delta`, `response.function_call_arguments.delta`, `response.completed`), `instructions` → system message conversion, `function_call_output` → tool message conversion, and `max_output_tokens` → `max_tokens` translation.
+
+### Tool-Call Repair & Reliability Engine
+
+Third-party models frequently emit malformed tool calls — unquoted JSON keys, trailing commas, single quotes, or tool arguments wrapped in prose. Gateway Switch includes a **multi-layer tool-call repair pipeline**:
+
+1. **JSON argument repair** (`repair_json_object`): Extracts JSON objects from surrounding text, fixes unquoted keys, converts single quotes to double quotes, removes trailing commas. Applied to both sync and streaming tool-call arguments before forwarding to clients.
+
+2. **Fake tool-call detection** (`detect_fake_tool_call`): Identifies text that *claims* a tool was called without an actual tool block — patterns like "I called the tool", "I read the file", "我已经调用...". The Claude gateway attaches `gateway_warning` to suspicious SSE text deltas.
+
+3. **Missing tool-call retry** (`has_action_description` + `tool_choice: "required"`): When the Codex gateway detects that a model described planned actions in text ("Let me read the file...", "我来查看...") without emitting structured `tool_calls`, it automatically retries the upstream request with `tool_choice: "required"` to force tool invocation. This fixes the #1 cause of Codex conversation stalls with Chinese mainland models.
+
+4. **`finish_reason` tracking**: The gateway parses `finish_reason` from upstream SSE streams. Truncated responses (`"length"`) are reported as `status: "incomplete"` instead of `"completed"`, so Codex knows when to request more output.
+
+5. **Stream timeout enforcement**: A 120-second timeout on upstream stream reads prevents indefinite hangs when providers stop responding mid-stream.
+
+### Secret Redaction Engine
+
+Before any request metadata is written to the local SQLite log database, the **Secret Redaction Engine** scans error summaries and replaces sensitive patterns:
+
+- OpenAI API keys (`sk-...`)
+- Anthropic API keys
+- GitHub tokens (`ghp_...`, `gho_...`)
+- JWT-like strings
+- AWS access keys
+- PEM blocks
+- Generic bearer tokens
+
+This ensures that API keys or tokens accidentally included in upstream error messages never persist to disk.
+
+### Safety Gates (MCP / Shell / Patch)
+
+Gateway Switch includes pre-built safety infrastructure for agent-like execution workflows. These gates are implemented in `compatibility.rs` and exposed as Tauri commands, ready for future execution entry points:
+
+- **MCP Path Safety** (`mcp_path_safety`): Blocks access to `.env`, `.ssh/`, private key files (`id_rsa`, `id_ed25519`), token/cookie-like paths, path traversal attempts, and absolute paths outside the workspace root.
+
+- **Command Safety Gate** (`command_safety`): Blocks high-risk shell patterns — `rm -rf`, `sudo`, recursive `chmod`, `curl | bash`, global package installs, and direct system path mutations.
+
+- **Patch Validator** (`validate_patch`): Validates unified diff patches for recognizable file headers, unsafe paths, missing hunks, and malformed `---`/`+++` headers. Includes a **Patch Repair Engine** that can fix common header drift by adding `a/`/`b/` prefixes.
+
+- **Fake Action Detector** (`detect_fake_action`): Detects text claiming an action was performed ("I edited the file", "我已经修改了...") without actual execution evidence.
+
+### Provider Capability Profiling
+
+Gateway Switch automatically infers **provider capability profiles** from metadata:
+
+| Capability | Detection |
+|---|---|
+| Messages API | Anthropic Base URL present |
+| Chat Completions | Default (all providers) |
+| Responses API | OpenAI-like provider ID |
+| Tool Use | OpenAI / Qwen / Claude-like |
+| Vision | OpenAI / Qwen / Claude-like |
+| Reasoning | DeepSeek / Qwen / OpenAI |
+| Streaming | Default (all providers) |
+| JSON Stability | High (OpenAI/Claude) / Medium / Low |
+| Tool-call Accuracy | High / Medium (Qwen) / Low |
+| Max Context | 32K – 128K inferred from provider |
+
+Claude and Codex `/health` endpoints expose these profiles, so external tools can inspect runtime readiness without opening the desktop UI.
+
+### Context Compression & Agent Recovery
+
+For long-running agent workflows:
+
+- **Context Compression** (`compress_context`): Implements a sliding-window compression strategy with tool-state pinning. Recent messages and tool-related messages are preserved while older context is summarized.
+
+- **Agent State Recovery** (`recover_agent_state`): Reconstructs a lightweight state object from a conversation — plan, files touched, commands run, errors seen, patches applied, and suggested next action. This reduces long-task drift when an agent resumes work after losing context.
+
+### Compatibility Benchmark Suite
+
+`benchmark_provider` grades providers across 8 dimensions:
+
+| Dimension | Grade A | Grade B | Grade C |
+|---|---|---|---|
+| Chat | All providers | — | — |
+| Tool Use | OpenAI/Claude + high accuracy | Tool-capable | Others |
+| MCP | Tool + system prompt support | Tool-capable | Others |
+| Artifacts | Tool + high JSON stability | Medium stability | Others |
+| Long Context | 128K+ | 32K+ | <32K |
+| Responses Compat | Native Responses API | Chat Completions | Others |
+| Patch Quality | Tool + high JSON stability | Tool-capable | Others |
+| Agent Recovery | 128K + tool support | 32K+ | Others |
+
+### Diagnostics Export
+
+`export_diagnostics` generates a comprehensive JSON bundle containing: runtime feature status, all provider capability profiles, benchmark results, provider configurations, route configurations, Codex route configurations, and recent request logs — everything needed to reproduce and debug an issue remotely.
 
 ---
 
@@ -286,7 +399,7 @@ Artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.1_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.2_aarch64.dmg
 ```
 
 ---

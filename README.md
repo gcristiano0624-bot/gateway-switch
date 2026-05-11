@@ -2,7 +2,9 @@
 
 # Gateway Switch
 
-**Claude Desktop、Claude Code 与 Codex App 的第三方模型路由网关**
+**Claude Desktop、Claude Code 与 Codex App 的运行时兼容性网关**
+
+> Gateway Switch 不仅仅是一个模型路由器。它是一个**运行时兼容性层**，驻留在 AI 原生桌面应用与第三方模型服务之间，弥合协议鸿沟、修复畸形工具调用、强制安全边界，并在上游 Provider 异常时优雅降级。
 
 [![Version](https://img.shields.io/badge/Version-1.6.2-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
@@ -26,6 +28,117 @@ Gateway Switch 是一个 macOS 桌面应用，用来把 Claude Desktop、Claude 
 - **Codex App**：Codex 使用 OpenAI Responses API，但很多第三方服务只支持 Chat Completions。Gateway Switch 提供本地 Responses 网关，把 Codex 请求转换为 `/v1/chat/completions`，再把响应转换回 Codex 可解析的 Responses 格式。
 
 Provider 是公共配置，但 Base URL 按协议拆分。Codex 使用 OpenAI Base URL，Claude 与 Claude Code 优先使用 Anthropic Base URL，避免同一个地址被不同产品错误复用。
+
+---
+
+## 架构与工程技术
+
+Gateway Switch 使用 **Rust + React/Tauri** 构建，后端 Rust 代码约 2,700 行。它不只是简单的请求转发，而是一个完整的运行时兼容性层，让第三方模型在期望特定协议语义的 AI 原生客户端中稳定工作。
+
+### 多协议运行时转换
+
+Gateway Switch 桥接**三种不同的 API 接口**，并实现双向转换：
+
+```
+Claude Desktop ──→ Anthropic Messages API ──→ Gateway ──→ 上游 Provider
+                                                  ↓
+                                    Anthropic Messages  （首选）
+                                    Chat Completions    （自动 fallback）
+
+Claude Code ────→ Anthropic Messages API ──→ Gateway ──→ Anthropic Base URL
+
+Codex App ──────→ OpenAI Responses API ──→ Gateway ──→ OpenAI Chat Completions
+```
+
+Claude 网关执行**自动协议回退**：先尝试上游 Provider 的 Anthropic Messages 端点。如果 Provider 不支持 `/v1/messages`（中国大陆 Provider 如小米 MiMo 常见情况），网关会透明地将请求转换为 OpenAI Chat Completions 格式，发送到 Provider 的 `/v1/chat/completions` 端点，再将响应转回 — 全过程对 Claude Desktop 完全不可见。
+
+Codex 网关处理 **Responses API ↔ Chat Completions** 转换，包括流式 SSE 事件重映射（`response.created`、`response.output_text.delta`、`response.function_call_arguments.delta`、`response.completed`）、`instructions` → system message 转换、`function_call_output` → tool message 转换、`max_output_tokens` → `max_tokens` 映射等。
+
+### 工具调用修复与可靠性引擎
+
+第三方模型经常输出畸形的工具调用 — 未加引号的 JSON key、尾部逗号、单引号、或包裹在散文中的工具参数。Gateway Switch 包含一个**多层工具调用修复流水线**：
+
+1. **JSON 参数修复**（`repair_json_object`）：从包裹文本中提取 JSON 对象，修复未加引号的 key，将单引号转为双引号，删除尾部逗号。在同步和流式工具调用参数转发给客户端之前都会应用。
+
+2. **伪工具调用检测**（`detect_fake_tool_call`）：识别声称调用了工具但实际没有工具块的文本 — 如 "I called the tool"、"I read the file"、"我已经调用..."。Claude 网关会在可疑的 SSE 文本 delta 上附加 `gateway_warning`。
+
+3. **缺失工具调用重试**（`has_action_description` + `tool_choice: "required"`）：当 Codex 网关检测到模型用文本描述了计划执行的操作（"Let me read the file..."、"我来查看..."）但没有发出结构化的 `tool_calls` 时，会自动用 `tool_choice: "required"` 重试上游请求，强制模型调用工具。这修复了中国大陆模型在 Codex 中对话中断的头号原因。
+
+4. **`finish_reason` 追踪**：网关从上游 SSE 流中解析 `finish_reason`。被截断的响应（`"length"`）会被报告为 `status: "incomplete"` 而非 `"completed"`，让 Codex 知道何时需要请求更多输出。
+
+5. **流超时强制执行**：对上游流读取设置 120 秒超时，防止 Provider 在流式传输中途停止响应时无限挂起。
+
+### 密钥脱敏引擎
+
+在任何请求元数据写入本地 SQLite 日志数据库之前，**密钥脱敏引擎**会扫描错误摘要并替换敏感模式：
+
+- OpenAI API Key（`sk-...`）
+- Anthropic API Key
+- GitHub Token（`ghp_...`、`gho_...`）
+- JWT 类字符串
+- AWS Access Key
+- PEM 证书块
+- 通用 Bearer Token
+
+确保上游错误消息中意外包含的 API Key 或 Token 永远不会持久化到磁盘。
+
+### 安全门控（MCP / Shell / Patch）
+
+Gateway Switch 包含面向 Agent 类执行工作流的预建安全基础设施。这些门控在 `compatibility.rs` 中实现并通过 Tauri 命令暴露，为未来的执行入口做好了准备：
+
+- **MCP 路径安全**（`mcp_path_safety`）：拦截对 `.env`、`.ssh/`、私钥文件（`id_rsa`、`id_ed25519`）、token/cookie 类路径的访问，以及路径穿越攻击和工作区根目录之外的绝对路径。
+
+- **命令安全门控**（`command_safety`）：拦截高风险 Shell 模式 — `rm -rf`、`sudo`、递归 `chmod`、`curl | bash`、全局包安装、直接系统路径修改。
+
+- **Patch 校验器**（`validate_patch`）：校验 unified diff 补丁的文件头、不安全路径、缺失 hunk、和格式错误的 `---`/`+++` 头。包含 **Patch 修复引擎**，可自动修复常见的头漂移（添加 `a/`/`b/` 前缀）。
+
+- **伪动作检测器**（`detect_fake_action`）：检测声称已执行某个动作的文本（"I edited the file"、"我已经修改了..."）但没有实际执行证据。
+
+### Provider 能力画像
+
+Gateway Switch 自动从元数据推断 **Provider 能力画像**：
+
+| 能力 | 检测逻辑 |
+|---|---|
+| Messages API | 存在 Anthropic Base URL |
+| Chat Completions | 默认（所有 Provider） |
+| Responses API | OpenAI 类 Provider ID |
+| Tool Use | OpenAI / Qwen / Claude 类 |
+| Vision | OpenAI / Qwen / Claude 类 |
+| Reasoning | DeepSeek / Qwen / OpenAI |
+| Streaming | 默认（所有 Provider） |
+| JSON 稳定性 | 高（OpenAI/Claude）/ 中 / 低 |
+| 工具调用准确度 | 高 / 中（Qwen）/ 低 |
+| 最大上下文 | 32K – 128K，根据 Provider 推断 |
+
+Claude 和 Codex 的 `/health` 端点会暴露这些画像，外部工具无需打开桌面 UI 即可检查运行时就绪状态。
+
+### 上下文压缩与 Agent 恢复
+
+面向长时间运行的 Agent 工作流：
+
+- **上下文压缩**（`compress_context`）：实现带工具状态钉住的滑动窗口压缩策略。近期消息和工具相关消息被保留，较早的上下文被摘要。
+
+- **Agent 状态恢复**（`recover_agent_state`）：从对话中重建轻量级状态对象 — 计划、已接触文件、已运行命令、已见错误、已应用补丁、和建议的下一步动作。减少 Agent 在丢失上下文后恢复工作时的长任务漂移。
+
+### 兼容性基准测试套件
+
+`benchmark_provider` 在 8 个维度上对 Provider 进行评级：
+
+| 维度 | A 级 | B 级 | C 级 |
+|---|---|---|---|
+| Chat | 所有 Provider | — | — |
+| Tool Use | OpenAI/Claude + 高准确度 | 支持工具调用 | 其他 |
+| MCP | 工具 + 系统提示支持 | 支持工具调用 | 其他 |
+| Artifacts | 工具 + 高 JSON 稳定性 | 中等稳定性 | 其他 |
+| 长上下文 | 128K+ | 32K+ | <32K |
+| Responses 兼容性 | 原生 Responses API | Chat Completions | 其他 |
+| Patch 质量 | 工具 + 高 JSON 稳定性 | 支持工具调用 | 其他 |
+| Agent 恢复 | 128K + 工具支持 | 32K+ | 其他 |
+
+### 诊断导出
+
+`export_diagnostics` 生成全面的 JSON 包，包含：运行时特性状态、所有 Provider 能力画像、基准测试结果、Provider 配置、路由配置、Codex 路由配置、和近期请求日志 — 远程复现和调试问题所需的一切。
 
 ---
 
@@ -286,7 +399,7 @@ pnpm tauri build
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.1_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.2_aarch64.dmg
 ```
 
 ---

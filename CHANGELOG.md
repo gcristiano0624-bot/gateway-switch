@@ -2,6 +2,15 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.6.3 - 2026-05-12
+
+- Refreshed the whole app with a Claude Warm Native UI: white surfaces, warm paper backgrounds, ink text, oxblood accents, low-saturation semantic colors, and softer native desktop cards.
+- Reworked the left navigation into a compact icon rail with hover labels to free space for the main Gateway Switch workbench.
+- Redesigned the in-app brand mark, App Icon, and tray/status icon around a white `Gateway Pin` route symbol with a Claude oxblood center point.
+- Updated typography to Geist, Fraunces, and Geist Mono and aligned buttons, tables, forms, badges, health bars, provider cards, and route cards with the new visual system.
+- Updated version to `1.6.3` across `package.json`, `Cargo.toml`, `Cargo.lock`, and `tauri.conf.json`.
+- Verification: `pnpm build`, `cargo test`, and `pnpm tauri build`.
+
 ## 1.6.2 - 2026-05-11
 
 - Fixed Codex conversation stall: when third-party models describe planned actions in text without emitting `tool_calls`, the gateway now detects this pattern via `has_action_description()` and automatically retries with `tool_choice: "required"` to force tool invocation.

@@ -6,7 +6,7 @@
 
 > Gateway Switch is not just a model router. It is a **runtime compatibility layer** that sits between AI-native desktop applications and third-party model providers, bridging protocol gaps, repairing malformed tool calls, enforcing safety boundaries, and degrading gracefully when upstream providers misbehave.
 
-[![Version](https://img.shields.io/badge/Version-1.6.2-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.6.3-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -141,6 +141,15 @@ For long-running agent workflows:
 `export_diagnostics` generates a comprehensive JSON bundle containing: runtime feature status, all provider capability profiles, benchmark results, provider configurations, route configurations, Codex route configurations, and recent request logs — everything needed to reproduce and debug an issue remotely.
 
 ---
+
+## Version 1.6.3 Highlights
+
+- New **Claude Warm Native** UI with white surfaces, warm paper backgrounds, ink text, Claude oxblood accents, low-saturation status colors, and a lighter macOS-native utility feel.
+- Reworked the left navigation into a compact icon rail that preserves Dashboard, Claude, Claude Code, Codex, Providers, Logs, and Settings while freeing more space for the main workbench.
+- Redesigned the App Icon and status bar icon around a white `Gateway Pin` symbol with a Claude oxblood route point, representing multi-client routing through the local gateway to upstream providers.
+- Updated the frontend design system to Geist / Fraunces / Geist Mono and refreshed cards, tables, forms, buttons, badges, and health indicators.
+- App version is now `1.6.3`.
+- Latest verification: `pnpm build`, `cargo test`, and `pnpm tauri build`.
 
 ## Version 1.6.2 Highlights
 
@@ -399,7 +408,7 @@ Artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.2_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.3_aarch64.dmg
 ```
 
 ---

@@ -708,19 +708,20 @@ function App() {
       <div className="sidebar-brand">
         <div className="brand-icon">
           <svg viewBox="0 0 24 24" fill="none">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c3.86 0 7 3.14 7 7s-3.14 7-7 7-7-3.14-7-7 3.14-7 7-7z" fill="currentColor" opacity="0.3"/>
-            <path d="M12 4C7.58 4 4 7.58 4 12s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm3.5 10.5h-3v3a1 1 0 11-2 0v-3h-3a1 1 0 110-2h3v-3a1 1 0 112 0v3h3a1 1 0 110 2z" fill="currentColor"/>
+            <path d="M12 3.25c4.25 0 7.55 3.22 7.55 7.35 0 5.18-7.55 10.15-7.55 10.15S4.45 15.78 4.45 10.6C4.45 6.47 7.75 3.25 12 3.25Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
+            <path d="M8.2 10.55h7.6M12 6.75v7.6" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round"/>
+            <circle cx="12" cy="10.55" r="2.45" fill="currentColor"/>
           </svg>
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.6.2</div>
+          <div className="brand-sub">v1.6.3</div>
         </div>
       </div>
 
       <div className="nav-group">
         <div className="nav-group-label">Dashboard</div>
-        <button className={`nav-item ${page === "dashboard" ? "active" : ""}`} onClick={() => setPage("dashboard")}>
+        <button className={`nav-item ${page === "dashboard" ? "active" : ""}`} aria-label="Dashboard" title="Dashboard" onClick={() => setPage("dashboard")}>
           <IconGrid />
           Dashboard
         </button>
@@ -728,16 +729,16 @@ function App() {
 
       <div className="nav-group">
         <div className="nav-group-label">Products</div>
-        <button className={`nav-item ${page === "claude" ? "active" : ""}`} onClick={() => setPage("claude")}>
+        <button className={`nav-item ${page === "claude" ? "active" : ""}`} aria-label="Claude" title="Claude" onClick={() => setPage("claude")}>
           <IconShuffle />
           Claude
           {routes.length > 0 && <span className="nav-badge">{routes.length}</span>}
         </button>
-        <button className={`nav-item ${page === "claudeCode" ? "active" : ""}`} onClick={() => setPage("claudeCode")}>
+        <button className={`nav-item ${page === "claudeCode" ? "active" : ""}`} aria-label="Claude Code" title="Claude Code" onClick={() => setPage("claudeCode")}>
           <IconTerminal />
           Claude Code
         </button>
-        <button className={`nav-item ${page === "codex" ? "active" : ""}`} onClick={() => setPage("codex")}>
+        <button className={`nav-item ${page === "codex" ? "active" : ""}`} aria-label="Codex" title="Codex" onClick={() => setPage("codex")}>
           <IconTerminal />
           Codex
           {codexRoutes.length > 0 && <span className="nav-badge">{codexRoutes.length}</span>}
@@ -746,7 +747,7 @@ function App() {
 
       <div className="nav-group">
         <div className="nav-group-label">Shared</div>
-        <button className={`nav-item ${page === "providers" ? "active" : ""}`} onClick={() => setPage("providers")}>
+        <button className={`nav-item ${page === "providers" ? "active" : ""}`} aria-label="Providers" title="Providers" onClick={() => setPage("providers")}>
           <IconSun />
           Providers
           {providers.length > 0 && <span className="nav-badge">{providers.length}</span>}
@@ -755,11 +756,11 @@ function App() {
 
       <div className="nav-group">
         <div className="nav-group-label">System</div>
-        <button className={`nav-item ${page === "logs" ? "active" : ""}`} onClick={() => setPage("logs")}>
+        <button className={`nav-item ${page === "logs" ? "active" : ""}`} aria-label="Logs" title="Logs" onClick={() => setPage("logs")}>
           <IconTerminal />
           Logs
         </button>
-        <button className={`nav-item ${page === "settings" ? "active" : ""}`} onClick={() => setPage("settings")}>
+        <button className={`nav-item ${page === "settings" ? "active" : ""}`} aria-label="Settings" title="Settings" onClick={() => setPage("settings")}>
           <IconSettings />
           Settings
         </button>

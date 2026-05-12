@@ -151,10 +151,6 @@ Claude 和 Codex 的 `/health` 端点会暴露这些画像，外部工具无需�
 - 版本统一更新为 `1.6.3`。
 - 最新验证：`pnpm build`、`cargo test`、`pnpm tauri build`。
 
-## 1.6.2 更新重点
-
-## 1.6.2 更新重点
-
 - **核心修复：Codex 对话中断问题。** 当第三方模型（DeepSeek、MiMo、Qwen 等）在有 tools 可用时只生成文本描述（如"我来读取文件..."）而不调用工具，Codex 会认为本轮结束导致对话中断。现在 Gateway 会自动检测这种情况并用 `tool_choice: "required"` 重试上游请求，强制模型调用工具。
 - 新增 `finish_reason` 检测：当上游返回 `finish_reason: "length"`（输出被截断）时，`response.completed` 会正确设置 `status: "incomplete"` 而非 `"completed"`，让 Codex 知道响应不完整。
 - 新增流超时机制（120 秒）：上游 Provider 挂起或长时间无数据时，Gateway 不再无限等待，会主动断开并报告超时错误。

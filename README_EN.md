@@ -6,7 +6,7 @@
 
 > Gateway Switch is not just a model router. It is a **runtime compatibility layer** that sits between AI-native desktop applications and third-party model providers, bridging protocol gaps, repairing malformed tool calls, enforcing safety boundaries, and degrading gracefully when upstream providers misbehave.
 
-[![Version](https://img.shields.io/badge/Version-1.6.3-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.6.4-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -47,12 +47,12 @@ Claude Desktop ──→ Anthropic Messages API ──→ Gateway ──→ Upst
 
 Claude Code ────→ Anthropic Messages API ──→ Gateway ──→ Anthropic Base URL
 
-Codex App ──────→ OpenAI Responses API ──→ Gateway ──→ UpAI Chat Completions
+Codex App ──────→ OpenAI Responses API ──→ Gateway ──→ OpenAI Chat Completions
 ```
 
 The Claude gateway performs **automatic protocol fallback**: it first tries the Anthropic Messages endpoint on the upstream provider. If the provider does not support `/v1/messages` (common with Chinese mainland providers like XiaoMiMo), the gateway transparently converts the request to OpenAI Chat Completions format, sends it to the provider's `/v1/chat/completions` endpoint, and converts the response back — all invisible to Claude Desktop.
 
-The Codex gateway handles the **Responses API ↔ Chat Completions** conversion, including streaming SSE event remapping (`response.created`, `response.output_text.delta`, `response.function_call_arguments.delta`, `response.completed`), `instructions` → system message conversion, `function_call_output` → tool message conversion, and `max_output_tokens` → `max_tokens` translation.
+The Codex gateway handles the **Responses API ↔ Chat Completions** conversion, including streaming SSE event remapping (`response.created`, `response.output_text.delta`, `response.function_call_arguments.delta`, `response.completed`), `instructions` → system message conversion, `function_call_output` → tool message conversion, and `max_output_tokens` → Chat Completions token mapping (using `max_completion_tokens` for Xiaomi/MiMO).
 
 ### Tool-Call Repair & Reliability Engine
 
@@ -141,6 +141,15 @@ For long-running agent workflows:
 `export_diagnostics` generates a comprehensive JSON bundle containing: runtime feature status, all provider capability profiles, benchmark results, provider configurations, route configurations, Codex route configurations, and recent request logs — everything needed to reproduce and debug an issue remotely.
 
 ---
+
+## Version 1.6.4 Highlights
+
+- **Fixed Xiaomi MiMO Codex routing failures with 502 / `Param Incorrect`.** The latest Xiaomi MiMO OpenAI-compatible API enables thinking by default for `mimo-v2.5` / `mimo-v2.5-pro`; during multi-turn tool conversations, upstream requires historical `reasoning_content` to be replayed. Gateway now injects `thinking: {"type":"disabled"}` for Xiaomi/MiMO Codex conversion requests by default, preventing upstream rejection during Codex tool workflows.
+- Xiaomi/MiMO Codex requests now map `max_output_tokens` to `max_completion_tokens`, matching the current MiMO OpenAI API contract instead of sending the less compatible `max_tokens` field.
+- Explicit caller-provided `thinking` controls are preserved, and the compatibility default is scoped only to Xiaomi/MiMO routes so other providers are unaffected.
+- Added focused Rust tests for Xiaomi/MiMO Codex compatibility, covering thinking disablement and token parameter renaming.
+- App version is now `1.6.4`.
+- Latest verification: `pnpm build`, `cargo test`, and `pnpm tauri build --bundles app`.
 
 ## Version 1.6.3 Highlights
 
@@ -408,7 +417,7 @@ Artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.3_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.4_aarch64.dmg
 ```
 
 ---

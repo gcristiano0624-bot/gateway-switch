@@ -1,6 +1,6 @@
 # Gateway Switch Project Documentation
 
-Version: 1.6.3
+Version: 1.6.4
 
 This document is the single technical source of truth for Gateway Switch. It merges the former project architecture notes and the Codex Gateway notes into one maintained file.
 
@@ -9,7 +9,7 @@ This document is the single technical source of truth for Gateway Switch. It mer
 If another AI receives this repository, start here:
 
 - Product: macOS Tauri app that routes Claude Desktop, Claude Code, and Codex App to third-party model providers.
-- Current version: `1.6.3`.
+- Current version: `1.6.4`.
 - Main frontend: `src/App.tsx` and `src/App.css`.
 - Main backend: `src-tauri/src/*.rs`.
 - Claude gateway: `src-tauri/src/gateway.rs`, local Anthropic Messages surface on `127.0.0.1:3456`.
@@ -20,7 +20,7 @@ If another AI receives this repository, start here:
 - Bindings: Claude Desktop in `desktop_binding.rs`, Claude Code in `claude_code_binding.rs`, Codex in `codex_binding.rs`.
 - Local data: `~/Library/Application Support/Gateway Switch/`.
 - Build: `PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build` when `cargo` is not already on `PATH`.
-- Latest verified tests: `pnpm build`, `cargo test`, and `pnpm tauri build` after the 1.6.3 Claude Warm Native UI refresh.
+- Latest verified tests: `pnpm build`, `cargo test`, and `pnpm tauri build --bundles app` after the 1.6.4 Xiaomi MiMO Codex compatibility fix.
 
 The design intent is to make third-party models less likely to degrade Claude/Codex behavior by normalizing protocol shapes, repairing common tool-call failures, redacting secrets, exposing provider capability profiles, and adding safety/diagnostic gates around agent-like workflows.
 
@@ -36,7 +36,28 @@ The app solves two related but different protocol problems:
 
 The shared design goal is simple: providers share identity, auth header, auth scheme, and API key, but they do not share one universal Base URL. Provider URLs are split by protocol: OpenAI Base URL for Codex and Chat Completions fallback, Anthropic Base URL for Claude and Claude Code direct requests.
 
-## 2. Version 1.6.3 Scope
+## 2. Version 1.6.4 Scope
+
+Version 1.6.4 fixes Xiaomi MiMO Codex routing against the latest MiMO OpenAI-compatible Chat Completions behavior.
+
+Main changes:
+
+- Fixed Codex `502 Bad Gateway` / upstream `Param Incorrect` failures when routing through Xiaomi MiMO `mimo-v2.5` and `mimo-v2.5-pro`.
+- Root cause: MiMO thinking mode is enabled by default for these models, and multi-turn tool workflows require historical `reasoning_content` to be passed back. Codex Responses traffic does not preserve that provider-specific field, so the upstream rejected follow-up tool turns.
+- Gateway now applies Xiaomi/MiMO-specific Codex compatibility after Responses-to-Chat conversion by defaulting `thinking` to `{ "type": "disabled" }` for Xiaomi/MiMO routes only.
+- The compatibility layer preserves explicit caller-provided `thinking` settings, so future callers can opt into MiMO thinking behavior deliberately.
+- Xiaomi/MiMO Codex token limits now use `max_completion_tokens` instead of `max_tokens`, matching the current Xiaomi MiMO OpenAI API documentation.
+- Added focused Rust tests covering MiMO thinking disablement, explicit thinking preservation, and token parameter renaming.
+- Versioned package metadata and release artifacts as `1.6.4`.
+
+Verification for 1.6.4:
+
+- `pnpm build`: passed.
+- `cargo test`: passed, 25 tests.
+- `pnpm tauri build --bundles app`: passed.
+- Manual verification: reinstalling the validation build restored Codex conversation through the Xiaomi MiMO route.
+
+## 3. Version 1.6.3 Scope
 
 Version 1.6.3 is the Claude Warm Native UI and icon refresh release.
 
@@ -54,7 +75,7 @@ Verification for 1.6.3:
 - `cargo test`: passed.
 - `pnpm tauri build`: passed.
 
-## 3. Version 1.6.2 Scope
+## 4. Version 1.6.2 Scope
 
 Version 1.6.2 fixes the Codex conversation stall problem when routing through third-party Chat Completions models.
 
@@ -75,7 +96,7 @@ Verification for 1.6.2:
 - `cargo test`: passed, 23 tests.
 - `cargo clippy`: no new warnings introduced by the streaming changes.
 
-## 4. Version 1.6.1 Scope
+## 5. Version 1.6.1 Scope
 
 Version 1.6.1 is the AI handoff and Codex agent reliability release.
 
@@ -97,7 +118,7 @@ Verification for 1.6.1:
 - `cargo test`: passed, 23 tests.
 - Browser preview at `http://localhost:1420/`: rendered Gateway Switch with mock XiaoMiMo/Codex data and no Tauri invoke error.
 
-## 5. Version 1.6.0 Scope
+## 6. Version 1.6.0 Scope
 
 Version 1.6.0 is the runtime compatibility release.
 
@@ -117,7 +138,7 @@ Main changes:
 
 Version 1.5.0 was the protocol-split and Claude Code release. Its core behavior remains: providers store separate `openai_base_url` and `anthropic_base_url`, Claude Code supports Gateway Route and Direct Provider modes, Claude Gateway falls back to Chat Completions when needed, and Codex Gateway uses OpenAI Base URL for Responses-to-Chat conversion.
 
-## 6. High-Level Architecture
+## 7. High-Level Architecture
 
 ```text
 Gateway Switch
@@ -161,7 +182,7 @@ Gateway Switch
    └─ ~/.codex/config.toml
 ```
 
-## 7. Technology Stack
+## 8. Technology Stack
 
 | Layer | Technology | Notes |
 | --- | --- | --- |
@@ -176,7 +197,7 @@ Gateway Switch
 | Serialization | serde / serde_json | Tauri IPC and request transformation |
 | Time/IDs | chrono / uuid | Logs, backups, response IDs |
 
-## 8. Source Layout
+## 9. Source Layout
 
 | Path | Responsibility |
 | --- | --- |
@@ -198,7 +219,7 @@ Gateway Switch
 | `src-tauri/src/tray.rs` | macOS tray menu |
 | `docs/project.md` | Complete technical documentation |
 
-## 9. Data Storage
+## 10. Data Storage
 
 App data is stored under:
 
@@ -236,7 +257,7 @@ Codex backups are written to:
 ~/.codex/gateway-switch-backups/
 ```
 
-## 10. Database Schema
+## 11. Database Schema
 
 ### `providers`
 
@@ -324,7 +345,7 @@ Logs are the primary way to verify which model was actually called.
 
 Since 1.6.0, error summaries are passed through the Secret Redaction Engine before insertion. Common OpenAI/Anthropic keys, GitHub tokens, JWT-like strings, AWS access keys, and PEM blocks are replaced with redacted placeholders.
 
-## 11. Claude Gateway
+## 12. Claude Gateway
 
 ### Endpoint Surface
 
@@ -402,7 +423,7 @@ Claude streaming uses Anthropic SSE events. For Anthropic-compatible upstreams, 
 
 For Chat Completions fallback upstreams, Gateway Switch converts Chat Completions SSE deltas into Anthropic Messages SSE events: `message_start`, `content_block_start`, `content_block_delta`, `content_block_stop`, `message_delta`, and `message_stop`.
 
-## 12. Claude Desktop Binding
+## 13. Claude Desktop Binding
 
 Claude Desktop binding reads and writes:
 
@@ -429,7 +450,7 @@ Binding writes fields such as:
 
 Restore uses the latest backup created before Gateway Switch took over.
 
-## 13. Claude Code Binding
+## 14. Claude Code Binding
 
 Claude Code binding reads and writes:
 
@@ -477,7 +498,7 @@ Restore uses the latest backup under:
 ~/.claude/gateway-switch-backups/
 ```
 
-## 14. Codex Gateway
+## 15. Codex Gateway
 
 ### Endpoint Surface
 
@@ -532,7 +553,7 @@ Gateway Switch converts:
 - `input` message items to Chat Completions messages.
 - `function_call_output` to tool messages.
 - `function_call` to assistant `tool_calls`.
-- `max_output_tokens` to `max_tokens`.
+- `max_output_tokens` to the provider-compatible Chat Completions token limit field; Xiaomi/MiMO routes use `max_completion_tokens`.
 - `temperature`, `top_p`, and `tool_choice` are passed through when present.
 - `tools` of type `function` are converted to Chat Completions function tools.
 - If tools exist and the client did not set `tool_choice`, Gateway Switch sends `tool_choice: "auto"`.
@@ -587,7 +608,7 @@ Common upstream errors:
 - 429: provider quota or rate limit.
 - 5xx: provider outage.
 
-## 15. Runtime Compatibility Layer
+## 16. Runtime Compatibility Layer
 
 Runtime compatibility code lives in:
 
@@ -717,7 +738,7 @@ This is meant to reduce long task drift when an agent resumes work after losing 
 
 `export_diagnostics` writes a JSON bundle to the app backups directory. The bundle includes runtime feature status, provider capabilities, benchmark output, providers, routes, Codex routes, and recent logs.
 
-## 16. Codex App Binding
+## 17. Codex App Binding
 
 Binding writes to:
 
@@ -751,7 +772,7 @@ Important fields:
 
 Restore returns to the latest unmanaged backup. If no clean backup exists, Gateway Switch removes its managed `gateway-switch` config block while preserving unrelated Codex config sections.
 
-## 17. Reasoning Behavior With Third-Party Models
+## 18. Reasoning Behavior With Third-Party Models
 
 Gateway Switch does not add or remove model reasoning ability. It only converts protocol shape.
 
@@ -764,7 +785,7 @@ Fast responses are normal when:
 - The provider returns only final text.
 - The model does not expose visible reasoning over Chat Completions.
 
-## 18. Verifying The Real Model
+## 19. Verifying The Real Model
 
 The recommended verification path is:
 
@@ -781,13 +802,13 @@ The important log fields are:
 - `Status`: whether the upstream call succeeded.
 - `Duration`: response time.
 
-## 19. Project History And Context Limits
+## 20. Project History And Context Limits
 
 Gateway Switch preserves local config sections such as `[projects...]` when binding or restoring Codex. This preserves project trust and local config as much as possible.
 
 Codex App conversation history, account state, and provider-specific cloud state are controlled by Codex itself. Switching between OpenAI login and a local Gateway provider can show different conversation lists. Gateway Switch cannot force different Codex account/provider states to share one conversation database unless Codex App exposes that capability.
 
-## 20. Frontend UX Model
+## 21. Frontend UX Model
 
 Navigation is grouped as:
 
@@ -804,13 +825,13 @@ Dashboard intentionally does not perform binding or gateway startup. Startup and
 
 This prevents confusion between the Claude gateway and Codex gateway.
 
-## 21. Input Focus Bug Fix
+## 22. Input Focus Bug Fix
 
 The app originally rendered page functions as nested React components, which changed component identity on every parent render. That caused input fields to remount after typing one character, losing focus.
 
 The fix is to call internal page functions directly in the content switch instead of rendering them as nested component tags. This keeps input elements stable during state updates.
 
-## 22. Tauri IPC Commands
+## 23. Tauri IPC Commands
 
 Provider and route commands:
 
@@ -875,7 +896,7 @@ Runtime compatibility commands:
 - `recover_agent_state_payload`
 - `export_diagnostics`
 
-## 23. Build And Release
+## 24. Build And Release
 
 Development:
 
@@ -910,7 +931,7 @@ src-tauri/target/release/bundle/macos/Gateway Switch.app
 src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.1_aarch64.dmg
 ```
 
-## 24. Release Checklist
+## 25. Release Checklist
 
 - Frontend build passes.
 - Rust tests pass. Latest 1.6.1 verification: 23 tests passed.
@@ -929,7 +950,7 @@ src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.1_aarch64.dmg
 - Codex binding creates a backup and can restore.
 - DMG version matches `package.json`, `Cargo.toml`, and `tauri.conf.json`.
 
-## 25. PRD Coverage Map
+## 26. PRD Coverage Map
 
 The 1.6.0 implementation covers the vNext PRD as follows:
 
@@ -958,7 +979,7 @@ The 1.6.0 implementation covers the vNext PRD as follows:
 | Shell Execution Sandbox | Implemented safety gate, no shell executor exists yet | `compatibility.rs` |
 | Responses Runtime Benchmark | Implemented as benchmark report | `compatibility.rs` |
 
-## 26. Known Limitations
+## 27. Known Limitations
 
 - Claude Code Direct Provider requires an Anthropic Messages-compatible upstream.
 - Codex Gateway requires a Chat Completions-compatible upstream.

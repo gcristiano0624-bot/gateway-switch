@@ -6,7 +6,7 @@
 
 > Gateway Switch 不仅仅是一个模型路由器。它是一个**运行时兼容性层**，驻留在 AI 原生桌面应用与第三方模型服务之间，弥合协议鸿沟、修复畸形工具调用、强制安全边界，并在上游 Provider 异常时优雅降级。
 
-[![Version](https://img.shields.io/badge/Version-1.6.3-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.6.4-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -52,7 +52,7 @@ Codex App ──────→ OpenAI Responses API ──→ Gateway ──→
 
 Claude 网关执行**自动协议回退**：先尝试上游 Provider 的 Anthropic Messages 端点。如果 Provider 不支持 `/v1/messages`（中国大陆 Provider 如小米 MiMo 常见情况），网关会透明地将请求转换为 OpenAI Chat Completions 格式，发送到 Provider 的 `/v1/chat/completions` 端点，再将响应转回 — 全过程对 Claude Desktop 完全不可见。
 
-Codex 网关处理 **Responses API ↔ Chat Completions** 转换，包括流式 SSE 事件重映射（`response.created`、`response.output_text.delta`、`response.function_call_arguments.delta`、`response.completed`）、`instructions` → system message 转换、`function_call_output` → tool message 转换、`max_output_tokens` → `max_tokens` 映射等。
+Codex 网关处理 **Responses API ↔ Chat Completions** 转换，包括流式 SSE 事件重映射（`response.created`、`response.output_text.delta`、`response.function_call_arguments.delta`、`response.completed`）、`instructions` → system message 转换、`function_call_output` → tool message 转换、`max_output_tokens` → Chat Completions token 参数映射（对 Xiaomi/MiMO 使用 `max_completion_tokens`）等。
 
 ### 工具调用修复与可靠性引擎
 
@@ -142,6 +142,15 @@ Claude 和 Codex 的 `/health` 端点会暴露这些画像，外部工具无需�
 
 ---
 
+## 1.6.4 更新重点
+
+- **修复 Xiaomi MiMO Codex 路由 502 / `Param Incorrect` 问题。** 小米 MiMO 最新 OpenAI 兼容接口中，`mimo-v2.5` / `mimo-v2.5-pro` 默认启用 thinking；多轮工具调用时上游要求回传历史 `reasoning_content`。Gateway 现在对 Xiaomi/MiMO 的 Codex 转换请求默认注入 `thinking: {"type":"disabled"}`，避免 Codex 对话在工具调用链路中被上游拒绝。
+- 将 Xiaomi/MiMO Codex 请求中的 `max_output_tokens` 正确映射为 `max_completion_tokens`，符合当前小米 MiMO OpenAI API 文档，而不是发送兼容性较差的 `max_tokens`。
+- 如果调用方显式提供 `thinking` 控制，Gateway 会保留该设置；MiMO 兼容默认值只作用于 Xiaomi/MiMO 路由，不影响 DeepSeek、Qwen、OpenAI 等其他 Provider。
+- 新增 Xiaomi/MiMO Codex 兼容性 Rust 单测，覆盖禁用 thinking 与 token 参数改名。
+- 版本统一更新为 `1.6.4`。
+- 最新验证：`pnpm build`、`cargo test`、`pnpm tauri build --bundles app`。
+
 ## 1.6.3 更新重点
 
 - 全新 **Claude Warm Native** UI：采用白底、暖米色纸面背景、深墨文字、Claude 暗红点睛、低饱和状态色和更轻量的 macOS 原生工具质感。
@@ -150,6 +159,8 @@ Claude 和 Codex 的 `/health` 端点会暴露这些画像，外部工具无需�
 - 前端视觉系统切换到 Geist / Fraunces / Geist Mono 字体组合，并统一卡片、表格、表单、按钮、徽标、健康状态条的 warm native 风格。
 - 版本统一更新为 `1.6.3`。
 - 最新验证：`pnpm build`、`cargo test`、`pnpm tauri build`。
+
+## 1.6.2 更新重点
 
 - **核心修复：Codex 对话中断问题。** 当第三方模型（DeepSeek、MiMo、Qwen 等）在有 tools 可用时只生成文本描述（如"我来读取文件..."）而不调用工具，Codex 会认为本轮结束导致对话中断。现在 Gateway 会自动检测这种情况并用 `tool_choice: "required"` 重试上游请求，强制模型调用工具。
 - 新增 `finish_reason` 检测：当上游返回 `finish_reason: "length"`（输出被截断）时，`response.completed` 会正确设置 `status: "incomplete"` 而非 `"completed"`，让 Codex 知道响应不完整。
@@ -406,7 +417,7 @@ pnpm tauri build
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.3_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.4_aarch64.dmg
 ```
 
 ---

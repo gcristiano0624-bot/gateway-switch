@@ -155,7 +155,8 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
 
     // Convert Responses API request → Chat Completions request
     let body_ref = body.clone();
-    let chat_req = convert_request(&body_ref, &route.upstream_model);
+    let mut chat_req = convert_request(&body_ref, &route.upstream_model);
+    apply_xiaomi_mimo_codex_compat(&mut chat_req, &route);
 
     // Forward to upstream provider's Chat Completions endpoint.
     let resp = ctx.client.post(upstream_url(&route.base_url, "chat/completions"))
@@ -712,7 +713,7 @@ fn convert_request(body: &Value, upstream_model: &str) -> Value {
         chat_req["temperature"] = temp.clone();
     }
 
-    // Pass max_output_tokens → max_tokens
+    // Pass max_output_tokens; provider-specific compatibility may rename it later.
     if let Some(max) = body.get("max_output_tokens") {
         chat_req["max_tokens"] = max.clone();
     }
@@ -727,7 +728,41 @@ fn convert_request(body: &Value, upstream_model: &str) -> Value {
         chat_req["tool_choice"] = tc.clone();
     }
 
+    // Provider-specific clients may pass through thinking controls.
+    if let Some(thinking) = body.get("thinking") {
+        chat_req["thinking"] = thinking.clone();
+    }
+
     chat_req
+}
+
+fn apply_xiaomi_mimo_codex_compat(chat_req: &mut Value, route: &Route) {
+    if !is_xiaomi_mimo_route(route) {
+        return;
+    }
+
+    if chat_req.get("thinking").is_none() {
+        chat_req["thinking"] = json!({ "type": "disabled" });
+    }
+
+    if let Some(max_tokens) = chat_req.get("max_tokens").cloned() {
+        if chat_req.get("max_completion_tokens").is_none() {
+            chat_req["max_completion_tokens"] = max_tokens;
+        }
+        if let Some(obj) = chat_req.as_object_mut() {
+            obj.remove("max_tokens");
+        }
+    }
+}
+
+fn is_xiaomi_mimo_route(route: &Route) -> bool {
+    let provider = route.provider_id.to_lowercase();
+    let model = route.upstream_model.to_lowercase();
+    let base = route.base_url.to_lowercase();
+    provider.contains("xiaomi")
+        || provider.contains("mimo")
+        || model.contains("mimo")
+        || base.contains("xiaomimimo.com")
 }
 
 fn extract_content_from_item(item: &Value) -> String {
@@ -1221,6 +1256,50 @@ mod tests {
         assert_eq!(chat_req["messages"][0]["role"], "system");
         assert!(chat_req["messages"][0]["content"].as_str().unwrap().contains("structured tool_calls"));
         assert_eq!(chat_req["tools"][0]["function"]["name"], "exec_command");
+    }
+
+    #[test]
+    fn test_xiaomi_mimo_codex_compat_disables_thinking_and_renames_max_tokens() {
+        let responses_req = json!({
+            "model": "gpt-5.4",
+            "input": "Inspect the repository",
+            "max_output_tokens": 2048,
+            "stream": true
+        });
+        let route = Route {
+            display: "gpt-5.4".into(),
+            provider_id: "Xiaomi".into(),
+            upstream_model: "mimo-v2.5".into(),
+            base_url: "https://token-plan-sgp.xiaomimimo.com/v1".into(),
+            headers: vec![],
+        };
+
+        let mut chat_req = convert_request(&responses_req, "mimo-v2.5");
+        apply_xiaomi_mimo_codex_compat(&mut chat_req, &route);
+
+        assert_eq!(chat_req["thinking"]["type"], "disabled");
+        assert_eq!(chat_req["max_completion_tokens"], 2048);
+        assert!(chat_req.get("max_tokens").is_none());
+    }
+
+    #[test]
+    fn test_xiaomi_mimo_codex_compat_keeps_explicit_thinking() {
+        let route = Route {
+            display: "gpt-5.4".into(),
+            provider_id: "Xiaomi".into(),
+            upstream_model: "mimo-v2.5".into(),
+            base_url: "https://api.xiaomimimo.com/v1".into(),
+            headers: vec![],
+        };
+        let mut chat_req = json!({
+            "model": "mimo-v2.5",
+            "messages": [{"role": "user", "content": "hi"}],
+            "thinking": {"type": "enabled"}
+        });
+
+        apply_xiaomi_mimo_codex_compat(&mut chat_req, &route);
+
+        assert_eq!(chat_req["thinking"]["type"], "enabled");
     }
 
     #[test]

@@ -2,6 +2,15 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.6.4 - 2026-05-16
+
+- Fixed Xiaomi MiMO Codex routing for the latest OpenAI-compatible Chat Completions behavior: MiMO thinking mode now defaults to `disabled` for Gateway-generated Codex requests so upstream no longer rejects multi-turn tool conversations with `reasoning_content` replay errors.
+- Updated Xiaomi/MiMO Codex token mapping from `max_tokens` to `max_completion_tokens`, matching the current MiMO OpenAI API contract.
+- Preserved explicit passthrough `thinking` controls when a caller provides them, while keeping the compatibility default scoped only to Xiaomi/MiMO routes.
+- Added focused Rust tests for Xiaomi/MiMO Codex compatibility and verified the full Rust test suite.
+- Updated version to `1.6.4` across `package.json`, `Cargo.toml`, `Cargo.lock`, and `tauri.conf.json`.
+- Verification: `pnpm build`, `cargo test`, and `pnpm tauri build --bundles app`.
+
 ## 1.6.3 - 2026-05-12
 
 - Refreshed the whole app with a Claude Warm Native UI: white surfaces, warm paper backgrounds, ink text, oxblood accents, low-saturation semantic colors, and softer native desktop cards.

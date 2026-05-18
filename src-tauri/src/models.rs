@@ -169,6 +169,41 @@ pub struct HealthStatus {
     pub latency_ms: Option<u64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColdStartStep {
+    pub id: String,
+    pub label: String,
+    pub target: String,
+    pub status: String,
+    pub detail: String,
+    pub timestamp: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColdStartCapability {
+    pub name: String,
+    pub target: String,
+    pub status: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColdStartReport {
+    pub generated_at: String,
+    pub mode: String,
+    pub verdict: String,
+    pub claude_score: u8,
+    pub codex_score: u8,
+    pub overall_score: u8,
+    pub biggest_risk: String,
+    pub most_important_fix: String,
+    pub report_path: Option<String>,
+    pub auto_fixes_applied: Vec<String>,
+    pub manual_fixes_required: Vec<String>,
+    pub steps: Vec<ColdStartStep>,
+    pub capabilities: Vec<ColdStartCapability>,
+}
+
 // ── Codex Types ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

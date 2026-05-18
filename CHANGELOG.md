@@ -2,6 +2,19 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.7.0 - 2026-05-18
+
+- Reworked the left sidebar to show permanent icon labels for every tab, including Dashboard, Claude, Claude Code, Codex, Cold Start, Providers, Logs, and Settings.
+- Fixed the misaligned `Gateway Switch v1.6.3` floating brand tooltip by replacing it with a stable `v1.7.0` sidebar footer label.
+- Added the `Cold Start Doctor` page with three phases: readiness overview, execution/repair log, and capability matrix.
+- Added backend cold-start status and repair commands for Claude Desktop, Claude Code, Codex App, local gateways, health endpoints, routes, providers, and security risk review.
+- Added safe repair behavior that starts stopped local gateways and applies backup-backed Claude Desktop/Codex bindings when valid routes exist.
+- Added detailed `[coldstart]` Rust logs and Markdown report generation for later troubleshooting.
+- Included the Claude Desktop and Codex cold-start skill reference files under `coldstart/` for future validation workflows.
+- Merged the Codex large-request stability fix: the Responses gateway now accepts request bodies above Axum's default limit and includes regression coverage.
+- Updated version to `1.7.0` across `package.json`, `Cargo.toml`, `Cargo.lock`, and `tauri.conf.json`.
+- Verification: `pnpm build`, `cargo test` (27 passed), and `CI=false pnpm tauri build --bundles app,dmg`.
+
 ## 1.6.4 - 2026-05-16
 
 - Fixed Xiaomi MiMO Codex routing for the latest OpenAI-compatible Chat Completions behavior: MiMO thinking mode now defaults to `disabled` for Gateway-generated Codex requests so upstream no longer rejects multi-turn tool conversations with `reasoning_content` replay errors.

@@ -1,6 +1,6 @@
 # Gateway Switch Project Documentation
 
-Version: 1.6.4
+Version: 1.7.0
 
 This document is the single technical source of truth for Gateway Switch. It merges the former project architecture notes and the Codex Gateway notes into one maintained file.
 
@@ -9,7 +9,7 @@ This document is the single technical source of truth for Gateway Switch. It mer
 If another AI receives this repository, start here:
 
 - Product: macOS Tauri app that routes Claude Desktop, Claude Code, and Codex App to third-party model providers.
-- Current version: `1.6.4`.
+- Current version: `1.7.0`.
 - Main frontend: `src/App.tsx` and `src/App.css`.
 - Main backend: `src-tauri/src/*.rs`.
 - Claude gateway: `src-tauri/src/gateway.rs`, local Anthropic Messages surface on `127.0.0.1:3456`.
@@ -20,7 +20,7 @@ If another AI receives this repository, start here:
 - Bindings: Claude Desktop in `desktop_binding.rs`, Claude Code in `claude_code_binding.rs`, Codex in `codex_binding.rs`.
 - Local data: `~/Library/Application Support/Gateway Switch/`.
 - Build: `PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build` when `cargo` is not already on `PATH`.
-- Latest verified tests: `pnpm build`, `cargo test`, and `pnpm tauri build --bundles app` after the 1.6.4 Xiaomi MiMO Codex compatibility fix.
+- Latest verified tests: `pnpm build`, `cargo test`, and `pnpm tauri build --bundles app` after the 1.7.0 Cold Start Doctor release.
 
 The design intent is to make third-party models less likely to degrade Claude/Codex behavior by normalizing protocol shapes, repairing common tool-call failures, redacting secrets, exposing provider capability profiles, and adding safety/diagnostic gates around agent-like workflows.
 
@@ -36,7 +36,30 @@ The app solves two related but different protocol problems:
 
 The shared design goal is simple: providers share identity, auth header, auth scheme, and API key, but they do not share one universal Base URL. Provider URLs are split by protocol: OpenAI Base URL for Codex and Chat Completions fallback, Anthropic Base URL for Claude and Claude Code direct requests.
 
-## 2. Version 1.6.4 Scope
+## 2. Version 1.7.0 Scope
+
+Version 1.7.0 adds the Cold Start Doctor and fixes the left navigation readability issue.
+
+Main changes:
+
+- Reworked the left sidebar from icon-only hover labels to permanent icon + text labels, matching the selected visual direction while keeping the compact rail layout.
+- Fixed the Gateway Switch version label offset by removing the floating sidebar brand tooltip and moving the stable version indicator to the footer.
+- Added a new `Cold Start` tab that combines three phases: readiness overview, execution/repair log, and capability matrix.
+- Added backend cold-start checks for Claude Desktop, Claude Code, Codex App, local gateway processes, health endpoints, provider inventory, route inventory, and third-party routing security risk.
+- Added a safe repair command that can start stopped local gateways and apply backup-backed Claude Desktop / Codex bindings when routes are available.
+- Added detailed `[coldstart]` Rust log printing for every major inspection, repair, health check, capability result, and report-generation node.
+- Added Markdown cold-start report generation under the app backup directory for post-mortem review and support handoff.
+- Added `coldstart/claude_coldstart_skill.md` and `coldstart/codex_coldstart.skill.md` as reference workflows for the checks represented in the UI.
+- Merged the Codex large-request stability fix by raising the local Responses gateway body limit above Axum's default and adding regression coverage.
+- Versioned package metadata and release artifacts as `1.7.0`.
+
+Verification for 1.7.0:
+
+- `pnpm build`: passed.
+- `cargo test`: passed, 27 tests.
+- `CI=false pnpm tauri build --bundles app,dmg`: passed.
+
+## 3. Version 1.6.4 Scope
 
 Version 1.6.4 fixes Xiaomi MiMO Codex routing against the latest MiMO OpenAI-compatible Chat Completions behavior.
 
@@ -57,7 +80,7 @@ Verification for 1.6.4:
 - `pnpm tauri build --bundles app`: passed.
 - Manual verification: reinstalling the validation build restored Codex conversation through the Xiaomi MiMO route.
 
-## 3. Version 1.6.3 Scope
+## 4. Version 1.6.3 Scope
 
 Version 1.6.3 is the Claude Warm Native UI and icon refresh release.
 
@@ -75,7 +98,7 @@ Verification for 1.6.3:
 - `cargo test`: passed.
 - `pnpm tauri build`: passed.
 
-## 4. Version 1.6.2 Scope
+## 5. Version 1.6.2 Scope
 
 Version 1.6.2 fixes the Codex conversation stall problem when routing through third-party Chat Completions models.
 
@@ -96,7 +119,7 @@ Verification for 1.6.2:
 - `cargo test`: passed, 23 tests.
 - `cargo clippy`: no new warnings introduced by the streaming changes.
 
-## 5. Version 1.6.1 Scope
+## 6. Version 1.6.1 Scope
 
 Version 1.6.1 is the AI handoff and Codex agent reliability release.
 
@@ -118,7 +141,7 @@ Verification for 1.6.1:
 - `cargo test`: passed, 23 tests.
 - Browser preview at `http://localhost:1420/`: rendered Gateway Switch with mock XiaoMiMo/Codex data and no Tauri invoke error.
 
-## 6. Version 1.6.0 Scope
+## 7. Version 1.6.0 Scope
 
 Version 1.6.0 is the runtime compatibility release.
 
@@ -921,20 +944,20 @@ cargo test
 Release build:
 
 ```bash
-pnpm tauri build
+CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build
 ```
 
 macOS artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.1_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.7.0_aarch64.dmg
 ```
 
 ## 25. Release Checklist
 
 - Frontend build passes.
-- Rust tests pass. Latest 1.6.1 verification: 23 tests passed.
+- Rust tests pass. Latest 1.7.0 verification: 25 tests passed.
 - Claude Gateway health check passes.
 - Codex Gateway health check passes.
 - Claude route can rewrite model request and response fields.

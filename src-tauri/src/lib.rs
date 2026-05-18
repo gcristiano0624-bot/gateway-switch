@@ -108,6 +108,8 @@ pub fn run() {
             commands::list_model_aliases,
             commands::create_model_alias,
             commands::delete_model_alias,
+            commands::get_coldstart_status,
+            commands::run_coldstart_repair,
         ])
         .run(tauri::generate_context!())
         .expect("error running app");

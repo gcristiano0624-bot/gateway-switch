@@ -3,7 +3,7 @@ use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Instant};
 use async_stream::stream;
 use axum::{
     body::Body,
-    extract::State,
+    extract::{DefaultBodyLimit, State},
     http::{header, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -105,12 +105,14 @@ pub fn status(st: &AppState) -> Result<GatewayStatus, String> {
 }
 
 const STREAM_TIMEOUT_SECS: u64 = 120;
+const CODEX_REQUEST_BODY_LIMIT_BYTES: usize = 64 * 1024 * 1024;
 
 fn build_router(ctx: Ctx) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/v1/models", get(list_models))
         .route("/v1/responses", post(responses_handler))
+        .layer(DefaultBodyLimit::max(CODEX_REQUEST_BODY_LIMIT_BYTES))
         .with_state(ctx)
 }
 
@@ -1152,6 +1154,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_codex_responses_accepts_large_payloads_above_axum_default() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("t.db");
+        database::initialize(&db).unwrap();
+
+        let app = build_router(Ctx {
+            db,
+            client: Client::new(),
+            profile: GatewayProfile {
+                listen_host: "127.0.0.1".into(),
+                listen_port: 3457,
+                auth_token: "tok".into(),
+            },
+        });
+        let large_body = json!({
+            "input": "x".repeat(3 * 1024 * 1024),
+            "stream": false
+        })
+        .to_string();
+
+        let resp = app
+            .oneshot(
+                http::Request::builder()
+                    .method("POST")
+                    .uri("/v1/responses")
+                    .header(header::AUTHORIZATION, "Bearer tok")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(large_body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["error"]["message"], "missing model");
+    }
+
+    #[tokio::test]
     async fn test_codex_request_conversion() {
         let responses_req = json!({
             "model": "gpt-4o",
@@ -1300,6 +1342,30 @@ mod tests {
         apply_xiaomi_mimo_codex_compat(&mut chat_req, &route);
 
         assert_eq!(chat_req["thinking"]["type"], "enabled");
+    }
+
+    #[test]
+    fn test_non_xiaomi_routes_keep_standard_chat_completion_shape() {
+        let responses_req = json!({
+            "model": "gpt-4o",
+            "input": "Inspect the repository",
+            "max_output_tokens": 1024,
+            "stream": true
+        });
+        let route = Route {
+            display: "gpt-4o".into(),
+            provider_id: "OpenAI".into(),
+            upstream_model: "gpt-4o".into(),
+            base_url: "https://api.openai.com/v1".into(),
+            headers: vec![],
+        };
+
+        let mut chat_req = convert_request(&responses_req, "gpt-4o");
+        apply_xiaomi_mimo_codex_compat(&mut chat_req, &route);
+
+        assert!(chat_req.get("thinking").is_none());
+        assert_eq!(chat_req["max_tokens"], 1024);
+        assert!(chat_req.get("max_completion_tokens").is_none());
     }
 
     #[test]

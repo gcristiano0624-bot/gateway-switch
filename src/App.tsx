@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
 // ── Types ──
-type Page = "dashboard" | "claude" | "claudeCode" | "codex" | "providers" | "logs" | "settings";
+type Page = "dashboard" | "claude" | "claudeCode" | "codex" | "coldstart" | "providers" | "logs" | "settings";
 
 type CodexRoute = {
   id: string;
@@ -111,6 +111,38 @@ type Health = {
   ok: boolean;
   message: string;
   latency_ms: number | null;
+};
+
+type ColdStartStep = {
+  id: string;
+  label: string;
+  target: string;
+  status: string;
+  detail: string;
+  timestamp: string;
+};
+
+type ColdStartCapability = {
+  name: string;
+  target: string;
+  status: string;
+  detail: string;
+};
+
+type ColdStartReport = {
+  generated_at: string;
+  mode: string;
+  verdict: string;
+  claude_score: number;
+  codex_score: number;
+  overall_score: number;
+  biggest_risk: string;
+  most_important_fix: string;
+  report_path: string | null;
+  auto_fixes_applied: string[];
+  manual_fixes_required: string[];
+  steps: ColdStartStep[];
+  capabilities: ColdStartCapability[];
 };
 
 // ── Constants ──
@@ -242,6 +274,33 @@ const MOCK_LOGS: RequestLog[] = [
     created_at: "browser preview",
   },
 ];
+
+const MOCK_COLDSTART: ColdStartReport = {
+  generated_at: "browser preview",
+  mode: "check",
+  verdict: "usable but needs targeted fixes",
+  claude_score: 85,
+  codex_score: 72,
+  overall_score: 78,
+  biggest_risk: "Third-party routing may expose prompts, file contents, tool results, and code to upstream providers.",
+  most_important_fix: "Bind Codex to Gateway Switch and verify the local /v1/responses health endpoint.",
+  report_path: null,
+  auto_fixes_applied: ["Preview: Claude Gateway would be started if stopped"],
+  manual_fixes_required: ["Preview: verify GitHub/MCP readiness inside the target desktop apps"],
+  steps: [
+    { id: "environment", label: "Environment discovery", target: "system", status: "ok", detail: "Loaded local app state and config paths", timestamp: "preview" },
+    { id: "inventory", label: "Provider and route inventory", target: "gateway", status: "ok", detail: "2 providers, 2 Claude routes, 1 Codex route", timestamp: "preview" },
+    { id: "codex_apply", label: "Codex binding check", target: "Codex", status: "warn", detail: "Codex is not managed yet; repair can apply a backup-backed binding", timestamp: "preview" },
+    { id: "report", label: "Generate coldstart report", target: "system", status: "ok", detail: "Compiled UI report and manual remediation list", timestamp: "preview" },
+  ],
+  capabilities: [
+    { name: "Claude Desktop config", target: "Claude", status: "ok", detail: "Managed by Gateway Switch" },
+    { name: "Claude Gateway process", target: "Claude", status: "ok", detail: "Running on local health endpoint" },
+    { name: "Codex config", target: "Codex", status: "warn", detail: "Not managed by Gateway Switch" },
+    { name: "Codex route inventory", target: "Codex", status: "ok", detail: "1 enabled Codex route" },
+    { name: "Third-party routing security", target: "Security", status: "warn", detail: "Review provider privacy policy before sending private repositories" },
+  ],
+};
 
 // ── Helpers ──
 function getModelFamily(alias: string): string {
@@ -404,6 +463,8 @@ function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
   const [codexHealth, setCodexHealth] = useState<Health | null>(null);
+  const [coldStart, setColdStart] = useState<ColdStartReport | null>(null);
+  const [coldStartRunning, setColdStartRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -459,13 +520,14 @@ function App() {
       setCodexStatus(MOCK_CODEX_STATUS);
       setCodexRoutes(MOCK_CODEX_ROUTES);
       setCodexBinding(MOCK_CODEX_BINDING);
+      setColdStart(MOCK_COLDSTART);
       setClaudeAliases(DEFAULT_CLAUDE_ALIASES.map((alias, index) => ({ id: `mock-claude-${index}`, alias, alias_type: "claude", created_at: null })));
       setCodexAliases(DEFAULT_CODEX_MODELS.map((alias, index) => ({ id: `mock-codex-${index}`, alias, alias_type: "codex", created_at: null })));
       return;
     }
 
     try {
-      const [s, p, r, d, cc, l, cfg, cs, cr, cb, ca, cma] = await Promise.all([
+      const [s, p, r, d, cc, l, cfg, cs, cr, cb, cold, ca, cma] = await Promise.all([
         invoke<Status>("get_status"),
         invoke<Provider[]>("list_providers"),
         invoke<ModelRoute[]>("list_routes"),
@@ -476,6 +538,7 @@ function App() {
         invoke<CodexGatewayStatus>("get_codex_status"),
         invoke<CodexRoute[]>("list_codex_routes"),
         invoke<CodexBindingInfo>("get_codex_binding_info"),
+        invoke<ColdStartReport>("get_coldstart_status"),
         invoke<ModelAlias[]>("list_model_aliases", { aliasType: "claude" }),
         invoke<ModelAlias[]>("list_model_aliases", { aliasType: "codex" }),
       ]);
@@ -489,6 +552,7 @@ function App() {
       setCodexStatus(cs);
       setCodexRoutes(cr);
       setCodexBinding(cb);
+      setColdStart(cold);
       setClaudeAliases(ca);
       setCodexAliases(cma);
     } catch (e) {
@@ -642,6 +706,22 @@ function App() {
       flash("Codex restored to OpenAI login");
     } catch (e) { flash(String(e), "error"); }
   };
+  const runColdStartRepair = async () => {
+    setColdStartRunning(true);
+    try {
+      const report = isTauriRuntime
+        ? await invoke<ColdStartReport>("run_coldstart_repair")
+        : { ...MOCK_COLDSTART, mode: "repair", report_path: "~/Library/Application Support/Gateway Switch/backups/coldstart/preview.md" };
+      await loadAll();
+      setColdStart(report);
+      setPage("coldstart");
+      flash(report.report_path ? `Cold start repair report saved: ${report.report_path}` : "Cold start check completed");
+    } catch (e) {
+      flash(String(e), "error");
+    } finally {
+      setColdStartRunning(false);
+    }
+  };
   const saveCodexRoute = async () => {
     try {
       if (editingC) {
@@ -715,7 +795,7 @@ function App() {
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.6.3</div>
+          <div className="brand-sub">v1.7.0</div>
         </div>
       </div>
 
@@ -723,7 +803,7 @@ function App() {
         <div className="nav-group-label">Dashboard</div>
         <button className={`nav-item ${page === "dashboard" ? "active" : ""}`} aria-label="Dashboard" title="Dashboard" onClick={() => setPage("dashboard")}>
           <IconGrid />
-          Dashboard
+          <span className="nav-label">Dashboard</span>
         </button>
       </div>
 
@@ -731,17 +811,21 @@ function App() {
         <div className="nav-group-label">Products</div>
         <button className={`nav-item ${page === "claude" ? "active" : ""}`} aria-label="Claude" title="Claude" onClick={() => setPage("claude")}>
           <IconShuffle />
-          Claude
+          <span className="nav-label">Claude</span>
           {routes.length > 0 && <span className="nav-badge">{routes.length}</span>}
         </button>
         <button className={`nav-item ${page === "claudeCode" ? "active" : ""}`} aria-label="Claude Code" title="Claude Code" onClick={() => setPage("claudeCode")}>
           <IconTerminal />
-          Claude Code
+          <span className="nav-label">Claude<br />Code</span>
         </button>
         <button className={`nav-item ${page === "codex" ? "active" : ""}`} aria-label="Codex" title="Codex" onClick={() => setPage("codex")}>
           <IconTerminal />
-          Codex
+          <span className="nav-label">Codex</span>
           {codexRoutes.length > 0 && <span className="nav-badge">{codexRoutes.length}</span>}
+        </button>
+        <button className={`nav-item ${page === "coldstart" ? "active" : ""}`} aria-label="Cold Start" title="Cold Start" onClick={() => setPage("coldstart")}>
+          <IconZap />
+          <span className="nav-label">Cold<br />Start</span>
         </button>
       </div>
 
@@ -749,7 +833,7 @@ function App() {
         <div className="nav-group-label">Shared</div>
         <button className={`nav-item ${page === "providers" ? "active" : ""}`} aria-label="Providers" title="Providers" onClick={() => setPage("providers")}>
           <IconSun />
-          Providers
+          <span className="nav-label">Providers</span>
           {providers.length > 0 && <span className="nav-badge">{providers.length}</span>}
         </button>
       </div>
@@ -758,11 +842,11 @@ function App() {
         <div className="nav-group-label">System</div>
         <button className={`nav-item ${page === "logs" ? "active" : ""}`} aria-label="Logs" title="Logs" onClick={() => setPage("logs")}>
           <IconTerminal />
-          Logs
+          <span className="nav-label">Logs</span>
         </button>
         <button className={`nav-item ${page === "settings" ? "active" : ""}`} aria-label="Settings" title="Settings" onClick={() => setPage("settings")}>
           <IconSettings />
-          Settings
+          <span className="nav-label">Settings</span>
         </button>
       </div>
 
@@ -771,6 +855,7 @@ function App() {
         <span className="status-text">
           Claude <strong>{status?.gateway_running ? "On" : "Off"}</strong> · Codex <strong>{codexStatus?.running ? "On" : "Off"}</strong>
         </span>
+        <span className="sidebar-version">v1.7.0</span>
       </div>
     </aside>
   );
@@ -1757,6 +1842,143 @@ function App() {
     );
   };
 
+  const statusBadgeClass = (statusText: string) => {
+    if (statusText === "ok" || statusText === "fixed") return "badge-green";
+    if (statusText === "error") return "badge-red";
+    return "badge-amber";
+  };
+
+  const scoreClass = (score: number) => {
+    if (score >= 85) return "ok";
+    if (score >= 70) return "warn";
+    return "bad";
+  };
+
+  // =====================================================
+  //  COLD START PAGE
+  // =====================================================
+  const ColdStartPage = () => {
+    const report = coldStart ?? MOCK_COLDSTART;
+    const phaseSteps = report.steps.slice(-8);
+    const matrix = report.capabilities;
+    return (
+      <div>
+        <div className="page-header page-header-row">
+          <div>
+            <h1>Cold Start Doctor</h1>
+            <p>Claude Desktop 与 Codex 第三方模型接入后的状态确认、冷启动修复和安全报告</p>
+          </div>
+          <button className="btn btn-primary" onClick={runColdStartRepair} disabled={coldStartRunning}>
+            <IconZap /> {coldStartRunning ? "Running..." : "Run Check & Safe Fixes"}
+          </button>
+        </div>
+
+        <div className="cold-hero">
+          <div>
+            <span className="eyebrow">Phase A · Readiness Overview</span>
+            <h2>{report.verdict}</h2>
+            <p>{report.most_important_fix}</p>
+          </div>
+          <div className={`score-ring ${scoreClass(report.overall_score)}`}>
+            <strong>{report.overall_score}%</strong>
+            <span>Overall</span>
+          </div>
+        </div>
+
+        <div className="cold-score-grid">
+          <div className="cold-score-card">
+            <span>Claude Desktop</span>
+            <strong>{report.claude_score}%</strong>
+            <em>{desktop?.managed ? "Managed" : "Needs binding"}</em>
+          </div>
+          <div className="cold-score-card">
+            <span>Codex App</span>
+            <strong>{report.codex_score}%</strong>
+            <em>{codexBinding?.managed ? "Managed" : "Needs binding"}</em>
+          </div>
+          <div className="cold-score-card">
+            <span>MCP / Tools</span>
+            <strong>{matrix.filter(i => i.status === "ok").length}/{matrix.length}</strong>
+            <em>Observable checks passed</em>
+          </div>
+          <div className="cold-score-card">
+            <span>Security</span>
+            <strong>{matrix.some(i => i.target === "Security" && i.status !== "ok") ? "Review" : "OK"}</strong>
+            <em>Third-party routing risk</em>
+          </div>
+        </div>
+
+        <div className="two-col">
+          <div className="card">
+            <div className="card-title">Phase B · Execution & Repair Log</div>
+            <div className="cold-timeline">
+              {phaseSteps.map((step, index) => (
+                <div key={`${step.id}-${index}`} className="cold-step">
+                  <span className={`cold-step-dot ${step.status}`} />
+                  <div>
+                    <div className="cold-step-head">
+                      <strong>{step.label}</strong>
+                      <span className={`badge ${statusBadgeClass(step.status)}`}>{step.status}</span>
+                    </div>
+                    <p>{step.detail}</p>
+                    <small>{step.target} · {step.timestamp}</small>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-title">Fix Results</div>
+            <div className="cold-result-block">
+              <strong>Auto fixes applied</strong>
+              {report.auto_fixes_applied.length > 0 ? (
+                report.auto_fixes_applied.map(item => <p key={item}><IconCheck /> {item}</p>)
+              ) : (
+                <p className="muted-line">No automatic fix has been applied in the latest check.</p>
+              )}
+            </div>
+            <div className="cold-result-block">
+              <strong>Manual fixes required</strong>
+              {report.manual_fixes_required.length > 0 ? (
+                report.manual_fixes_required.slice(0, 5).map(item => <p key={item}><IconArrowRight /> {item}</p>)
+              ) : (
+                <p className="muted-line">No manual action required.</p>
+              )}
+            </div>
+            {report.report_path && (
+              <div className="report-path">
+                <span>Report saved</span>
+                <code>{report.report_path}</code>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-title">Phase C · Capability Matrix</div>
+          <div className="cold-matrix">
+            {matrix.map(item => (
+              <div key={`${item.target}-${item.name}`} className="cold-matrix-item">
+                <div>
+                  <span>{item.target}</span>
+                  <strong>{item.name}</strong>
+                </div>
+                <span className={`badge ${statusBadgeClass(item.status)}`}>{item.status}</span>
+                <p>{item.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="cold-risk">
+          <strong>Biggest Risk</strong>
+          <p>{report.biggest_risk}</p>
+        </div>
+      </div>
+    );
+  };
+
   // =====================================================
   //  SETTINGS PAGE
   // =====================================================
@@ -1852,6 +2074,7 @@ function App() {
       case "claude": return ClaudePage();
       case "claudeCode": return ClaudeCodePage();
       case "codex": return CodexPage();
+      case "coldstart": return ColdStartPage();
       case "providers": return ProvidersPage();
       case "logs": return LogsPage();
       case "settings": return SettingsPage();

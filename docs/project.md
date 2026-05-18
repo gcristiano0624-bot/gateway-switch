@@ -38,12 +38,14 @@ The shared design goal is simple: providers share identity, auth header, auth sc
 
 ## 2. Version 1.7.0 Scope
 
-Version 1.7.0 adds the Cold Start Doctor and fixes the left navigation readability issue.
+Version 1.7.0 adds the Cold Start Doctor, fixes the left navigation readability issue, and introduces a bilingual Chinese/English interface.
 
 Main changes:
 
 - Reworked the left sidebar from icon-only hover labels to permanent icon + text labels, matching the selected visual direction while keeping the compact rail layout.
 - Fixed the Gateway Switch version label offset by removing the floating sidebar brand tooltip and moving the stable version indicator to the footer.
+- Added bilingual UI support. Chinese is the default language, English remains available from Settings, and required technical terms such as Claude, Codex, Gateway, Provider, API Key, Base URL, MCP, Responses API, and Chat Completions stay in English for diagnostic clarity.
+- Added a persistent `language` field to app settings with a backward-compatible default for existing installations.
 - Added a new `Cold Start` tab that combines three phases: readiness overview, execution/repair log, and capability matrix.
 - Added backend cold-start checks for Claude Desktop, Claude Code, Codex App, local gateway processes, health endpoints, provider inventory, route inventory, and third-party routing security risk.
 - Added a safe repair command that can start stopped local gateways and apply backup-backed Claude Desktop / Codex bindings when routes are available.

@@ -4,6 +4,8 @@ This file tracks user-visible Gateway Switch changes so future AI agents can qui
 
 ## 1.7.0 - 2026-05-18
 
+- Added bilingual UI support for Chinese and English, with Chinese as the default language and a Settings toggle for switching the interface language.
+- Added persistent `language` storage to app settings while keeping existing settings files backward compatible.
 - Reworked the left sidebar to show permanent icon labels for every tab, including Dashboard, Claude, Claude Code, Codex, Cold Start, Providers, Logs, and Settings.
 - Fixed the misaligned `Gateway Switch v1.6.3` floating brand tooltip by replacing it with a stable `v1.7.0` sidebar footer label.
 - Added the `Cold Start Doctor` page with three phases: readiness overview, execution/repair log, and capability matrix.

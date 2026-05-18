@@ -104,6 +104,7 @@ type Settings = {
   listen_host: string;
   listen_port: number;
   auth_token: string;
+  language: "zh" | "en";
 };
 
 type Health = {
@@ -175,6 +176,223 @@ const PROVIDER_PRESETS = [
 const POLL_INTERVAL_MS = 12_000;
 const isTauriRuntime = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
+type Language = "zh" | "en";
+
+const ZH_TEXT: Record<string, string> = {
+  "Dashboard": "仪表盘",
+  "Claude": "Claude",
+  "Claude Code": "Claude Code",
+  "Codex": "Codex",
+  "Cold Start": "冷启动",
+  "Providers": "模型服务商",
+  "Logs": "日志",
+  "Settings": "设置",
+  "Products": "产品",
+  "Shared": "共享",
+  "System": "系统",
+  "Read-only product gateway overview": "只读的产品网关总览",
+  "Claude Gateway": "Claude Gateway",
+  "Codex Gateway": "Codex Gateway",
+  "App Bindings": "应用绑定",
+  "Routes": "路由",
+  "Running": "运行中",
+  "Stopped": "已停止",
+  "Managed": "已接管",
+  "Unmanaged": "未接管",
+  "Gateway": "Gateway",
+  "Binding": "绑定",
+  "Last Call": "最近调用",
+  "Claude Desktop uses Gateway Switch": "Claude Desktop 正在使用 Gateway Switch",
+  "Claude Desktop is unmanaged": "Claude Desktop 未被接管",
+  "Claude Code is unmanaged": "Claude Code 未被接管",
+  "Codex App uses OpenAI login": "Codex App 正在使用 OpenAI 登录",
+  "No traffic yet": "暂无流量",
+  "Quick Add": "快速添加",
+  "Share credentials across products, with protocol-specific base URLs for OpenAI and Anthropic clients": "跨产品共享凭据，并分别配置 OpenAI 与 Anthropic 协议的 Base URL",
+  "Provider updated": "模型服务商已更新",
+  "Provider created": "模型服务商已创建",
+  "Provider deleted": "模型服务商已删除",
+  "Route updated": "路由已更新",
+  "Route created": "路由已创建",
+  "Route deleted": "路由已删除",
+  "Settings saved": "设置已保存",
+  "Config imported": "配置已导入",
+  "Exported to": "已导出到",
+  "Gateway started": "Gateway 已启动",
+  "Gateway stopped": "Gateway 已停止",
+  "Desktop bound": "Desktop 已绑定",
+  "Desktop restored": "Desktop 已恢复",
+  "Claude Code bound": "Claude Code 已绑定",
+  "Claude Code restored": "Claude Code 已恢复",
+  "Codex gateway started": "Codex Gateway 已启动",
+  "Codex gateway stopped": "Codex Gateway 已停止",
+  "Codex App bound to Gateway Switch": "Codex App 已绑定到 Gateway Switch",
+  "Codex restored to OpenAI login": "Codex 已恢复为 OpenAI 登录",
+  "Codex route updated": "Codex 路由已更新",
+  "Codex route created": "Codex 路由已创建",
+  "Codex route deleted": "Codex 路由已删除",
+  "Choose a default Codex model before binding": "绑定前请选择默认 Codex 模型",
+  "Choose a provider for Direct Provider mode": "请选择 Direct Provider 模式使用的模型服务商",
+  "Direct Provider mode needs an Anthropic Base URL on the selected provider": "Direct Provider 模式需要所选服务商配置 Anthropic Base URL",
+  "Enter the real upstream model name for Claude Code": "请输入 Claude Code 使用的真实上游模型名",
+  "Cold start check completed": "冷启动检查已完成",
+  "Cold start repair report saved": "冷启动修复报告已保存",
+  "Cold Start Doctor": "冷启动修复",
+  "Claude Desktop 与 Codex 第三方模型接入后的状态确认、冷启动修复和安全报告": "Claude Desktop 与 Codex 第三方模型接入后的状态确认、冷启动修复和安全报告",
+  "Run Check & Safe Fixes": "检查并执行安全修复",
+  "Running...": "执行中...",
+  "Phase A · Readiness Overview": "阶段 A · 状态总览",
+  "Phase B · Execution & Repair Log": "阶段 B · 执行与修复日志",
+  "Phase C · Capability Matrix": "阶段 C · 能力矩阵",
+  "Overall": "总体",
+  "Codex App": "Codex App",
+  "MCP / Tools": "MCP / 工具",
+  "Security": "安全",
+  "Observable checks passed": "可观测检查通过",
+  "Third-party routing risk": "第三方路由风险",
+  "Needs binding": "需要绑定",
+  "Fix Results": "修复结果",
+  "Auto fixes applied": "已自动修复",
+  "Manual fixes required": "需要手动处理",
+  "No automatic fix has been applied in the latest check.": "最近一次检查未执行自动修复。",
+  "No manual action required.": "无需手动处理。",
+  "Report saved": "报告已保存",
+  "Biggest Risk": "最大风险",
+  "usable but needs targeted fixes": "可用，但需要针对性修复",
+  "Bind Codex to Gateway Switch and verify the local /v1/responses health endpoint.": "将 Codex 绑定到 Gateway Switch，并验证本地 /v1/responses 健康检查端点。",
+  "Third-party routing may expose prompts, file contents, tool results, and code to upstream providers.": "第三方路由可能会把提示词、文件内容、工具结果和代码暴露给上游服务商。",
+  "Environment discovery": "环境发现",
+  "Provider and route inventory": "服务商与路由盘点",
+  "Codex binding check": "Codex 绑定检查",
+  "Generate coldstart report": "生成冷启动报告",
+  "Claude Desktop config": "Claude Desktop 配置",
+  "Claude Gateway process": "Claude Gateway 进程",
+  "Codex config": "Codex 配置",
+  "Codex route inventory": "Codex 路由盘点",
+  "Third-party routing security": "第三方路由安全",
+  "Request Logs": "请求日志",
+  "Monitor gateway request activity": "监控网关请求活动",
+  "Search logs...": "搜索日志...",
+  "Refresh": "刷新",
+  "Time": "时间",
+  "Requested Model": "请求模型",
+  "Provider": "服务商",
+  "Real Upstream": "真实上游",
+  "Mode": "模式",
+  "Status": "状态",
+  "Duration": "耗时",
+  "Error": "错误",
+  "No matching logs": "没有匹配日志",
+  "No logs yet": "暂无日志",
+  "Try a different search query.": "请尝试其他搜索关键词。",
+  "Logs will appear here once requests are made.": "发生请求后，日志会显示在这里。",
+  "Configure gateway behavior and manage data": "配置网关行为并管理数据",
+  "Gateway Configuration": "Gateway 配置",
+  "Language": "语言",
+  "Interface Language": "界面语言",
+  "Chinese": "中文",
+  "English": "English",
+  "Listen Host": "监听 Host",
+  "Listen Port": "监听端口",
+  "Auth Token": "认证 Token",
+  "Auto-start Gateway on launch": "启动应用时自动启动 Gateway",
+  "Auto-bind Claude Desktop on launch": "启动应用时自动绑定 Claude Desktop",
+  "Save Settings": "保存设置",
+  "Import / Export": "导入 / 导出",
+  "Import Configuration": "导入配置",
+  "Export Configuration": "导出配置",
+  "Export all providers, routes, and settings to a JSON file.": "将所有服务商、路由和设置导出为 JSON 文件。",
+  "Import": "导入",
+  "Export to File": "导出到文件",
+  "Data Storage": "数据存储",
+  "All data is stored under:": "所有数据存储在：",
+  "Edit Provider": "编辑服务商",
+  "Add Provider": "添加服务商",
+  "Provider ID": "服务商 ID",
+  "Display Name": "显示名称",
+  "Auth Header": "认证 Header",
+  "Auth Scheme": "认证方案",
+  "Your API key": "你的 API Key",
+  "Save": "保存",
+  "Cancel": "取消",
+  "Actions": "操作",
+  "No providers yet": "暂无服务商",
+  "Click a preset above to get started.": "点击上方预设开始配置。",
+  "Route Cards": "路由卡片",
+  "Route Table": "路由表",
+  "Active": "启用中",
+  "No routes configured": "暂无路由配置",
+  "Add a route above to start mapping models.": "请先在上方添加路由来映射模型。",
+  "Claude Gateway Status": "Claude Gateway 状态",
+  "Configure Claude model routes and Claude Desktop binding": "配置 Claude 模型路由和 Claude Desktop 绑定",
+  "Edit Route": "编辑路由",
+  "Add Route": "添加路由",
+  "Route ID": "路由 ID",
+  "Claude Alias": "Claude 别名",
+  "Upstream Model": "上游模型",
+  "Check Health": "检查健康状态",
+  "Start": "启动",
+  "Stop": "停止",
+  "Route": "路由",
+  "Real Model": "真实模型",
+  "Claude Desktop": "Claude Desktop",
+  "Binding Status": "绑定状态",
+  "Config File": "配置文件",
+  "Local Gateway Auth": "本地 Gateway 认证",
+  "Backup": "备份",
+  "Available": "可用",
+  "None": "无",
+  "Bind Desktop": "绑定 Desktop",
+  "Restore": "恢复",
+  "Exposed Models": "暴露模型",
+  "Exposed to Claude Desktop": "暴露给 Claude Desktop",
+  "No models exposed": "暂无暴露模型",
+  "Bind Desktop first to expose models.": "请先绑定 Desktop 后再暴露模型。",
+  "Bind Claude Code independently from Claude Desktop": "独立于 Claude Desktop 绑定 Claude Code",
+  "Claude Code Binding": "Claude Code 绑定",
+  "Connection Mode": "连接模式",
+  "Gateway Route": "Gateway 路由",
+  "Direct Provider": "直连服务商",
+  "Claude Code model": "Claude Code 模型",
+  "Upstream model": "上游模型",
+  "Bind Claude Code": "绑定 Claude Code",
+  "Runtime Environment": "运行环境",
+  "Codex Gateway Status": "Codex Gateway 状态",
+  "OpenAI Responses API to Chat Completions API converter for Codex App and Codex CLI": "面向 Codex App 和 Codex CLI 的 OpenAI Responses API 到 Chat Completions API 转换器",
+  "Verify Real Model": "验证真实模型",
+  "Open Logs": "打开日志",
+  "Codex App Binding": "Codex App 绑定",
+  "Default model for Codex App": "Codex App 默认模型",
+  "Start & Bind Codex App": "启动并绑定 Codex App",
+  "Restore OpenAI Login": "恢复 OpenAI 登录",
+  "Context and Reasoning Notes": "上下文与推理说明",
+  "Reply speed": "回复速度",
+  "Project history": "项目历史",
+  "Edit Codex Route": "编辑 Codex 路由",
+  "Add Codex Route": "添加 Codex 路由",
+  "Codex Model (requested by Codex)": "Codex 请求的模型",
+  "Upstream Model (real provider model)": "上游模型（服务商真实模型）",
+  "Active Codex Routes": "已启用 Codex 路由",
+  "No Codex routes configured": "暂无 Codex 路由",
+  "Add a route above to start mapping Codex models.": "请先在上方添加路由来映射 Codex 模型。",
+  "Maintain the aliases exposed to Claude Desktop and model routes.": "维护暴露给 Claude Desktop 和模型路由的别名。",
+  "Maintain the model names Codex can request from this gateway.": "维护 Codex 可向此 Gateway 请求的模型名称。",
+  "Add": "添加",
+  "Delete": "删除",
+  "Loading...": "加载中...",
+  "Review": "需检查",
+  "OK": "正常",
+  "ok": "正常",
+  "warn": "警告",
+  "error": "错误",
+  "fixed": "已修复",
+  "running": "执行中",
+};
+
+function tx(text: string, language: Language): string {
+  return language === "zh" ? ZH_TEXT[text] ?? text : text;
+}
+
 const MOCK_STATUS: Status = {
   gateway_running: false,
   gateway_port: 3456,
@@ -229,6 +447,7 @@ const MOCK_SETTINGS: Settings = {
   listen_host: "127.0.0.1",
   listen_port: 3456,
   auth_token: "gateway-switch-token",
+  language: "zh",
 };
 
 const MOCK_DESKTOP: DesktopInfo = {
@@ -501,10 +720,17 @@ function App() {
   const codexModelOptions = codexAliases.length > 0 ? codexAliases.map(a => a.alias) : DEFAULT_CODEX_MODELS;
   const latestCodexLog = logs.find(l => codexRoutes.some(r => r.codex_model === l.claude_alias));
   const latestClaudeLog = logs.find(l => routes.some(r => r.claude_alias === l.claude_alias));
+  const language: Language = settings?.language === "en" ? "en" : "zh";
+  const t = (text: string) => tx(text, language);
 
   const flash = (msg: string, type: "success" | "error" = "success") => {
-    if (type === "success") { setSuccess(msg); setError(null); }
-    else { setError(msg); setSuccess(null); }
+    const translated = msg.startsWith("Exported to ")
+      ? `${t("Exported to")} ${msg.slice("Exported to ".length)}`
+      : msg.startsWith("Cold start repair report saved:")
+        ? `${t("Cold start repair report saved")}: ${msg.slice("Cold start repair report saved:".length).trim()}`
+        : t(msg);
+    if (type === "success") { setSuccess(translated); setError(null); }
+    else { setError(translated); setSuccess(null); }
     setTimeout(() => { setSuccess(null); setError(null); }, 4000);
   };
 
@@ -800,60 +1026,60 @@ function App() {
       </div>
 
       <div className="nav-group">
-        <div className="nav-group-label">Dashboard</div>
-        <button className={`nav-item ${page === "dashboard" ? "active" : ""}`} aria-label="Dashboard" title="Dashboard" onClick={() => setPage("dashboard")}>
+        <div className="nav-group-label">{t("Dashboard")}</div>
+        <button className={`nav-item ${page === "dashboard" ? "active" : ""}`} aria-label={t("Dashboard")} title={t("Dashboard")} onClick={() => setPage("dashboard")}>
           <IconGrid />
-          <span className="nav-label">Dashboard</span>
+          <span className="nav-label">{t("Dashboard")}</span>
         </button>
       </div>
 
       <div className="nav-group">
-        <div className="nav-group-label">Products</div>
-        <button className={`nav-item ${page === "claude" ? "active" : ""}`} aria-label="Claude" title="Claude" onClick={() => setPage("claude")}>
+        <div className="nav-group-label">{t("Products")}</div>
+        <button className={`nav-item ${page === "claude" ? "active" : ""}`} aria-label={t("Claude")} title={t("Claude")} onClick={() => setPage("claude")}>
           <IconShuffle />
-          <span className="nav-label">Claude</span>
+          <span className="nav-label">{t("Claude")}</span>
           {routes.length > 0 && <span className="nav-badge">{routes.length}</span>}
         </button>
-        <button className={`nav-item ${page === "claudeCode" ? "active" : ""}`} aria-label="Claude Code" title="Claude Code" onClick={() => setPage("claudeCode")}>
+        <button className={`nav-item ${page === "claudeCode" ? "active" : ""}`} aria-label={t("Claude Code")} title={t("Claude Code")} onClick={() => setPage("claudeCode")}>
           <IconTerminal />
           <span className="nav-label">Claude<br />Code</span>
         </button>
-        <button className={`nav-item ${page === "codex" ? "active" : ""}`} aria-label="Codex" title="Codex" onClick={() => setPage("codex")}>
+        <button className={`nav-item ${page === "codex" ? "active" : ""}`} aria-label={t("Codex")} title={t("Codex")} onClick={() => setPage("codex")}>
           <IconTerminal />
-          <span className="nav-label">Codex</span>
+          <span className="nav-label">{t("Codex")}</span>
           {codexRoutes.length > 0 && <span className="nav-badge">{codexRoutes.length}</span>}
         </button>
-        <button className={`nav-item ${page === "coldstart" ? "active" : ""}`} aria-label="Cold Start" title="Cold Start" onClick={() => setPage("coldstart")}>
+        <button className={`nav-item ${page === "coldstart" ? "active" : ""}`} aria-label={t("Cold Start")} title={t("Cold Start")} onClick={() => setPage("coldstart")}>
           <IconZap />
-          <span className="nav-label">Cold<br />Start</span>
+          <span className="nav-label">{language === "zh" ? "冷启动" : <>Cold<br />Start</>}</span>
         </button>
       </div>
 
       <div className="nav-group">
-        <div className="nav-group-label">Shared</div>
-        <button className={`nav-item ${page === "providers" ? "active" : ""}`} aria-label="Providers" title="Providers" onClick={() => setPage("providers")}>
+        <div className="nav-group-label">{t("Shared")}</div>
+        <button className={`nav-item ${page === "providers" ? "active" : ""}`} aria-label={t("Providers")} title={t("Providers")} onClick={() => setPage("providers")}>
           <IconSun />
-          <span className="nav-label">Providers</span>
+          <span className="nav-label">{t("Providers")}</span>
           {providers.length > 0 && <span className="nav-badge">{providers.length}</span>}
         </button>
       </div>
 
       <div className="nav-group">
-        <div className="nav-group-label">System</div>
-        <button className={`nav-item ${page === "logs" ? "active" : ""}`} aria-label="Logs" title="Logs" onClick={() => setPage("logs")}>
+        <div className="nav-group-label">{t("System")}</div>
+        <button className={`nav-item ${page === "logs" ? "active" : ""}`} aria-label={t("Logs")} title={t("Logs")} onClick={() => setPage("logs")}>
           <IconTerminal />
-          <span className="nav-label">Logs</span>
+          <span className="nav-label">{t("Logs")}</span>
         </button>
-        <button className={`nav-item ${page === "settings" ? "active" : ""}`} aria-label="Settings" title="Settings" onClick={() => setPage("settings")}>
+        <button className={`nav-item ${page === "settings" ? "active" : ""}`} aria-label={t("Settings")} title={t("Settings")} onClick={() => setPage("settings")}>
           <IconSettings />
-          <span className="nav-label">Settings</span>
+          <span className="nav-label">{t("Settings")}</span>
         </button>
       </div>
 
       <div className="sidebar-footer">
         <span className={`status-dot ${status?.gateway_running || codexStatus?.running ? "on" : "off"}`} />
         <span className="status-text">
-          Claude <strong>{status?.gateway_running ? "On" : "Off"}</strong> · Codex <strong>{codexStatus?.running ? "On" : "Off"}</strong>
+          Claude <strong>{status?.gateway_running ? t("Running") : t("Stopped")}</strong> · Codex <strong>{codexStatus?.running ? t("Running") : t("Stopped")}</strong>
         </span>
         <span className="sidebar-version">v1.7.0</span>
       </div>
@@ -866,8 +1092,8 @@ function App() {
   const DashboardPage = () => (
     <div>
       <div className="page-header">
-        <h1>Dashboard</h1>
-        <p>Read-only product gateway overview</p>
+        <h1>{t("Dashboard")}</h1>
+        <p>{t("Read-only product gateway overview")}</p>
       </div>
 
       {/* KPI Row */}
@@ -877,11 +1103,11 @@ function App() {
             <IconPulse />
           </div>
           <div className="kpi-info">
-            <div className="kpi-label">Claude Gateway</div>
+            <div className="kpi-label">{t("Claude Gateway")}</div>
             {status?.gateway_running ? (
-              <span className="kpi-badge green"><span className="dot" /> Running</span>
+              <span className="kpi-badge green"><span className="dot" /> {t("Running")}</span>
             ) : (
-              <span className="kpi-badge red"><span className="dot" /> Stopped</span>
+              <span className="kpi-badge red"><span className="dot" /> {t("Stopped")}</span>
             )}
           </div>
         </div>
@@ -890,11 +1116,11 @@ function App() {
             <IconMonitor />
           </div>
           <div className="kpi-info">
-            <div className="kpi-label">Codex Gateway</div>
+            <div className="kpi-label">{t("Codex Gateway")}</div>
             {codexStatus?.running ? (
-              <span className="kpi-badge green"><span className="dot" /> Running</span>
+              <span className="kpi-badge green"><span className="dot" /> {t("Running")}</span>
             ) : (
-              <span className="kpi-badge red"><span className="dot" /> Stopped</span>
+              <span className="kpi-badge red"><span className="dot" /> {t("Stopped")}</span>
             )}
           </div>
         </div>
@@ -903,11 +1129,11 @@ function App() {
             <IconMonitor />
           </div>
           <div className="kpi-info">
-            <div className="kpi-label">App Bindings</div>
+            <div className="kpi-label">{t("App Bindings")}</div>
             {desktop?.managed || codexBinding?.managed || claudeCode?.managed ? (
-              <span className="kpi-badge blue"><span className="dot" /> Managed</span>
+              <span className="kpi-badge blue"><span className="dot" /> {t("Managed")}</span>
             ) : (
-              <span className="kpi-badge muted"><span className="dot" /> Unmanaged</span>
+              <span className="kpi-badge muted"><span className="dot" /> {t("Unmanaged")}</span>
             )}
           </div>
         </div>
@@ -916,7 +1142,7 @@ function App() {
             <IconSun />
           </div>
           <div className="kpi-info">
-            <div className="kpi-label">Providers</div>
+            <div className="kpi-label">{t("Providers")}</div>
             <div className="kpi-value">{providers.length}</div>
           </div>
         </div>
@@ -925,7 +1151,7 @@ function App() {
             <IconShuffle />
           </div>
           <div className="kpi-info">
-            <div className="kpi-label">Routes</div>
+            <div className="kpi-label">{t("Routes")}</div>
             <div className="kpi-value">{routes.length + codexRoutes.length}</div>
           </div>
         </div>
@@ -935,18 +1161,18 @@ function App() {
         <div className="card">
           <div className="card-title">Claude</div>
           <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
-            <span className="info-key">Gateway</span>
+            <span className="info-key">{t("Gateway")}</span>
             <span className="info-val">
               <span className={`badge ${status?.gateway_running ? "badge-green" : "badge-gray"}`}>
-                {status?.gateway_running ? "Running" : "Stopped"}
+                {status?.gateway_running ? t("Running") : t("Stopped")}
               </span>
             </span>
-            <span className="info-key">Binding</span>
-            <span className="info-val">{desktop?.managed ? "Claude Desktop uses Gateway Switch" : "Claude Desktop is unmanaged"}</span>
+            <span className="info-key">{t("Binding")}</span>
+            <span className="info-val">{desktop?.managed ? t("Claude Desktop uses Gateway Switch") : t("Claude Desktop is unmanaged")}</span>
             <span className="info-key">Claude Code</span>
-            <span className="info-val">{claudeCode?.managed ? `${claudeCode.model ?? "model"} via ${claudeCode.base_url ?? "Gateway"}` : "Claude Code is unmanaged"}</span>
-            <span className="info-key">Last Call</span>
-            <span className="info-val">{latestClaudeLog ? `${latestClaudeLog.upstream_model} via ${latestClaudeLog.provider_id}` : "No traffic yet"}</span>
+            <span className="info-val">{claudeCode?.managed ? `${claudeCode.model ?? "model"} via ${claudeCode.base_url ?? "Gateway"}` : t("Claude Code is unmanaged")}</span>
+            <span className="info-key">{t("Last Call")}</span>
+            <span className="info-val">{latestClaudeLog ? `${latestClaudeLog.upstream_model} via ${latestClaudeLog.provider_id}` : t("No traffic yet")}</span>
           </div>
 
           {health && (
@@ -974,16 +1200,16 @@ function App() {
         <div className="card">
           <div className="card-title">Codex</div>
           <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
-            <span className="info-key">Gateway</span>
+            <span className="info-key">{t("Gateway")}</span>
             <span className="info-val">
               <span className={`badge ${codexStatus?.running ? "badge-green" : "badge-gray"}`}>
-                {codexStatus?.running ? "Running" : "Stopped"}
+                {codexStatus?.running ? t("Running") : t("Stopped")}
               </span>
             </span>
-            <span className="info-key">Binding</span>
-            <span className="info-val">{codexBinding?.managed ? `Codex App uses ${codexBinding.model ?? "Gateway Switch"}` : "Codex App uses OpenAI login"}</span>
-            <span className="info-key">Last Call</span>
-            <span className="info-val">{latestCodexLog ? `${latestCodexLog.upstream_model} via ${latestCodexLog.provider_id}` : "No traffic yet"}</span>
+            <span className="info-key">{t("Binding")}</span>
+            <span className="info-val">{codexBinding?.managed ? `Codex App uses ${codexBinding.model ?? "Gateway Switch"}` : t("Codex App uses OpenAI login")}</span>
+            <span className="info-key">{t("Last Call")}</span>
+            <span className="info-val">{latestCodexLog ? `${latestCodexLog.upstream_model} via ${latestCodexLog.provider_id}` : t("No traffic yet")}</span>
           </div>
           {codexHealth && (
             <div className="health-row">
@@ -998,7 +1224,7 @@ function App() {
       </div>
 
       {/* Providers preview */}
-      <div className="section-label">Providers</div>
+      <div className="section-label">{t("Providers")}</div>
       <div className="providers-grid">
         {PROVIDER_PRESETS.map(preset => {
           const isConnected = providers.some(p => p.id === preset.id && p.enabled);
@@ -1028,12 +1254,12 @@ function App() {
   const ProvidersPage = () => (
     <div>
       <div className="page-header">
-        <h1>Providers</h1>
-        <p>Share credentials across products, with protocol-specific base URLs for OpenAI and Anthropic clients</p>
+        <h1>{t("Providers")}</h1>
+        <p>{t("Share credentials across products, with protocol-specific base URLs for OpenAI and Anthropic clients")}</p>
       </div>
 
       {/* Preset grid */}
-      <div className="section-label">Quick Add</div>
+      <div className="section-label">{t("Quick Add")}</div>
       <div className="providers-grid">
         {PROVIDER_PRESETS.map(preset => {
           const isConnected = providers.some(p => p.id === preset.id && p.enabled);
@@ -1061,14 +1287,14 @@ function App() {
 
       {/* Add/Edit form */}
       <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-title">{editingP ? "Edit Provider" : "Add Provider"}</div>
+        <div className="card-title">{editingP ? t("Edit Provider") : t("Add Provider")}</div>
         <div className="form-row">
           <div className="form-field">
-            <label>Provider ID</label>
+            <label>{t("Provider ID")}</label>
             <input value={pForm.id} disabled={!!editingP} onChange={e => setPForm({ ...pForm, id: e.target.value })} placeholder="e.g. ark" />
           </div>
           <div className="form-field">
-            <label>Display Name</label>
+            <label>{t("Display Name")}</label>
             <input value={pForm.name} onChange={e => setPForm({ ...pForm, name: e.target.value })} placeholder="e.g. Volcano Engine" />
           </div>
           <div className="form-field">
@@ -1080,27 +1306,27 @@ function App() {
             <input value={pForm.anthropic_base_url} onChange={e => setPForm({ ...pForm, anthropic_base_url: e.target.value })} placeholder="https://.../anthropic" />
           </div>
           <div className="form-field">
-            <label>Auth Header</label>
+            <label>{t("Auth Header")}</label>
             <input value={pForm.auth_header} onChange={e => setPForm({ ...pForm, auth_header: e.target.value })} />
           </div>
           <div className="form-field">
-            <label>Auth Scheme</label>
+            <label>{t("Auth Scheme")}</label>
             <input value={pForm.auth_scheme} onChange={e => setPForm({ ...pForm, auth_scheme: e.target.value })} placeholder="Bearer / x-api-key" />
           </div>
           <div className="form-field">
             <label>API Key</label>
-            <input type="password" value={pForm.api_key} onChange={e => setPForm({ ...pForm, api_key: e.target.value })} placeholder="Your API key" />
+            <input type="password" value={pForm.api_key} onChange={e => setPForm({ ...pForm, api_key: e.target.value })} placeholder={t("Your API key")} />
           </div>
         </div>
         <div className="qa-buttons" style={{ marginTop: 16 }}>
           <button className="btn btn-primary" onClick={saveProvider}>
-            {editingP ? <><IconEdit /> Save</> : <><IconPlus /> Add Provider</>}
+            {editingP ? <><IconEdit /> {t("Save")}</> : <><IconPlus /> {t("Add Provider")}</>}
           </button>
           {editingP && (
             <button className="btn" onClick={() => {
               setEditingP(null);
               setPForm(emptyProviderForm);
-            }}>Cancel</button>
+            }}>{t("Cancel")}</button>
           )}
         </div>
       </div>
@@ -1110,12 +1336,12 @@ function App() {
         <table>
           <thead>
             <tr>
-              <th>Provider</th>
+              <th>{t("Provider")}</th>
               <th>OpenAI URL</th>
               <th>Anthropic URL</th>
               <th>Auth</th>
-              <th>Status</th>
-              <th>Actions</th>
+              <th>{t("Status")}</th>
+              <th>{t("Actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -1146,7 +1372,7 @@ function App() {
                   <div className="empty-state">
                     <div className="empty-icon">--</div>
                     <h3>No providers configured</h3>
-                    <p>Click a preset above to get started.</p>
+                    <p>{t("Click a preset above to get started.")}</p>
                   </div>
                 </td>
               </tr>
@@ -1172,7 +1398,7 @@ function App() {
         <div className="alias-manager-head">
           <div>
             <div className="card-title">{title}</div>
-            <p>{aliasType === "claude" ? "Maintain the aliases exposed to Claude Desktop and model routes." : "Maintain the model names Codex can request from this gateway."}</p>
+            <p>{aliasType === "claude" ? t("Maintain the aliases exposed to Claude Desktop and model routes.") : t("Maintain the model names Codex can request from this gateway.")}</p>
           </div>
           <div className="alias-add">
             <input
@@ -1181,7 +1407,7 @@ function App() {
               onKeyDown={e => { if (e.key === "Enter") void addModelAlias(aliasType); }}
               placeholder={placeholder}
             />
-            <button className="btn" onClick={() => void addModelAlias(aliasType)}><IconPlus /> Add</button>
+            <button className="btn" onClick={() => void addModelAlias(aliasType)}><IconPlus /> {t("Add")}</button>
           </div>
         </div>
         <div className="alias-chip-list">
@@ -1200,14 +1426,14 @@ function App() {
   const ClaudePage = () => (
     <div>
       <div className="page-header">
-        <h1>Claude</h1>
-        <p>Configure Claude model routes and Claude Desktop binding</p>
+        <h1>{t("Claude")}</h1>
+        <p>{t("Configure Claude model routes and Claude Desktop binding")}</p>
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-title">Claude Gateway Status</div>
+        <div className="card-title">{t("Claude Gateway Status")}</div>
         <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
-          <span className="info-key">Status</span>
+          <span className="info-key">{t("Status")}</span>
           <span className="info-val">
             <span className={`badge ${status?.gateway_running ? "badge-green" : "badge-gray"}`}>
               {status?.gateway_running ? "Running" : "Stopped"}
@@ -1220,42 +1446,42 @@ function App() {
         </div>
         <div className="qa-buttons" style={{ marginTop: 16 }}>
           {status?.gateway_running ? (
-            <button className="btn btn-danger" onClick={stopGw}><IconStop /> Stop</button>
+            <button className="btn btn-danger" onClick={stopGw}><IconStop /> {t("Stop")}</button>
           ) : (
-            <button className="btn btn-primary" onClick={startGw}><IconPlay /> Start</button>
+            <button className="btn btn-primary" onClick={startGw}><IconPlay /> {t("Start")}</button>
           )}
-          <button className="btn" onClick={checkHealth}><IconZap /> Check Health</button>
-          <button className="btn" onClick={() => void loadAll()}><IconRefresh /> Refresh</button>
+          <button className="btn" onClick={checkHealth}><IconZap /> {t("Check Health")}</button>
+          <button className="btn" onClick={() => void loadAll()}><IconRefresh /> {t("Refresh")}</button>
         </div>
       </div>
 
       {/* Add/Edit form */}
       <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-title">{editingR ? "Edit Route" : "Add Route"}</div>
+        <div className="card-title">{editingR ? t("Edit Route") : t("Add Route")}</div>
         <div className="form-row">
           <div className="form-field">
-            <label>Route ID</label>
+            <label>{t("Route ID")}</label>
             <input value={rForm.id} disabled={!!editingR} onChange={e => setRForm({ ...rForm, id: e.target.value })} placeholder="e.g. sonnet-ark" />
           </div>
           <div className="form-field">
-            <label>Claude Alias</label>
+            <label>{t("Claude Alias")}</label>
             <select value={rForm.claude_alias} onChange={e => setRForm({ ...rForm, claude_alias: e.target.value })}>
               {claudeAliasOptions.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
           </div>
           <div className="form-field">
-            <label>Display Name</label>
+            <label>{t("Display Name")}</label>
             <input value={rForm.display_name} onChange={e => setRForm({ ...rForm, display_name: e.target.value })} placeholder="e.g. DeepSeek V3" />
           </div>
           <div className="form-field">
-            <label>Provider</label>
+            <label>{t("Provider")}</label>
             <select value={rForm.provider_id} onChange={e => setRForm({ ...rForm, provider_id: e.target.value })}>
               <option value="">Select provider...</option>
               {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
           <div className="form-field">
-            <label>Upstream Model</label>
+            <label>{t("Upstream Model")}</label>
             <input value={rForm.upstream_model} onChange={e => setRForm({ ...rForm, upstream_model: e.target.value })} placeholder="e.g. deepseek-v3" />
           </div>
         </div>
@@ -1267,7 +1493,7 @@ function App() {
             <button className="btn" onClick={() => {
               setEditingR(null);
               setRForm({ id: "", claude_alias: "claude-sonnet-4-6", display_name: "", provider_id: "", upstream_model: "" });
-            }}>Cancel</button>
+            }}>{t("Cancel")}</button>
           )}
         </div>
       </div>
@@ -1275,7 +1501,7 @@ function App() {
       {AliasManager("claude")}
 
       {/* Route cards */}
-      <div className="section-label">Route Cards</div>
+      <div className="section-label">{t("Route Cards")}</div>
       <div className="route-list" style={{ marginBottom: 20 }}>
         {routes.length > 0 ? (
           routes.map(r => (
@@ -1299,24 +1525,24 @@ function App() {
         ) : (
           <div className="empty-state">
             <div className="empty-icon">--</div>
-            <h3>No routes configured</h3>
-            <p>Add a route above to start mapping models.</p>
+            <h3>{t("No routes configured")}</h3>
+            <p>{t("Add a route above to start mapping models.")}</p>
           </div>
         )}
       </div>
 
       {/* Routes table */}
-      <div className="section-label">Route Table</div>
+      <div className="section-label">{t("Route Table")}</div>
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
               <th>Claude Alias</th>
               <th>Display Name</th>
-              <th>Provider</th>
+              <th>{t("Provider")}</th>
               <th>Upstream Model</th>
-              <th>Status</th>
-              <th>Actions</th>
+              <th>{t("Status")}</th>
+              <th>{t("Actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -1340,8 +1566,8 @@ function App() {
                 <td colSpan={6}>
                   <div className="empty-state">
                     <div className="empty-icon">--</div>
-                    <h3>No routes configured</h3>
-                    <p>Add a route above to start mapping models.</p>
+                    <h3>{t("No routes configured")}</h3>
+                    <p>{t("Add a route above to start mapping models.")}</p>
                   </div>
                 </td>
               </tr>
@@ -1350,7 +1576,7 @@ function App() {
         </table>
       </div>
 
-      <div className="section-label">Claude Desktop</div>
+      <div className="section-label">{t("Claude Desktop")}</div>
       {DesktopPage()}
     </div>
   );
@@ -1363,17 +1589,17 @@ function App() {
     return (
       <div>
         <div className="page-header">
-          <h1>Claude Code</h1>
-          <p>Bind Claude Code independently from Claude Desktop</p>
+          <h1>{t("Claude Code")}</h1>
+          <p>{t("Bind Claude Code independently from Claude Desktop")}</p>
         </div>
 
         <div className="two-col">
           <div className="card">
-            <div className="card-title">Claude Code Binding</div>
+            <div className="card-title">{t("Claude Code Binding")}</div>
             <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
               <span className="info-key">Config</span>
               <span className="info-val">{claudeCode?.config_path ?? "~/.claude/settings.json"}</span>
-              <span className="info-key">Status</span>
+              <span className="info-key">{t("Status")}</span>
               <span className="info-val">
                 <span className={`badge ${claudeCode?.managed ? "badge-green" : "badge-gray"}`}>
                   {claudeCode?.managed ? "Managed by Gateway Switch" : "Not bound"}
@@ -1385,13 +1611,13 @@ function App() {
               <span className="info-val">{claudeCode?.model ?? "Not set"}</span>
               <span className="info-key">Auth Env</span>
               <span className="info-val">{claudeCode?.auth_env ?? "Not set"}</span>
-              <span className="info-key">Backup</span>
+              <span className="info-key">{t("Backup")}</span>
               <span className="info-val">{claudeCode?.backup_path ? "Available" : "None"}</span>
             </div>
           </div>
 
           <div className="card">
-            <div className="card-title">Connection Mode</div>
+            <div className="card-title">{t("Connection Mode")}</div>
             <div className="mode-switch">
               <button className={`mode-option ${ccMode === "gateway" ? "active" : ""}`} onClick={() => setCcMode("gateway")}>
                 <IconShuffle />
@@ -1405,7 +1631,7 @@ function App() {
 
             {ccMode === "gateway" ? (
               <div className="binding-actions" style={{ marginTop: 16 }}>
-                <label>Claude Code model</label>
+                <label>{t("Claude Code model")}</label>
                 <select value={ccModel} onChange={e => setCcModel(e.target.value)}>
                   {Array.from(new Set(gatewayRouteOptions)).map(model => (
                     <option key={model} value={model}>{model}</option>
@@ -1415,7 +1641,7 @@ function App() {
               </div>
             ) : (
               <div className="binding-actions" style={{ marginTop: 16 }}>
-                <label>Provider</label>
+                <label>{t("Provider")}</label>
                 <select value={ccProviderId} onChange={e => {
                   const providerId = e.target.value;
                   setCcProviderId(providerId);
@@ -1437,7 +1663,7 @@ function App() {
                     </div>
                   </div>
                 )}
-                <label>Upstream model</label>
+                <label>{t("Upstream model")}</label>
                 <input value={ccUpstreamModel} onChange={e => setCcUpstreamModel(e.target.value)} placeholder="e.g. claude-sonnet-4-5" />
                 <p>Direct Provider writes the provider's Anthropic Base URL and API key into Claude Code. Use Gateway Route when a provider only supports OpenAI Chat Completions.</p>
                 {selectedProvider && (
@@ -1453,14 +1679,14 @@ function App() {
             )}
 
             <div className="qa-buttons" style={{ marginTop: 16, marginBottom: 0 }}>
-              <button className="btn btn-primary" onClick={bindClaudeCode} disabled={ccMode === "provider" && !directProviderReady}><IconLink /> Bind Claude Code</button>
-              <button className="btn" onClick={restoreClaudeCode} disabled={!claudeCode?.managed && !claudeCode?.backup_path}><IconUnlink /> Restore</button>
+              <button className="btn btn-primary" onClick={bindClaudeCode} disabled={ccMode === "provider" && !directProviderReady}><IconLink /> {t("Bind Claude Code")}</button>
+              <button className="btn" onClick={restoreClaudeCode} disabled={!claudeCode?.managed && !claudeCode?.backup_path}><IconUnlink /> {t("Restore")}</button>
             </div>
           </div>
         </div>
 
         <div className="card">
-          <div className="card-title">Runtime Environment</div>
+          <div className="card-title">{t("Runtime Environment")}</div>
           <div className="note-grid">
             <div>
               <strong>Gateway Route</strong>
@@ -1482,16 +1708,16 @@ function App() {
   const CodexPage = () => (
     <div>
       <div className="page-header">
-        <h1>Codex Gateway</h1>
-        <p>OpenAI Responses API to Chat Completions API converter for Codex App and Codex CLI</p>
+        <h1>{t("Codex Gateway")}</h1>
+        <p>{t("OpenAI Responses API to Chat Completions API converter for Codex App and Codex CLI")}</p>
       </div>
 
       {/* Status + Quick Actions */}
       <div className="two-col">
         <div className="card">
-          <div className="card-title">Codex Gateway Status</div>
+          <div className="card-title">{t("Codex Gateway Status")}</div>
           <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
-            <span className="info-key">Status</span>
+            <span className="info-key">{t("Status")}</span>
             <span className="info-val">
               <span className={`badge ${codexStatus?.running ? "badge-green" : "badge-gray"}`}>
                 {codexStatus?.running ? "Running" : "Stopped"}
@@ -1504,12 +1730,12 @@ function App() {
           </div>
           <div className="qa-buttons" style={{ marginTop: 16 }}>
             {codexStatus?.running ? (
-              <button className="btn btn-danger" onClick={stopCodex}><IconStop /> Stop</button>
+              <button className="btn btn-danger" onClick={stopCodex}><IconStop /> {t("Stop")}</button>
             ) : (
-              <button className="btn btn-primary" onClick={startCodex}><IconPlay /> Start</button>
+              <button className="btn btn-primary" onClick={startCodex}><IconPlay /> {t("Start")}</button>
             )}
-            <button className="btn" onClick={checkCodexHealth}><IconZap /> Check Health</button>
-            <button className="btn" onClick={() => void loadAll()}><IconRefresh /> Refresh</button>
+            <button className="btn" onClick={checkCodexHealth}><IconZap /> {t("Check Health")}</button>
+            <button className="btn" onClick={() => void loadAll()}><IconRefresh /> {t("Refresh")}</button>
           </div>
           {codexHealth && (
             <div className="health-row">
@@ -1523,7 +1749,7 @@ function App() {
         </div>
 
         <div className="card">
-          <div className="card-title">Verify Real Model</div>
+          <div className="card-title">{t("Verify Real Model")}</div>
           <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
             <span className="info-key">Last Codex Model</span>
             <span className="info-val">{latestCodexLog?.claude_alias ?? "No Codex request yet"}</span>
@@ -1537,14 +1763,14 @@ function App() {
             </span>
           </div>
           <div className="qa-buttons" style={{ marginTop: 16 }}>
-            <button className="btn" onClick={() => setPage("logs")}><IconSearch /> Open Logs</button>
-            <button className="btn" onClick={() => void loadAll()}><IconRefresh /> Refresh</button>
+            <button className="btn" onClick={() => setPage("logs")}><IconSearch /> {t("Open Logs")}</button>
+            <button className="btn" onClick={() => void loadAll()}><IconRefresh /> {t("Refresh")}</button>
           </div>
         </div>
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-title">Codex App Binding</div>
+        <div className="card-title">{t("Codex App Binding")}</div>
         <div className="binding-panel">
           <div className="binding-state">
             <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
@@ -1563,7 +1789,7 @@ function App() {
             </div>
           </div>
           <div className="binding-actions">
-            <label>Default model for Codex App</label>
+            <label>{t("Default model for Codex App")}</label>
             <select value={codexBindModel} onChange={e => setCodexBindModel(e.target.value)}>
               {Array.from(new Set([...codexRoutes.map(r => r.codex_model), ...codexModelOptions])).map(model => (
                 <option key={model} value={model}>{model}</option>
@@ -1571,22 +1797,22 @@ function App() {
             </select>
             <p>Bind writes Gateway Switch into `~/.codex/config.toml` and forces API-key mode for the local gateway. Restart Codex App after binding.</p>
             <div className="qa-buttons" style={{ margin: 0 }}>
-              <button className="btn btn-primary" onClick={bindCodexApp}><IconLink /> Start & Bind Codex App</button>
-              <button className="btn" onClick={restoreCodexApp} disabled={!codexBinding?.managed && !codexBinding?.backup_path}><IconUnlink /> Restore OpenAI Login</button>
+              <button className="btn btn-primary" onClick={bindCodexApp}><IconLink /> {t("Start & Bind Codex App")}</button>
+              <button className="btn" onClick={restoreCodexApp} disabled={!codexBinding?.managed && !codexBinding?.backup_path}><IconUnlink /> {t("Restore")} OpenAI Login</button>
             </div>
           </div>
         </div>
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-title">Context and Reasoning Notes</div>
+        <div className="card-title">{t("Context and Reasoning Notes")}</div>
         <div className="note-grid">
           <div>
-            <strong>Reply speed</strong>
+            <strong>{t("Reply speed")}</strong>
             <p>Gateway Switch converts protocol shape; it does not add or remove a model's native reasoning ability. If the upstream model is fast, or does not expose reasoning tokens through Chat Completions, the visible response can be very quick.</p>
           </div>
           <div>
-            <strong>Project history</strong>
+            <strong>{t("Project history")}</strong>
             <p>Binding preserves `~/.codex/config.toml` project entries. Existing Codex conversations may still be separated by Codex's own account/provider state, so switching providers can show a different conversation list even when local project trust remains intact.</p>
           </div>
         </div>
@@ -1594,7 +1820,7 @@ function App() {
 
       {/* Add/Edit route form */}
       <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-title">{editingC ? "Edit Codex Route" : "Add Codex Route"}</div>
+        <div className="card-title">{editingC ? t("Edit Codex Route") : t("Add Codex Route")}</div>
         <div className="route-explainer">
           <div className="route-explainer-copy">
             <strong>Codex Model must match the model used by Codex CLI.</strong>
@@ -1610,29 +1836,29 @@ function App() {
         </div>
         <div className="form-row">
           <div className="form-field">
-            <label>Route ID</label>
+            <label>{t("Route ID")}</label>
             <input value={cForm.id} disabled={!!editingC} onChange={e => setCForm({ ...cForm, id: e.target.value })} placeholder="e.g. gpt4o-deepseek" />
           </div>
           <div className="form-field">
-            <label>Codex Model (requested by Codex)</label>
+            <label>{t("Codex Model (requested by Codex)")}</label>
             <select value={cForm.codex_model} onChange={e => setCForm({ ...cForm, codex_model: e.target.value })}>
               {codexModelOptions.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
             <span className="field-hint">This is the model name used in `codex -m ...`.</span>
           </div>
           <div className="form-field">
-            <label>Display Name</label>
+            <label>{t("Display Name")}</label>
             <input value={cForm.display_name} onChange={e => setCForm({ ...cForm, display_name: e.target.value })} placeholder="e.g. DeepSeek V3" />
           </div>
           <div className="form-field">
-            <label>Provider</label>
+            <label>{t("Provider")}</label>
             <select value={cForm.provider_id} onChange={e => setCForm({ ...cForm, provider_id: e.target.value })}>
               <option value="">Select provider...</option>
               {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
           <div className="form-field">
-            <label>Upstream Model (real provider model)</label>
+            <label>{t("Upstream Model (real provider model)")}</label>
             <input value={cForm.upstream_model} onChange={e => setCForm({ ...cForm, upstream_model: e.target.value })} placeholder="e.g. deepseek-chat" />
             <span className="field-hint">This is the actual model name sent to the third-party API.</span>
           </div>
@@ -1645,7 +1871,7 @@ function App() {
             <button className="btn" onClick={() => {
               setEditingC(null);
               setCForm({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "" });
-            }}>Cancel</button>
+            }}>{t("Cancel")}</button>
           )}
         </div>
       </div>
@@ -1653,7 +1879,7 @@ function App() {
       {AliasManager("codex")}
 
       {/* Route cards */}
-      <div className="section-label">Active Codex Routes</div>
+      <div className="section-label">{t("Active Codex Routes")}</div>
       <div className="route-list" style={{ marginBottom: 20 }}>
         {codexRoutes.length > 0 ? (
           codexRoutes.map(r => (
@@ -1677,8 +1903,8 @@ function App() {
         ) : (
           <div className="empty-state">
             <div className="empty-icon">--</div>
-            <h3>No Codex routes configured</h3>
-            <p>Add a route above to start mapping Codex models.</p>
+            <h3>{t("No Codex routes configured")}</h3>
+            <p>{t("Add a route above to start mapping Codex models.")}</p>
           </div>
         )}
       </div>
@@ -1693,17 +1919,17 @@ function App() {
       <div className="two-col">
         {/* Binding Status */}
         <div className="card">
-          <div className="card-title">Binding Status</div>
+          <div className="card-title">{t("Binding Status")}</div>
           <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
-            <span className="info-key">Config File</span>
+            <span className="info-key">{t("Config File")}</span>
             <span className="info-val">{desktop?.config_path ?? "-"}</span>
             <span className="info-key">Base URL</span>
             <span className="info-val">{desktop?.base_url ?? "Not set"}</span>
-            <span className="info-key">Local Gateway Auth</span>
+            <span className="info-key">{t("Local Gateway Auth")}</span>
             <span className="info-val">{desktop?.auth_scheme ?? "Not set"}</span>
-            <span className="info-key">Backup</span>
+            <span className="info-key">{t("Backup")}</span>
             <span className="info-val">{desktop?.backup_path ? "Available" : "None"}</span>
-            <span className="info-key">Status</span>
+            <span className="info-key">{t("Status")}</span>
             <span className="info-val">
               <span className={`badge ${desktop?.managed ? "badge-green" : "badge-gray"}`}>
                 {desktop?.managed ? "Managed" : "Unmanaged"}
@@ -1712,17 +1938,17 @@ function App() {
           </div>
           <div className="qa-buttons" style={{ marginTop: 16 }}>
             <button className="btn btn-primary" onClick={bindDesktop}>
-              <IconLink /> Bind Desktop
+              <IconLink /> {t("Bind Desktop")}
             </button>
             <button className="btn" onClick={restoreDesktop}>
-              <IconUnlink /> Restore
+              <IconUnlink /> {t("Restore")}
             </button>
           </div>
         </div>
 
         {/* Exposed Models */}
         <div className="card">
-          <div className="card-title">Exposed Models</div>
+          <div className="card-title">{t("Exposed Models")}</div>
           {desktop?.models && desktop.models.length > 0 ? (
             <div className="route-list">
               {desktop.models.map(m => (
@@ -1732,10 +1958,10 @@ function App() {
                   </div>
                   <div className="route-info">
                     <div className="route-name">{m}</div>
-                    <div className="route-path">Exposed to Claude Desktop</div>
+                    <div className="route-path">{t("Exposed to Claude Desktop")}</div>
                   </div>
                   <span className="route-status active">
-                    <IconCheck /> Active
+                    <IconCheck /> {t("Active")}
                   </span>
                 </div>
               ))}
@@ -1743,8 +1969,8 @@ function App() {
           ) : (
             <div className="empty-state">
               <div className="empty-icon">--</div>
-              <h3>No models exposed</h3>
-              <p>Bind Desktop first to expose models.</p>
+              <h3>{t("No models exposed")}</h3>
+              <p>{t("Bind Desktop first to expose models.")}</p>
             </div>
           )}
         </div>
@@ -1768,8 +1994,8 @@ function App() {
     return (
       <div>
         <div className="page-header">
-          <h1>Request Logs</h1>
-          <p>Monitor gateway request activity</p>
+          <h1>{t("Request Logs")}</h1>
+          <p>{t("Monitor gateway request activity")}</p>
         </div>
 
         <div className="qa-buttons" style={{ marginBottom: 16 }}>
@@ -1778,12 +2004,12 @@ function App() {
             <input
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search logs..."
+              placeholder={t("Search logs...")}
               style={{ border: "none", outline: "none", fontSize: 13, flex: 1, background: "transparent", fontFamily: "inherit", color: "var(--fg)", minWidth: 0 }}
             />
           </div>
           <button className="btn" onClick={() => void loadAll()}>
-            <IconRefresh /> Refresh
+            <IconRefresh /> {t("Refresh")}
           </button>
         </div>
 
@@ -1791,14 +2017,14 @@ function App() {
           <table>
             <thead>
               <tr>
-                <th>Time</th>
-                <th>Requested Model</th>
-                <th>Provider</th>
-                <th>Real Upstream</th>
-                <th>Mode</th>
-                <th>Status</th>
-                <th>Duration</th>
-                {filteredLogs.some(l => l.error_summary) && <th>Error</th>}
+                <th>{t("Time")}</th>
+                <th>{t("Requested Model")}</th>
+                <th>{t("Provider")}</th>
+                <th>{t("Real Upstream")}</th>
+                <th>{t("Mode")}</th>
+                <th>{t("Status")}</th>
+                <th>{t("Duration")}</th>
+                {filteredLogs.some(l => l.error_summary) && <th>{t("Error")}</th>}
               </tr>
             </thead>
             <tbody>
@@ -1829,8 +2055,8 @@ function App() {
                   <td colSpan={filteredLogs.some(l => l.error_summary) ? 8 : 7}>
                     <div className="empty-state">
                       <div className="empty-icon">--</div>
-                      <h3>{searchQuery ? "No matching logs" : "No logs yet"}</h3>
-                      <p>{searchQuery ? "Try a different search query." : "Logs will appear here once requests are made."}</p>
+                      <h3>{searchQuery ? t("No matching logs") : t("No logs yet")}</h3>
+                      <p>{searchQuery ? t("Try a different search query.") : t("Logs will appear here once requests are made.")}</p>
                     </div>
                   </td>
                 </tr>
@@ -1865,23 +2091,23 @@ function App() {
       <div>
         <div className="page-header page-header-row">
           <div>
-            <h1>Cold Start Doctor</h1>
-            <p>Claude Desktop 与 Codex 第三方模型接入后的状态确认、冷启动修复和安全报告</p>
+            <h1>{t("Cold Start Doctor")}</h1>
+            <p>{t("Claude Desktop 与 Codex 第三方模型接入后的状态确认、冷启动修复和安全报告")}</p>
           </div>
           <button className="btn btn-primary" onClick={runColdStartRepair} disabled={coldStartRunning}>
-            <IconZap /> {coldStartRunning ? "Running..." : "Run Check & Safe Fixes"}
+            <IconZap /> {coldStartRunning ? t("Running...") : t("Run Check & Safe Fixes")}
           </button>
         </div>
 
         <div className="cold-hero">
           <div>
-            <span className="eyebrow">Phase A · Readiness Overview</span>
-            <h2>{report.verdict}</h2>
-            <p>{report.most_important_fix}</p>
+            <span className="eyebrow">{t("Phase A · Readiness Overview")}</span>
+            <h2>{t(report.verdict)}</h2>
+            <p>{t(report.most_important_fix)}</p>
           </div>
           <div className={`score-ring ${scoreClass(report.overall_score)}`}>
             <strong>{report.overall_score}%</strong>
-            <span>Overall</span>
+            <span>{t("Overall")}</span>
           </div>
         </div>
 
@@ -1889,38 +2115,38 @@ function App() {
           <div className="cold-score-card">
             <span>Claude Desktop</span>
             <strong>{report.claude_score}%</strong>
-            <em>{desktop?.managed ? "Managed" : "Needs binding"}</em>
+            <em>{desktop?.managed ? t("Managed") : t("Needs binding")}</em>
           </div>
           <div className="cold-score-card">
-            <span>Codex App</span>
+            <span>{t("Codex App")}</span>
             <strong>{report.codex_score}%</strong>
-            <em>{codexBinding?.managed ? "Managed" : "Needs binding"}</em>
+            <em>{codexBinding?.managed ? t("Managed") : t("Needs binding")}</em>
           </div>
           <div className="cold-score-card">
-            <span>MCP / Tools</span>
+            <span>{t("MCP / Tools")}</span>
             <strong>{matrix.filter(i => i.status === "ok").length}/{matrix.length}</strong>
-            <em>Observable checks passed</em>
+            <em>{t("Observable checks passed")}</em>
           </div>
           <div className="cold-score-card">
-            <span>Security</span>
-            <strong>{matrix.some(i => i.target === "Security" && i.status !== "ok") ? "Review" : "OK"}</strong>
-            <em>Third-party routing risk</em>
+            <span>{t("Security")}</span>
+            <strong>{matrix.some(i => i.target === "Security" && i.status !== "ok") ? t("Review") : t("OK")}</strong>
+            <em>{t("Third-party routing risk")}</em>
           </div>
         </div>
 
         <div className="two-col">
           <div className="card">
-            <div className="card-title">Phase B · Execution & Repair Log</div>
+            <div className="card-title">{t("Phase B · Execution & Repair Log")}</div>
             <div className="cold-timeline">
               {phaseSteps.map((step, index) => (
                 <div key={`${step.id}-${index}`} className="cold-step">
                   <span className={`cold-step-dot ${step.status}`} />
                   <div>
                     <div className="cold-step-head">
-                      <strong>{step.label}</strong>
-                      <span className={`badge ${statusBadgeClass(step.status)}`}>{step.status}</span>
+                      <strong>{t(step.label)}</strong>
+                      <span className={`badge ${statusBadgeClass(step.status)}`}>{t(step.status)}</span>
                     </div>
-                    <p>{step.detail}</p>
+                    <p>{t(step.detail)}</p>
                     <small>{step.target} · {step.timestamp}</small>
                   </div>
                 </div>
@@ -1929,26 +2155,26 @@ function App() {
           </div>
 
           <div className="card">
-            <div className="card-title">Fix Results</div>
+            <div className="card-title">{t("Fix Results")}</div>
             <div className="cold-result-block">
-              <strong>Auto fixes applied</strong>
+              <strong>{t("Auto fixes applied")}</strong>
               {report.auto_fixes_applied.length > 0 ? (
                 report.auto_fixes_applied.map(item => <p key={item}><IconCheck /> {item}</p>)
               ) : (
-                <p className="muted-line">No automatic fix has been applied in the latest check.</p>
+                <p className="muted-line">{t("No automatic fix has been applied in the latest check.")}</p>
               )}
             </div>
             <div className="cold-result-block">
-              <strong>Manual fixes required</strong>
+              <strong>{t("Manual fixes required")}</strong>
               {report.manual_fixes_required.length > 0 ? (
                 report.manual_fixes_required.slice(0, 5).map(item => <p key={item}><IconArrowRight /> {item}</p>)
               ) : (
-                <p className="muted-line">No manual action required.</p>
+                <p className="muted-line">{t("No manual action required.")}</p>
               )}
             </div>
             {report.report_path && (
               <div className="report-path">
-                <span>Report saved</span>
+                <span>{t("Report saved")}</span>
                 <code>{report.report_path}</code>
               </div>
             )}
@@ -1956,24 +2182,24 @@ function App() {
         </div>
 
         <div className="card">
-          <div className="card-title">Phase C · Capability Matrix</div>
+          <div className="card-title">{t("Phase C · Capability Matrix")}</div>
           <div className="cold-matrix">
             {matrix.map(item => (
               <div key={`${item.target}-${item.name}`} className="cold-matrix-item">
                 <div>
                   <span>{item.target}</span>
-                  <strong>{item.name}</strong>
+                  <strong>{t(item.name)}</strong>
                 </div>
-                <span className={`badge ${statusBadgeClass(item.status)}`}>{item.status}</span>
-                <p>{item.detail}</p>
+                <span className={`badge ${statusBadgeClass(item.status)}`}>{t(item.status)}</span>
+                <p>{t(item.detail)}</p>
               </div>
             ))}
           </div>
         </div>
 
         <div className="cold-risk">
-          <strong>Biggest Risk</strong>
-          <p>{report.biggest_risk}</p>
+          <strong>{t("Biggest Risk")}</strong>
+          <p>{t(report.biggest_risk)}</p>
         </div>
       </div>
     );
@@ -1983,57 +2209,67 @@ function App() {
   //  SETTINGS PAGE
   // =====================================================
   const SettingsPage = () => {
-    if (!settings) return <div className="empty-state"><h3>Loading...</h3></div>;
+    if (!settings) return <div className="empty-state"><h3>{t("Loading...")}</h3></div>;
     return (
       <div>
         <div className="page-header">
-          <h1>Settings</h1>
-          <p>Configure gateway behavior and manage data</p>
+          <h1>{t("Settings")}</h1>
+          <p>{t("Configure gateway behavior and manage data")}</p>
         </div>
 
         <div className="two-col">
           {/* Gateway Configuration */}
           <div className="card">
-            <div className="card-title">Gateway Configuration</div>
+            <div className="card-title">{t("Gateway Configuration")}</div>
+            <div className="form-row" style={{ marginBottom: 16 }}>
+              <div className="form-field" style={{ gridColumn: "1 / -1" }}>
+                <label>{t("Interface Language")}</label>
+                <select value={settings.language ?? "zh"} onChange={e => setSettings({ ...settings, language: e.target.value as Language })}>
+                  <option value="zh">{t("Chinese")}</option>
+                  <option value="en">{t("English")}</option>
+                </select>
+                <span className="field-hint">{language === "zh" ? "默认中文，必要技术名词保留英文。" : "Default Chinese is available; required technical terms stay in English."}</span>
+              </div>
+            </div>
             <div className="form-row">
               <div className="form-field">
-                <label>Listen Host</label>
+                <label>{t("Listen Host")}</label>
                 <input value={settings.listen_host} onChange={e => setSettings({ ...settings, listen_host: e.target.value })} />
               </div>
               <div className="form-field">
-                <label>Listen Port</label>
+                <label>{t("Listen Port")}</label>
                 <input type="number" value={settings.listen_port} onChange={e => setSettings({ ...settings, listen_port: Number(e.target.value) })} />
               </div>
               <div className="form-field" style={{ gridColumn: "1 / -1" }}>
-                <label>Auth Token</label>
+                <label>{t("Auth Token")}</label>
                 <input value={settings.auth_token} onChange={e => setSettings({ ...settings, auth_token: e.target.value })} />
               </div>
             </div>
 
             <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
               <div className="toggle-row">
-                <span>Auto-start Gateway on launch</span>
+                <span>{t("Auto-start Gateway on launch")}</span>
                 <button className={`toggle ${settings.auto_start_gateway ? "on" : ""}`} onClick={() => setSettings({ ...settings, auto_start_gateway: !settings.auto_start_gateway })} />
               </div>
               <div className="toggle-row">
-                <span>Auto-bind Claude Desktop on launch</span>
+                <span>{t("Auto-bind Claude Desktop on launch")}</span>
                 <button className={`toggle ${settings.auto_takeover_desktop ? "on" : ""}`} onClick={() => setSettings({ ...settings, auto_takeover_desktop: !settings.auto_takeover_desktop })} />
               </div>
             </div>
 
             <div style={{ marginTop: 16 }}>
               <button className="btn btn-primary" onClick={saveSettings}>
-                <IconEdit /> Save Settings
+                <IconEdit /> {t("Save Settings")}
               </button>
             </div>
           </div>
 
           {/* Import / Export */}
           <div className="card">
-            <div className="card-title">Import / Export</div>
+            <div className="card-title">{t("Import / Export")}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <div>
-                <div style={{ fontSize: 12, fontWeight: 500, color: "var(--muted)", marginBottom: 6 }}>Import Configuration</div>
+                <div style={{ fontSize: 12, fontWeight: 500, color: "var(--muted)", marginBottom: 6 }}>{t("Import Configuration")}</div>
                 <div className="qa-buttons">
                   <input
                     value={importPath}
@@ -2041,20 +2277,20 @@ function App() {
                     placeholder="/path/to/config.json"
                     style={{ flex: 1, padding: "8px 12px", border: "1px solid var(--border)", borderRadius: "var(--radius-xs)", fontSize: 13, outline: "none", fontFamily: "var(--font-mono)", minWidth: 0, background: "var(--surface)", color: "var(--fg)" }}
                   />
-                  <button className="btn" onClick={doImport}><IconUpload /> Import</button>
+                  <button className="btn" onClick={doImport}><IconUpload /> {t("Import")}</button>
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 12, fontWeight: 500, color: "var(--muted)", marginBottom: 6 }}>Export Configuration</div>
+                <div style={{ fontSize: 12, fontWeight: 500, color: "var(--muted)", marginBottom: 6 }}>{t("Export Configuration")}</div>
                 <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 10 }}>
-                  Export all providers, routes, and settings to a JSON file.
+                  {t("Export all providers, routes, and settings to a JSON file.")}
                 </p>
-                <button className="btn" onClick={doExport}><IconDownload /> Export to File</button>
+                <button className="btn" onClick={doExport}><IconDownload /> {t("Export to File")}</button>
               </div>
               <div style={{ padding: 16, background: "var(--bg)", borderRadius: "var(--radius-xs)", border: "1px solid var(--border)" }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", marginBottom: 6 }}>Data Storage</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", marginBottom: 6 }}>{t("Data Storage")}</div>
                 <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.6 }}>
-                  All data is stored under:<br />
+                  {t("All data is stored under:")}<br />
                   <code style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>~/Library/Application Support/Gateway Switch/</code>
                 </div>
               </div>

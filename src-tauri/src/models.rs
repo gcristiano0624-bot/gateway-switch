@@ -21,6 +21,12 @@ pub struct AppSettings {
     pub listen_host: String,
     pub listen_port: u16,
     pub auth_token: String,
+    #[serde(default = "default_language")]
+    pub language: String,
+}
+
+fn default_language() -> String {
+    "zh".into()
 }
 
 impl Default for AppSettings {
@@ -31,6 +37,7 @@ impl Default for AppSettings {
             listen_host: "127.0.0.1".into(),
             listen_port: 3456,
             auth_token: "gateway-switch-token".into(),
+            language: default_language(),
         }
     }
 }

@@ -6,7 +6,7 @@
 
 > Gateway Switch 不仅仅是一个模型路由器。它是一个**运行时兼容性层**，驻留在 AI 原生桌面应用与第三方模型服务之间，弥合协议鸿沟、修复畸形工具调用、强制安全边界，并在上游 Provider 异常时优雅降级。
 
-[![Version](https://img.shields.io/badge/Version-1.6.4-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.7.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -141,6 +141,16 @@ Claude 和 Codex 的 `/health` 端点会暴露这些画像，外部工具无需�
 `export_diagnostics` 生成全面的 JSON 包，包含：运行时特性状态、所有 Provider 能力画像、基准测试结果、Provider 配置、路由配置、Codex 路由配置、和近期请求日志 — 远程复现和调试问题所需的一切。
 
 ---
+
+## 1.7.0 更新重点
+
+- **新增 Cold Start Doctor。** 新增冷启动检查与安全修复页，覆盖 Claude Desktop、Claude Code、Codex App、本地 Gateway、Provider、路由与安全风险检查。
+- **新增中英文界面切换。** 中文为默认语言，Settings 中可切换英文；技术诊断词如 Claude、Codex、Gateway、Provider、Responses API、Chat Completions 保持英文。
+- **修复 Codex 大请求 413。** Codex Responses 网关显式提高本地请求体上限，避免第二轮/多轮对话携带上下文和工具输出时被 Axum 默认限制拦截。
+- **修复火山方舟 Coding Plan 404。** OpenAI Base URL 现在正确识别 `/v2`、`/v3`、`/api/coding/v3` 等版本路径；如果用户直接填写完整 `/chat/completions` 地址，也不会重复追加 `/v1`。
+- **修复火山方舟 `developer` role 兼容。** Codex Responses 中的 `developer` 消息会转为 Chat Completions 的 `system` 消息，避免上游只支持 `system`、`assistant`、`user`、`tool` 时返回 400。
+- 版本保持并发布为 `1.7.0`。
+- 最新验证：`pnpm build`、`cargo test`（28 passed）、`CI=false pnpm tauri build --bundles app,dmg`。
 
 ## 1.6.4 更新重点
 
@@ -417,7 +427,7 @@ pnpm tauri build
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.4_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.7.0_aarch64.dmg
 ```
 
 ---

@@ -6,7 +6,7 @@
 
 > Gateway Switch is not just a model router. It is a **runtime compatibility layer** that sits between AI-native desktop applications and third-party model providers, bridging protocol gaps, repairing malformed tool calls, enforcing safety boundaries, and degrading gracefully when upstream providers misbehave.
 
-[![Version](https://img.shields.io/badge/Version-1.6.4-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.7.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -141,6 +141,16 @@ For long-running agent workflows:
 `export_diagnostics` generates a comprehensive JSON bundle containing: runtime feature status, all provider capability profiles, benchmark results, provider configurations, route configurations, Codex route configurations, and recent request logs — everything needed to reproduce and debug an issue remotely.
 
 ---
+
+## Version 1.7.0 Highlights
+
+- **Added Cold Start Doctor.** New readiness and safe-repair workflow for Claude Desktop, Claude Code, Codex App, local gateways, providers, routes, and security risk checks.
+- **Added bilingual UI support.** Chinese is the default language, English can be enabled from Settings, and diagnostic terms such as Claude, Codex, Gateway, Provider, Responses API, and Chat Completions remain in English.
+- **Fixed Codex 413 large-request failures.** The local Responses gateway now has an explicit request body limit above Axum's default so multi-turn Codex payloads with history and tool outputs are accepted.
+- **Fixed Volcengine Ark Coding Plan 404 routing.** OpenAI Base URLs ending in `/v2`, `/v3`, or `/api/coding/v3` are now treated as versioned bases, and complete `/chat/completions` endpoint URLs are preserved instead of receiving an extra `/v1` segment.
+- **Fixed Volcengine `developer` role compatibility.** Codex Responses `developer` messages are normalized to Chat Completions `system` messages so providers that only accept `system`, `assistant`, `user`, and `tool` roles can handle Codex traffic.
+- App version remains `1.7.0`.
+- Latest verification: `pnpm build`, `cargo test` (28 passed), and `CI=false pnpm tauri build --bundles app,dmg`.
 
 ## Version 1.6.4 Highlights
 
@@ -417,7 +427,7 @@ Artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.6.4_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.7.0_aarch64.dmg
 ```
 
 ---

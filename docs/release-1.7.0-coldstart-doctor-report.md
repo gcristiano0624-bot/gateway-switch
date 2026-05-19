@@ -141,6 +141,8 @@ Also merged into this release:
 
 - Codex Responses gateway request body limit was raised above Axum default.
 - Added regression coverage for large request bodies.
+- Fixed Volcengine Ark Coding Plan URL joining for `/api/coding/v3` and complete `/chat/completions` Base URLs.
+- Normalized Codex `developer` role messages to Chat Completions `system` messages for providers that reject `developer`.
 
 ## Coldstart Skill References
 
@@ -183,7 +185,7 @@ PATH="$HOME/.cargo/bin:$PATH" cargo test
 Result:
 
 - passed
-- 27 tests passed
+- 28 tests passed
 
 ### Local Packaging
 

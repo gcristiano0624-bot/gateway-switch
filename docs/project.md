@@ -20,7 +20,7 @@ If another AI receives this repository, start here:
 - Bindings: Claude Desktop in `desktop_binding.rs`, Claude Code in `claude_code_binding.rs`, Codex in `codex_binding.rs`.
 - Local data: `~/Library/Application Support/Gateway Switch/`.
 - Build: `PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build` when `cargo` is not already on `PATH`.
-- Latest verified tests: `pnpm build`, `cargo test`, and `pnpm tauri build --bundles app` after the 1.7.0 Cold Start Doctor release.
+- Latest verified tests: `pnpm build`, `cargo test`, and `CI=false pnpm tauri build --bundles app,dmg` after the final 1.7.0 Codex/Volcengine compatibility release.
 
 The design intent is to make third-party models less likely to degrade Claude/Codex behavior by normalizing protocol shapes, repairing common tool-call failures, redacting secrets, exposing provider capability profiles, and adding safety/diagnostic gates around agent-like workflows.
 
@@ -38,7 +38,7 @@ The shared design goal is simple: providers share identity, auth header, auth sc
 
 ## 2. Version 1.7.0 Scope
 
-Version 1.7.0 adds the Cold Start Doctor, fixes the left navigation readability issue, and introduces a bilingual Chinese/English interface.
+Version 1.7.0 adds the Cold Start Doctor, fixes the left navigation readability issue, introduces a bilingual Chinese/English interface, and finalizes Codex compatibility for large payloads and Volcengine Ark Coding Plan.
 
 Main changes:
 
@@ -53,12 +53,14 @@ Main changes:
 - Added Markdown cold-start report generation under the app backup directory for post-mortem review and support handoff.
 - Added `coldstart/claude_coldstart_skill.md` and `coldstart/codex_coldstart.skill.md` as reference workflows for the checks represented in the UI.
 - Merged the Codex large-request stability fix by raising the local Responses gateway body limit above Axum's default and adding regression coverage.
+- Fixed OpenAI-compatible Base URL joining for providers whose base already ends with `/v2`, `/v3`, `/api/coding/v3`, or a full `/chat/completions` endpoint. This fixes Volcengine Ark Coding Plan 404 failures caused by incorrectly appending `/v1`.
+- Normalized Codex Responses `developer` role messages into Chat Completions `system` messages, preserving compatibility with providers that only allow `system`, `assistant`, `user`, and `tool`.
 - Versioned package metadata and release artifacts as `1.7.0`.
 
 Verification for 1.7.0:
 
 - `pnpm build`: passed.
-- `cargo test`: passed, 27 tests.
+- `cargo test`: passed, 28 tests.
 - `CI=false pnpm tauri build --bundles app,dmg`: passed.
 
 ## 3. Version 1.6.4 Scope
@@ -959,7 +961,7 @@ src-tauri/target/release/bundle/dmg/Gateway Switch_1.7.0_aarch64.dmg
 ## 25. Release Checklist
 
 - Frontend build passes.
-- Rust tests pass. Latest 1.7.0 verification: 25 tests passed.
+- Rust tests pass. Latest 1.7.0 verification: 28 tests passed.
 - Claude Gateway health check passes.
 - Codex Gateway health check passes.
 - Claude route can rewrite model request and response fields.

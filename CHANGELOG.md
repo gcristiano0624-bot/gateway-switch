@@ -14,8 +14,10 @@ This file tracks user-visible Gateway Switch changes so future AI agents can qui
 - Added detailed `[coldstart]` Rust logs and Markdown report generation for later troubleshooting.
 - Included the Claude Desktop and Codex cold-start skill reference files under `coldstart/` for future validation workflows.
 - Merged the Codex large-request stability fix: the Responses gateway now accepts request bodies above Axum's default limit and includes regression coverage.
+- Fixed Volcengine Ark Coding Plan routing by recognizing `/v2` and `/v3` OpenAI-compatible Base URLs such as `/api/coding/v3`, and by preserving complete `/chat/completions` endpoint URLs without appending another `/v1` segment.
+- Normalized Codex Responses `developer` messages to Chat Completions `system` messages so providers that only accept `system`, `assistant`, `user`, and `tool` roles can handle Codex traffic.
 - Updated version to `1.7.0` across `package.json`, `Cargo.toml`, `Cargo.lock`, and `tauri.conf.json`.
-- Verification: `pnpm build`, `cargo test` (27 passed), and `CI=false pnpm tauri build --bundles app,dmg`.
+- Verification: `pnpm build`, `cargo test` (28 passed), and `CI=false pnpm tauri build --bundles app,dmg`.
 
 ## 1.6.4 - 2026-05-16
 

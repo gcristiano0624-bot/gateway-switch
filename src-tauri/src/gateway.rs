@@ -743,7 +743,9 @@ fn body_preview(bytes: &Bytes) -> String {
 fn upstream_url(base_url: &str, endpoint: &str) -> String {
     let base = base_url.trim_end_matches('/');
     let endpoint = endpoint.trim_start_matches('/');
-    if base.ends_with("/v1") {
+    if base.ends_with(endpoint) {
+        base.to_string()
+    } else if base.ends_with("/v1") || base.ends_with("/v2") || base.ends_with("/v3") {
         format!("{base}/{endpoint}")
     } else {
         format!("{base}/v1/{endpoint}")

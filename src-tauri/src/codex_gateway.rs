@@ -637,7 +637,7 @@ fn convert_request(body: &Value, upstream_model: &str) -> Value {
         for item in input {
             match item.get("type").and_then(|v| v.as_str()) {
                 Some("message") => {
-                    let role = item.get("role").and_then(|v| v.as_str()).unwrap_or("user");
+                    let role = normalize_chat_role(item.get("role").and_then(|v| v.as_str()).unwrap_or("user"));
                     let content = extract_content_from_item(item);
                     messages.push(json!({"role": role, "content": content}));
                 }
@@ -663,7 +663,7 @@ fn convert_request(body: &Value, upstream_model: &str) -> Value {
                 }
                 _ => {
                     // Try to extract as a simple message
-                    let role = item.get("role").and_then(|v| v.as_str()).unwrap_or("user");
+                    let role = normalize_chat_role(item.get("role").and_then(|v| v.as_str()).unwrap_or("user"));
                     let content = extract_content_from_item(item);
                     if !content.is_empty() {
                         messages.push(json!({"role": role, "content": content}));
@@ -736,6 +736,14 @@ fn convert_request(body: &Value, upstream_model: &str) -> Value {
     }
 
     chat_req
+}
+
+fn normalize_chat_role(role: &str) -> &str {
+    match role {
+        "developer" => "system",
+        "system" | "assistant" | "user" | "tool" => role,
+        _ => "user",
+    }
 }
 
 fn apply_xiaomi_mimo_codex_compat(chat_req: &mut Value, route: &Route) {
@@ -1049,7 +1057,9 @@ fn auth_headers(p: &Provider) -> Vec<(String, String)> {
 fn upstream_url(base_url: &str, endpoint: &str) -> String {
     let base = base_url.trim_end_matches('/');
     let endpoint = endpoint.trim_start_matches('/');
-    if base.ends_with("/v1") {
+    if base.ends_with(endpoint) {
+        base.to_string()
+    } else if base.ends_with("/v1") || base.ends_with("/v2") || base.ends_with("/v3") {
         format!("{base}/{endpoint}")
     } else {
         format!("{base}/v1/{endpoint}")
@@ -1211,6 +1221,33 @@ mod tests {
         assert_eq!(chat_req["messages"][1]["role"], "user");
         assert_eq!(chat_req["messages"][1]["content"], "Hello");
         assert_eq!(chat_req["stream"], false);
+    }
+
+    #[tokio::test]
+    async fn test_codex_developer_role_maps_to_system_for_chat_compat() {
+        let responses_req = json!({
+            "model": "gpt-4o",
+            "input": [
+                {
+                    "type": "message",
+                    "role": "developer",
+                    "content": [{"type": "input_text", "text": "Follow coding-plan constraints."}]
+                },
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Implement the task."}]
+                }
+            ],
+            "stream": true
+        });
+
+        let chat_req = convert_request(&responses_req, "DeepSeek-V4-Pro");
+
+        assert_eq!(chat_req["messages"][0]["role"], "system");
+        assert_eq!(chat_req["messages"][0]["content"], "Follow coding-plan constraints.");
+        assert_eq!(chat_req["messages"][1]["role"], "user");
+        assert_eq!(chat_req["messages"][1]["content"], "Implement the task.");
     }
 
     #[tokio::test]
@@ -1383,7 +1420,7 @@ mod tests {
     }
 
     #[test]
-    fn test_upstream_url_accepts_root_or_v1_base() {
+    fn test_upstream_url_accepts_root_versioned_or_full_endpoint_base() {
         assert_eq!(
             upstream_url("https://api.example.com", "chat/completions"),
             "https://api.example.com/v1/chat/completions"
@@ -1391,6 +1428,14 @@ mod tests {
         assert_eq!(
             upstream_url("https://api.example.com/v1", "chat/completions"),
             "https://api.example.com/v1/chat/completions"
+        );
+        assert_eq!(
+            upstream_url("https://ark.cn-beijing.volces.com/api/coding/v3", "chat/completions"),
+            "https://ark.cn-beijing.volces.com/api/coding/v3/chat/completions"
+        );
+        assert_eq!(
+            upstream_url("https://ark.cn-beijing.volces.com/api/coding/v3/chat/completions", "chat/completions"),
+            "https://ark.cn-beijing.volces.com/api/coding/v3/chat/completions"
         );
     }
 }

@@ -380,6 +380,90 @@ const ZH_TEXT: Record<string, string> = {
   "Add": "添加",
   "Delete": "删除",
   "Loading...": "加载中...",
+  "Config": "配置",
+  "Port": "端口",
+  "Not configured": "未配置",
+  "No providers configured": "暂无服务商配置",
+  "Model": "模型",
+  "Auth Env": "认证环境变量",
+  "Not set": "未设置",
+  "Not bound": "未绑定",
+  "Disabled": "已禁用",
+  "Managed by Gateway Switch": "由 Gateway Switch 接管",
+  "Select provider...": "请选择服务商...",
+  "Default aliases will be used until you add a custom one.": "未添加自定义别名前会使用默认别名。",
+  "Claude Gateway health check passed": "Claude Gateway 健康检查通过",
+  "Claude Gateway health check failed": "Claude Gateway 健康检查失败",
+  "Codex Gateway health check passed": "Codex Gateway 健康检查通过",
+  "Codex Gateway health check failed": "Codex Gateway 健康检查失败",
+  "Claude Code will use the local Claude Gateway and configured Claude routes, including Chat Completions fallback for providers such as XiaoMiMo.": "Claude Code 将使用本地 Claude Gateway 和已配置的 Claude 路由，并支持小米 MiMO 等服务商的 Chat Completions fallback。",
+  "Required for Direct Provider": "直连服务商模式必填",
+  "Missing Anthropic URL": "缺少 Anthropic URL",
+  "Direct Provider writes the provider's Anthropic Base URL and API key into Claude Code. Use Gateway Route when a provider only supports OpenAI Chat Completions.": "直连服务商会把该服务商的 Anthropic Base URL 和 API Key 写入 Claude Code；当服务商只支持 OpenAI Chat Completions 时，请使用 Gateway 路由。",
+  "Writes `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, and `ANTHROPIC_MODEL` into `~/.claude/settings.json`. Claude Desktop binding is not touched.": "写入 `ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN` 和 `ANTHROPIC_MODEL` 到 `~/.claude/settings.json`，不会影响 Claude Desktop 绑定。",
+  "Writes `ANTHROPIC_BASE_URL` from the provider's Anthropic URL. The OpenAI URL is reserved for Codex and Chat Completions fallback.": "从服务商的 Anthropic URL 写入 `ANTHROPIC_BASE_URL`；OpenAI URL 保留给 Codex 和 Chat Completions fallback 使用。",
+  "Last Codex Model": "最近 Codex 模型",
+  "No Codex request yet": "暂无 Codex 请求",
+  "Result": "结果",
+  "Default Codex provider": "默认 Codex 服务商",
+  "Default Model": "默认模型",
+  "Bind writes Gateway Switch into `~/.codex/config.toml` and forces API-key mode for the local gateway. Restart Codex App after binding.": "绑定会把 Gateway Switch 写入 `~/.codex/config.toml`，并强制本地网关使用 API Key 模式。绑定后请重启 Codex App。",
+  "Gateway Switch converts protocol shape; it does not add or remove a model's native reasoning ability. If the upstream model is fast, or does not expose reasoning tokens through Chat Completions, the visible response can be very quick.": "Gateway Switch 只转换协议形态，不会增加或移除模型本身的推理能力。如果上游模型响应很快，或不通过 Chat Completions 暴露推理 token，界面上看到的回复可能会非常快。",
+  "Binding preserves `~/.codex/config.toml` project entries. Existing Codex conversations may still be separated by Codex's own account/provider state, so switching providers can show a different conversation list even when local project trust remains intact.": "绑定会保留 `~/.codex/config.toml` 中的项目配置。已有 Codex 会话仍可能按 Codex 自身账号或服务商状态隔离，因此切换服务商后即使本地项目 trust 仍然保留，也可能看到不同的会话列表。",
+  "Codex Model must match the model used by Codex CLI.": "Codex Model 必须与 Codex CLI 使用的模型名一致。",
+  "If you do not need a disguised name, set Codex Model and Upstream Model to the same third-party model name.": "如果不需要伪装模型名，请把 Codex Model 和 Upstream Model 都设置为同一个第三方模型名。",
+  "This is the model name used in `codex -m ...`.": "这是 `codex -m ...` 使用的模型名。",
+  "This is the actual model name sent to the third-party API.": "这是发送给第三方 API 的真实模型名。",
+  "ready as daily gateway environment": "已可作为日常网关环境使用",
+  "not ready for unattended daily use": "尚不适合无人值守的日常使用",
+  "Bind Codex to Gateway Switch and verify the local /v1/responses health endpoint": "将 Codex 绑定到 Gateway Switch，并验证本地 /v1/responses 健康检查端点",
+  "Bind Claude Desktop to Gateway Switch and verify the local /v1/messages health endpoint": "将 Claude Desktop 绑定到 Gateway Switch，并验证本地 /v1/messages 健康检查端点",
+  "Prove MCP/GitHub readiness inside Claude Desktop and Codex with real tool calls": "在 Claude Desktop 和 Codex 内用真实工具调用验证 MCP/GitHub 就绪状态",
+  "Loaded local app state, settings path, database path, and binding targets": "已加载本地应用状态、设置路径、数据库路径和绑定目标",
+  "Loaded local app state and config paths": "已加载本地应用状态和配置路径",
+  "Codex is not managed yet; repair can apply a backup-backed binding": "Codex 尚未被接管；修复可以在备份后应用绑定",
+  "Compiled UI report and manual remediation list": "已生成界面报告和手动修复清单",
+  "Running on local health endpoint": "本地健康检查端点运行中",
+  "Not managed by Gateway Switch": "未由 Gateway Switch 接管",
+  "Start Claude Gateway": "启动 Claude Gateway",
+  "Gateway was stopped; attempting safe start before Desktop validation": "Gateway 已停止；正在 Desktop 验证前尝试安全启动",
+  "Claude Gateway start result": "Claude Gateway 启动结果",
+  "Claude Gateway start failed": "Claude Gateway 启动失败",
+  "Claude Gateway failed to start": "Claude Gateway 启动失败",
+  "Apply Claude Desktop binding": "应用 Claude Desktop 绑定",
+  "Desktop is not managed by Gateway Switch; creating backup and applying current enabled routes": "Desktop 未由 Gateway Switch 接管；正在创建备份并应用当前启用路由",
+  "Applied Claude Desktop Gateway Switch binding with backup": "已在备份后应用 Claude Desktop Gateway Switch 绑定",
+  "Claude Desktop binding applied": "Claude Desktop 绑定已应用",
+  "Desktop config now points to local Claude Gateway": "Desktop 配置现在指向本地 Claude Gateway",
+  "Claude Desktop binding failed": "Claude Desktop 绑定失败",
+  "Claude Desktop binding check": "Claude Desktop 绑定检查",
+  "Desktop is not managed by Gateway Switch; run repair to apply a safe backup-backed binding": "Desktop 未由 Gateway Switch 接管；请运行修复以在备份后安全绑定",
+  "Claude health endpoint": "Claude 健康检查端点",
+  "Claude Gateway health check": "Claude Gateway 健康检查",
+  "Start Codex Gateway": "启动 Codex Gateway",
+  "Codex Gateway was stopped; attempting safe start before config validation": "Codex Gateway 已停止；正在配置验证前尝试安全启动",
+  "Codex Gateway start result": "Codex Gateway 启动结果",
+  "Codex Gateway start failed": "Codex Gateway 启动失败",
+  "Codex Gateway failed to start": "Codex Gateway 启动失败",
+  "Codex Gateway process": "Codex Gateway 进程",
+  "Apply Codex binding": "应用 Codex 绑定",
+  "Codex is not managed by Gateway Switch; creating backup and applying current default route": "Codex 未由 Gateway Switch 接管；正在创建备份并应用当前默认路由",
+  "Codex binding applied": "Codex 绑定已应用",
+  "Codex config now points to local Responses Gateway": "Codex 配置现在指向本地 Responses Gateway",
+  "Codex binding failed": "Codex 绑定失败",
+  "Codex binding skipped": "Codex 绑定已跳过",
+  "Create at least one enabled Codex route before automatic Codex binding": "自动绑定 Codex 前，请至少创建一条已启用的 Codex 路由",
+  "No enabled Codex route is available": "没有可用的已启用 Codex 路由",
+  "Codex is not managed by Gateway Switch; run repair to apply a backup-backed binding": "Codex 未由 Gateway Switch 接管；请运行修复以在备份后应用绑定",
+  "Codex health endpoint": "Codex 健康检查端点",
+  "Codex Gateway health check": "Codex Gateway 健康检查",
+  "Provider inventory": "服务商盘点",
+  "Claude route inventory": "Claude 路由盘点",
+  "Third-party routing may expose prompts, file contents, tool results, and code to upstream providers; keep official providers as fallback for critical/private tasks": "第三方路由可能会把提示词、文件内容、工具结果和代码暴露给上游服务商；关键或私密任务建议保留官方服务商作为 fallback",
+  "Review provider privacy policy and avoid sending sensitive repositories to untrusted third-party models": "检查服务商隐私政策，避免把敏感仓库发送给不可信的第三方模型",
+  "Enable Auto Start Gateway if Claude Desktop should work immediately after app launch": "如果希望应用启动后 Claude Desktop 立即可用，请开启自动启动 Gateway",
+  "Enable Auto Takeover Desktop if Gateway Switch should re-assert Claude Desktop binding on every launch": "如果希望每次启动时重新确认 Claude Desktop 绑定，请开启自动接管 Desktop",
+  "Compiled UI report, safe-fix results, manual remediation list, and security notes": "已生成界面报告、安全修复结果、手动修复清单和安全说明",
   "Review": "需检查",
   "OK": "正常",
   "ok": "正常",
@@ -390,7 +474,30 @@ const ZH_TEXT: Record<string, string> = {
 };
 
 function tx(text: string, language: Language): string {
-  return language === "zh" ? ZH_TEXT[text] ?? text : text;
+  if (language !== "zh") return text;
+  if (ZH_TEXT[text]) return ZH_TEXT[text];
+
+  const inventory = text.match(/^(\d+) providers, (\d+) Claude routes, (\d+) Codex routes$/);
+  if (inventory) return `${inventory[1]} 个服务商，${inventory[2]} 条 Claude 路由，${inventory[3]} 条 Codex 路由`;
+
+  const enabled = text.match(/^(\d+) enabled (providers|Claude routes?|Codex routes?)$/);
+  if (enabled) {
+    const label = enabled[2] === "providers" ? "已启用服务商" : enabled[2].startsWith("Claude") ? "已启用 Claude 路由" : "已启用 Codex 路由";
+    return `${enabled[1]} 个${label}`;
+  }
+
+  if (text.startsWith("path=")) return text.replace("managed=true", "已接管").replace("managed=false", "未接管").replace("base_url=not configured", "base_url=未配置");
+  if (text.startsWith("status=")) return text.replace("error=none", "error=无");
+  if (text.startsWith("unreachable:")) return text.replace("unreachable:", "无法连接：");
+  if (text.startsWith("Claude Gateway start:")) return `Claude Gateway 启动：${text.slice("Claude Gateway start:".length).trim()}`;
+  if (text.startsWith("Codex Gateway start:")) return `Codex Gateway 启动：${text.slice("Codex Gateway start:".length).trim()}`;
+  if (text.startsWith("Claude Gateway failed to start:")) return `Claude Gateway 启动失败：${text.slice("Claude Gateway failed to start:".length).trim()}`;
+  if (text.startsWith("Codex Gateway failed to start:")) return `Codex Gateway 启动失败：${text.slice("Codex Gateway failed to start:".length).trim()}`;
+  if (text.startsWith("Claude Desktop binding failed:")) return `Claude Desktop 绑定失败：${text.slice("Claude Desktop binding failed:".length).trim()}`;
+  if (text.startsWith("Codex binding failed:")) return `Codex 绑定失败：${text.slice("Codex binding failed:".length).trim()}`;
+  if (text.startsWith("Applied Codex Gateway Switch binding for model")) return `已为模型 ${text.slice("Applied Codex Gateway Switch binding for model".length).trim()} 应用 Codex Gateway Switch 绑定`;
+
+  return text;
 }
 
 const MOCK_STATUS: Status = {
@@ -728,7 +835,11 @@ function App() {
       ? `${t("Exported to")} ${msg.slice("Exported to ".length)}`
       : msg.startsWith("Cold start repair report saved:")
         ? `${t("Cold start repair report saved")}: ${msg.slice("Cold start repair report saved:".length).trim()}`
-        : t(msg);
+        : msg.startsWith("Claude Gateway health check failed:")
+          ? `${t("Claude Gateway health check failed")}: ${msg.slice("Claude Gateway health check failed:".length).trim()}`
+          : msg.startsWith("Codex Gateway health check failed:")
+            ? `${t("Codex Gateway health check failed")}: ${msg.slice("Codex Gateway health check failed:".length).trim()}`
+            : t(msg);
     if (type === "success") { setSuccess(translated); setError(null); }
     else { setError(translated); setSuccess(null); }
     setTimeout(() => { setSuccess(null); setError(null); }, 4000);
@@ -808,8 +919,20 @@ function App() {
   // ---- Actions ----
   const startGw = async () => { try { await invoke("start_gateway"); await loadAll(); flash("Gateway started"); } catch (e) { flash(String(e), "error"); } };
   const stopGw = async () => { try { await invoke("stop_gateway"); await loadAll(); flash("Gateway stopped"); } catch (e) { flash(String(e), "error"); } };
-  const checkHealth = async () => { try { const h = await invoke<Health>("check_gateway_health"); setHealth(h); } catch (e) { flash(String(e), "error"); } };
-  const checkCodexHealth = async () => { try { const h = await invoke<Health>("check_codex_health"); setCodexHealth(h); } catch (e) { flash(String(e), "error"); } };
+  const checkHealth = async () => {
+    try {
+      const h = await invoke<Health>("check_gateway_health");
+      setHealth(h);
+      flash(h.ok ? "Claude Gateway health check passed" : `Claude Gateway health check failed: ${h.message}`, h.ok ? "success" : "error");
+    } catch (e) { flash(String(e), "error"); }
+  };
+  const checkCodexHealth = async () => {
+    try {
+      const h = await invoke<Health>("check_codex_health");
+      setCodexHealth(h);
+      flash(h.ok ? "Codex Gateway health check passed" : `Codex Gateway health check failed: ${h.message}`, h.ok ? "success" : "error");
+    } catch (e) { flash(String(e), "error"); }
+  };
   const bindDesktop = async () => { try { await invoke("apply_binding"); await loadAll(); flash("Desktop bound"); } catch (e) { flash(String(e), "error"); } };
   const restoreDesktop = async () => { try { await invoke("restore_binding"); await loadAll(); flash("Desktop restored"); } catch (e) { flash(String(e), "error"); } };
   const bindClaudeCode = async () => {
@@ -1021,7 +1144,7 @@ function App() {
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.7.0</div>
+          <div className="brand-sub">v1.7.1</div>
         </div>
       </div>
 
@@ -1081,7 +1204,7 @@ function App() {
         <span className="status-text">
           Claude <strong>{status?.gateway_running ? t("Running") : t("Stopped")}</strong> · Codex <strong>{codexStatus?.running ? t("Running") : t("Stopped")}</strong>
         </span>
-        <span className="sidebar-version">v1.7.0</span>
+        <span className="sidebar-version">v1.7.1</span>
       </div>
     </aside>
   );
@@ -1353,11 +1476,11 @@ function App() {
                   {p.anthropic_base_url ? (
                     <span className="url-cell">{p.anthropic_base_url}</span>
                   ) : (
-                    <span className="muted-pill">Not configured</span>
+                    <span className="muted-pill">{t("Not configured")}</span>
                   )}
                 </td>
                 <td><span className="badge badge-blue">{p.auth_header}</span></td>
-                <td><span className={`badge ${p.enabled ? "badge-green" : "badge-gray"}`}>{p.enabled ? "Active" : "Disabled"}</span></td>
+                <td><span className={`badge ${p.enabled ? "badge-green" : "badge-gray"}`}>{p.enabled ? t("Active") : t("Disabled")}</span></td>
                 <td>
                   <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
                     <button className="btn" style={{ padding: "5px 8px" }} onClick={() => editProvider(p)}><IconEdit /></button>
@@ -1371,7 +1494,7 @@ function App() {
                 <td colSpan={6}>
                   <div className="empty-state">
                     <div className="empty-icon">--</div>
-                    <h3>No providers configured</h3>
+                    <h3>{t("No providers configured")}</h3>
                     <p>{t("Click a preset above to get started.")}</p>
                   </div>
                 </td>
@@ -1417,11 +1540,71 @@ function App() {
               <button aria-label={`Delete ${a.alias}`} onClick={() => void removeModelAlias(aliasType, a.id, a.alias)}><IconX /></button>
             </span>
           ))}
-          {aliases.length === 0 && <span className="alias-empty">Default aliases will be used until you add a custom one.</span>}
+          {aliases.length === 0 && <span className="alias-empty">{t("Default aliases will be used until you add a custom one.")}</span>}
         </div>
       </div>
     );
   };
+  const DesktopBindingCard = () => (
+    <div className="card">
+      <div className="card-title">{t("Binding Status")}</div>
+      <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+        <span className="info-key">{t("Config File")}</span>
+        <span className="info-val">{desktop?.config_path ?? "-"}</span>
+        <span className="info-key">Base URL</span>
+        <span className="info-val">{desktop?.base_url ?? t("Not set")}</span>
+        <span className="info-key">{t("Local Gateway Auth")}</span>
+        <span className="info-val">{desktop?.auth_scheme ?? t("Not set")}</span>
+        <span className="info-key">{t("Backup")}</span>
+        <span className="info-val">{desktop?.backup_path ? t("Available") : t("None")}</span>
+        <span className="info-key">{t("Status")}</span>
+        <span className="info-val">
+          <span className={`badge ${desktop?.managed ? "badge-green" : "badge-gray"}`}>
+            {desktop?.managed ? t("Managed") : t("Unmanaged")}
+          </span>
+        </span>
+      </div>
+      <div className="qa-buttons" style={{ marginTop: 16 }}>
+        <button className="btn btn-primary" onClick={bindDesktop}>
+          <IconLink /> {t("Bind Desktop")}
+        </button>
+        <button className="btn" onClick={restoreDesktop}>
+          <IconUnlink /> {t("Restore")}
+        </button>
+      </div>
+    </div>
+  );
+
+  const DesktopExposedModelsCard = () => (
+    <div className="card">
+      <div className="card-title">{t("Exposed Models")}</div>
+      {desktop?.models && desktop.models.length > 0 ? (
+        <div className="route-list" style={{ marginBottom: 0 }}>
+          {desktop.models.map(m => (
+            <div key={m} className="route-item">
+              <div className={`route-icon ${getModelFamily(m)}`}>
+                {getModelAbbrev(m)}
+              </div>
+              <div className="route-info">
+                <div className="route-name">{m}</div>
+                <div className="route-path">{t("Exposed to Claude Desktop")}</div>
+              </div>
+              <span className="route-status active">
+                <IconCheck /> {t("Active")}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state">
+          <div className="empty-icon">--</div>
+          <h3>{t("No models exposed")}</h3>
+          <p>{t("Bind Desktop first to expose models.")}</p>
+        </div>
+      )}
+    </div>
+  );
+
 
   const ClaudePage = () => (
     <div>
@@ -1430,32 +1613,46 @@ function App() {
         <p>{t("Configure Claude model routes and Claude Desktop binding")}</p>
       </div>
 
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-title">{t("Claude Gateway Status")}</div>
-        <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
-          <span className="info-key">{t("Status")}</span>
-          <span className="info-val">
-            <span className={`badge ${status?.gateway_running ? "badge-green" : "badge-gray"}`}>
-              {status?.gateway_running ? "Running" : "Stopped"}
+      <div className="two-col">
+        <div className="card">
+          <div className="card-title">{t("Claude Gateway Status")}</div>
+          <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+            <span className="info-key">{t("Status")}</span>
+            <span className="info-val">
+              <span className={`badge ${status?.gateway_running ? "badge-green" : "badge-gray"}`}>
+                {status?.gateway_running ? t("Running") : t("Stopped")}
+              </span>
             </span>
-          </span>
-          <span className="info-key">Port</span>
-          <span className="info-val">{status?.gateway_port ?? settings?.listen_port ?? 3456}</span>
-          <span className="info-key">Desktop URL</span>
-          <span className="info-val">http://127.0.0.1:{status?.gateway_port ?? settings?.listen_port ?? 3456}</span>
-        </div>
-        <div className="qa-buttons" style={{ marginTop: 16 }}>
-          {status?.gateway_running ? (
-            <button className="btn btn-danger" onClick={stopGw}><IconStop /> {t("Stop")}</button>
-          ) : (
-            <button className="btn btn-primary" onClick={startGw}><IconPlay /> {t("Start")}</button>
+            <span className="info-key">{t("Port")}</span>
+            <span className="info-val">{status?.gateway_port ?? settings?.listen_port ?? 3456}</span>
+            <span className="info-key">Desktop URL</span>
+            <span className="info-val">http://127.0.0.1:{status?.gateway_port ?? settings?.listen_port ?? 3456}</span>
+          </div>
+          {health && (
+            <div className="health-row">
+              <span className="health-label">Claude</span>
+              <div className="health-bar-track">
+                <div className={`health-bar-fill ${health.ok ? "" : "err"}`} style={{ width: health.ok ? "100%" : "0%" }} />
+              </div>
+              <span className={`health-text ${health.ok ? "ok" : "err"}`}>
+                {health.message}{health.latency_ms != null ? ` · ${health.latency_ms}ms` : ""}
+              </span>
+            </div>
           )}
-          <button className="btn" onClick={checkHealth}><IconZap /> {t("Check Health")}</button>
-          <button className="btn" onClick={() => void loadAll()}><IconRefresh /> {t("Refresh")}</button>
+          <div className="qa-buttons" style={{ marginTop: 16 }}>
+            {status?.gateway_running ? (
+              <button className="btn btn-danger" onClick={stopGw}><IconStop /> {t("Stop")}</button>
+            ) : (
+              <button className="btn btn-primary" onClick={startGw}><IconPlay /> {t("Start")}</button>
+            )}
+            <button className="btn" onClick={checkHealth}><IconZap /> {t("Check Health")}</button>
+            <button className="btn" onClick={() => void loadAll()}><IconRefresh /> {t("Refresh")}</button>
+          </div>
         </div>
+
+        {DesktopBindingCard()}
       </div>
 
-      {/* Add/Edit form */}
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-title">{editingR ? t("Edit Route") : t("Add Route")}</div>
         <div className="form-row">
@@ -1476,7 +1673,7 @@ function App() {
           <div className="form-field">
             <label>{t("Provider")}</label>
             <select value={rForm.provider_id} onChange={e => setRForm({ ...rForm, provider_id: e.target.value })}>
-              <option value="">Select provider...</option>
+              <option value="">{t("Select provider...")}</option>
               {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
@@ -1487,7 +1684,7 @@ function App() {
         </div>
         <div className="qa-buttons" style={{ marginTop: 16 }}>
           <button className="btn btn-primary" onClick={saveRoute}>
-            {editingR ? <><IconEdit /> Save</> : <><IconPlus /> Add Route</>}
+            {editingR ? <><IconEdit /> {t("Save")}</> : <><IconPlus /> {t("Add Route")}</>}
           </button>
           {editingR && (
             <button className="btn" onClick={() => {
@@ -1500,47 +1697,51 @@ function App() {
 
       {AliasManager("claude")}
 
-      {/* Route cards */}
-      <div className="section-label">{t("Route Cards")}</div>
-      <div className="route-list" style={{ marginBottom: 20 }}>
-        {routes.length > 0 ? (
-          routes.map(r => (
-            <div key={r.id} className="route-item">
-              <div className={`route-icon ${getModelFamily(r.claude_alias)}`}>
-                {getModelAbbrev(r.claude_alias)}
+      <div className="two-col">
+        <div className="card">
+          <div className="card-title">{t("Route Cards")}</div>
+          <div className="route-list" style={{ marginBottom: 0 }}>
+            {routes.length > 0 ? (
+              routes.map(r => (
+                <div key={r.id} className="route-item">
+                  <div className={`route-icon ${getModelFamily(r.claude_alias)}`}>
+                    {getModelAbbrev(r.claude_alias)}
+                  </div>
+                  <div className="route-info">
+                    <div className="route-name">{r.claude_alias}</div>
+                    <div className="route-path">{r.display_name || r.upstream_model} via {r.provider_id}</div>
+                  </div>
+                  <span className={`route-status ${r.enabled ? "active" : "disabled"}`}>
+                    {r.enabled ? t("Active") : t("Disabled")}
+                  </span>
+                  <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
+                    <button className="btn" style={{ padding: "5px 8px" }} onClick={() => editRoute(r)}><IconEdit /></button>
+                    <button className="btn btn-danger" style={{ padding: "5px 8px" }} onClick={() => delRoute(r.id)}><IconTrash /></button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="empty-state">
+                <div className="empty-icon">--</div>
+                <h3>{t("No routes configured")}</h3>
+                <p>{t("Add a route above to start mapping models.")}</p>
               </div>
-              <div className="route-info">
-                <div className="route-name">{r.claude_alias}</div>
-                <div className="route-path">{r.display_name || r.upstream_model} via {r.provider_id}</div>
-              </div>
-              <span className={`route-status ${r.enabled ? "active" : "disabled"}`}>
-                {r.enabled ? "Active" : "Disabled"}
-              </span>
-              <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
-                <button className="btn" style={{ padding: "5px 8px" }} onClick={() => editRoute(r)}><IconEdit /></button>
-                <button className="btn btn-danger" style={{ padding: "5px 8px" }} onClick={() => delRoute(r.id)}><IconTrash /></button>
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className="empty-state">
-            <div className="empty-icon">--</div>
-            <h3>{t("No routes configured")}</h3>
-            <p>{t("Add a route above to start mapping models.")}</p>
+            )}
           </div>
-        )}
+        </div>
+
+        {DesktopExposedModelsCard()}
       </div>
 
-      {/* Routes table */}
       <div className="section-label">{t("Route Table")}</div>
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
               <th>Claude Alias</th>
-              <th>Display Name</th>
+              <th>{t("Display Name")}</th>
               <th>{t("Provider")}</th>
-              <th>Upstream Model</th>
+              <th>{t("Upstream Model")}</th>
               <th>{t("Status")}</th>
               <th>{t("Actions")}</th>
             </tr>
@@ -1552,7 +1753,7 @@ function App() {
                 <td>{r.display_name}</td>
                 <td><span className="badge badge-blue">{r.provider_id}</span></td>
                 <td style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{r.upstream_model}</td>
-                <td><span className={`badge ${r.enabled ? "badge-green" : "badge-gray"}`}>{r.enabled ? "Active" : "Disabled"}</span></td>
+                <td><span className={`badge ${r.enabled ? "badge-green" : "badge-gray"}`}>{r.enabled ? t("Active") : t("Disabled")}</span></td>
                 <td>
                   <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
                     <button className="btn" style={{ padding: "5px 8px" }} onClick={() => editRoute(r)}><IconEdit /></button>
@@ -1575,9 +1776,6 @@ function App() {
           </tbody>
         </table>
       </div>
-
-      <div className="section-label">{t("Claude Desktop")}</div>
-      {DesktopPage()}
     </div>
   );
 
@@ -1597,22 +1795,22 @@ function App() {
           <div className="card">
             <div className="card-title">{t("Claude Code Binding")}</div>
             <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
-              <span className="info-key">Config</span>
+              <span className="info-key">{t("Config")}</span>
               <span className="info-val">{claudeCode?.config_path ?? "~/.claude/settings.json"}</span>
               <span className="info-key">{t("Status")}</span>
               <span className="info-val">
                 <span className={`badge ${claudeCode?.managed ? "badge-green" : "badge-gray"}`}>
-                  {claudeCode?.managed ? "Managed by Gateway Switch" : "Not bound"}
+                  {claudeCode?.managed ? t("Managed by Gateway Switch") : t("Not bound")}
                 </span>
               </span>
               <span className="info-key">Base URL</span>
-              <span className="info-val">{claudeCode?.base_url ?? "Not set"}</span>
-              <span className="info-key">Model</span>
-              <span className="info-val">{claudeCode?.model ?? "Not set"}</span>
-              <span className="info-key">Auth Env</span>
-              <span className="info-val">{claudeCode?.auth_env ?? "Not set"}</span>
+              <span className="info-val">{claudeCode?.base_url ?? t("Not set")}</span>
+              <span className="info-key">{t("Model")}</span>
+              <span className="info-val">{claudeCode?.model ?? t("Not set")}</span>
+              <span className="info-key">{t("Auth Env")}</span>
+              <span className="info-val">{claudeCode?.auth_env ?? t("Not set")}</span>
               <span className="info-key">{t("Backup")}</span>
-              <span className="info-val">{claudeCode?.backup_path ? "Available" : "None"}</span>
+              <span className="info-val">{claudeCode?.backup_path ? t("Available") : t("None")}</span>
             </div>
           </div>
 
@@ -1621,11 +1819,11 @@ function App() {
             <div className="mode-switch">
               <button className={`mode-option ${ccMode === "gateway" ? "active" : ""}`} onClick={() => setCcMode("gateway")}>
                 <IconShuffle />
-                <span>Gateway Route</span>
+                <span>{t("Gateway Route")}</span>
               </button>
               <button className={`mode-option ${ccMode === "provider" ? "active" : ""}`} onClick={() => setCcMode("provider")}>
                 <IconSun />
-                <span>Direct Provider</span>
+                <span>{t("Direct Provider")}</span>
               </button>
             </div>
 
@@ -1637,7 +1835,7 @@ function App() {
                     <option key={model} value={model}>{model}</option>
                   ))}
                 </select>
-                <p>Claude Code will use the local Claude Gateway at `http://127.0.0.1:{status?.gateway_port ?? settings?.listen_port ?? 3456}`. This supports your configured Claude routes, including Chat Completions fallback for providers such as XiaoMiMo.</p>
+                <p>{t("Claude Code will use the local Claude Gateway and configured Claude routes, including Chat Completions fallback for providers such as XiaoMiMo.")}</p>
               </div>
             ) : (
               <div className="binding-actions" style={{ marginTop: 16 }}>
@@ -1648,7 +1846,7 @@ function App() {
                   const route = routes.find(r => r.provider_id === providerId);
                   if (route && !ccUpstreamModel) setCcUpstreamModel(route.upstream_model);
                 }}>
-                  <option value="">Select provider...</option>
+                  <option value="">{t("Select provider...")}</option>
                   {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
                 {selectedProvider && (
@@ -1659,18 +1857,18 @@ function App() {
                     </div>
                     <div className={selectedProvider.anthropic_base_url ? "" : "missing"}>
                       <span>Anthropic</span>
-                      <code>{selectedProvider.anthropic_base_url || "Required for Direct Provider"}</code>
+                      <code>{selectedProvider.anthropic_base_url || t("Required for Direct Provider")}</code>
                     </div>
                   </div>
                 )}
                 <label>{t("Upstream model")}</label>
                 <input value={ccUpstreamModel} onChange={e => setCcUpstreamModel(e.target.value)} placeholder="e.g. claude-sonnet-4-5" />
-                <p>Direct Provider writes the provider's Anthropic Base URL and API key into Claude Code. Use Gateway Route when a provider only supports OpenAI Chat Completions.</p>
+                <p>{t("Direct Provider writes the provider's Anthropic Base URL and API key into Claude Code. Use Gateway Route when a provider only supports OpenAI Chat Completions.")}</p>
                 {selectedProvider && (
                   <div className="route-flow">
                     <span>{selectedProvider.name}</span>
                     <IconArrowRight />
-                    <span>{selectedProvider.anthropic_base_url || "Missing Anthropic URL"}</span>
+                    <span>{selectedProvider.anthropic_base_url || t("Missing Anthropic URL")}</span>
                     <IconArrowRight />
                     <span><b>{ccUpstreamModel || "model"}</b></span>
                   </div>
@@ -1689,12 +1887,12 @@ function App() {
           <div className="card-title">{t("Runtime Environment")}</div>
           <div className="note-grid">
             <div>
-              <strong>Gateway Route</strong>
-              <p>Writes `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, and `ANTHROPIC_MODEL` into `~/.claude/settings.json`. Claude Desktop binding is not touched.</p>
+              <strong>{t("Gateway Route")}</strong>
+              <p>{t("Writes `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, and `ANTHROPIC_MODEL` into `~/.claude/settings.json`. Claude Desktop binding is not touched.")}</p>
             </div>
             <div>
-              <strong>Direct Provider</strong>
-              <p>Writes `ANTHROPIC_BASE_URL` from the provider's Anthropic URL. The OpenAI URL is reserved for Codex and Chat Completions fallback.</p>
+              <strong>{t("Direct Provider")}</strong>
+              <p>{t("Writes `ANTHROPIC_BASE_URL` from the provider's Anthropic URL. The OpenAI URL is reserved for Codex and Chat Completions fallback.")}</p>
             </div>
           </div>
         </div>
@@ -1720,10 +1918,10 @@ function App() {
             <span className="info-key">{t("Status")}</span>
             <span className="info-val">
               <span className={`badge ${codexStatus?.running ? "badge-green" : "badge-gray"}`}>
-                {codexStatus?.running ? "Running" : "Stopped"}
+                {codexStatus?.running ? t("Running") : t("Stopped")}
               </span>
             </span>
-            <span className="info-key">Port</span>
+            <span className="info-key">{t("Port")}</span>
             <span className="info-val">{codexPort}</span>
             <span className="info-key">Endpoint</span>
             <span className="info-val">http://127.0.0.1:{codexPort}/v1/responses</span>
@@ -1751,13 +1949,13 @@ function App() {
         <div className="card">
           <div className="card-title">{t("Verify Real Model")}</div>
           <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
-            <span className="info-key">Last Codex Model</span>
-            <span className="info-val">{latestCodexLog?.claude_alias ?? "No Codex request yet"}</span>
-            <span className="info-key">Provider</span>
+            <span className="info-key">{t("Last Codex Model")}</span>
+            <span className="info-val">{latestCodexLog?.claude_alias ?? t("No Codex request yet")}</span>
+            <span className="info-key">{t("Provider")}</span>
             <span className="info-val">{latestCodexLog?.provider_id ?? "-"}</span>
-            <span className="info-key">Real Upstream</span>
+            <span className="info-key">{t("Real Upstream")}</span>
             <span className="info-val">{latestCodexLog?.upstream_model ?? "-"}</span>
-            <span className="info-key">Result</span>
+            <span className="info-key">{t("Result")}</span>
             <span className="info-val">
               {latestCodexLog ? `${latestCodexLog.status_code ?? "pending"} · ${latestCodexLog.duration_ms ?? "-"}ms` : "-"}
             </span>
@@ -1769,51 +1967,53 @@ function App() {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-title">{t("Codex App Binding")}</div>
-        <div className="binding-panel">
-          <div className="binding-state">
-            <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
-              <span className="info-key">Config</span>
-              <span className="info-val">{codexBinding?.config_path ?? "~/.codex/config.toml"}</span>
-              <span className="info-key">Binding</span>
-              <span className="info-val">
-                <span className={`badge ${codexBinding?.managed ? "badge-green" : "badge-gray"}`}>
-                  {codexBinding?.managed ? "Managed by Gateway Switch" : "Not bound"}
+      <div className="two-col">
+        <div className="card">
+          <div className="card-title">{t("Codex App Binding")}</div>
+          <div className="binding-panel">
+            <div className="binding-state">
+              <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+                <span className="info-key">{t("Config")}</span>
+                <span className="info-val">{codexBinding?.config_path ?? "~/.codex/config.toml"}</span>
+                <span className="info-key">{t("Binding")}</span>
+                <span className="info-val">
+                  <span className={`badge ${codexBinding?.managed ? "badge-green" : "badge-gray"}`}>
+                    {codexBinding?.managed ? t("Managed by Gateway Switch") : t("Not bound")}
+                  </span>
                 </span>
-              </span>
-              <span className="info-key">Provider</span>
-              <span className="info-val">{codexBinding?.model_provider ?? "Default Codex provider"}</span>
-              <span className="info-key">Default Model</span>
-              <span className="info-val">{codexBinding?.model ?? "Not set"}</span>
+                <span className="info-key">{t("Provider")}</span>
+                <span className="info-val">{codexBinding?.model_provider ?? t("Default Codex provider")}</span>
+                <span className="info-key">{t("Default Model")}</span>
+                <span className="info-val">{codexBinding?.model ?? t("Not set")}</span>
+              </div>
             </div>
-          </div>
-          <div className="binding-actions">
-            <label>{t("Default model for Codex App")}</label>
-            <select value={codexBindModel} onChange={e => setCodexBindModel(e.target.value)}>
-              {Array.from(new Set([...codexRoutes.map(r => r.codex_model), ...codexModelOptions])).map(model => (
-                <option key={model} value={model}>{model}</option>
-              ))}
-            </select>
-            <p>Bind writes Gateway Switch into `~/.codex/config.toml` and forces API-key mode for the local gateway. Restart Codex App after binding.</p>
-            <div className="qa-buttons" style={{ margin: 0 }}>
-              <button className="btn btn-primary" onClick={bindCodexApp}><IconLink /> {t("Start & Bind Codex App")}</button>
-              <button className="btn" onClick={restoreCodexApp} disabled={!codexBinding?.managed && !codexBinding?.backup_path}><IconUnlink /> {t("Restore")} OpenAI Login</button>
+            <div className="binding-actions">
+              <label>{t("Default model for Codex App")}</label>
+              <select value={codexBindModel} onChange={e => setCodexBindModel(e.target.value)}>
+                {Array.from(new Set([...codexRoutes.map(r => r.codex_model), ...codexModelOptions])).map(model => (
+                  <option key={model} value={model}>{model}</option>
+                ))}
+              </select>
+              <p>{t("Bind writes Gateway Switch into `~/.codex/config.toml` and forces API-key mode for the local gateway. Restart Codex App after binding.")}</p>
+              <div className="qa-buttons" style={{ margin: 0 }}>
+                <button className="btn btn-primary" onClick={bindCodexApp}><IconLink /> {t("Start & Bind Codex App")}</button>
+                <button className="btn" onClick={restoreCodexApp} disabled={!codexBinding?.managed && !codexBinding?.backup_path}><IconUnlink /> {t("Restore OpenAI Login")}</button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-title">{t("Context and Reasoning Notes")}</div>
-        <div className="note-grid">
-          <div>
-            <strong>{t("Reply speed")}</strong>
-            <p>Gateway Switch converts protocol shape; it does not add or remove a model's native reasoning ability. If the upstream model is fast, or does not expose reasoning tokens through Chat Completions, the visible response can be very quick.</p>
-          </div>
-          <div>
-            <strong>{t("Project history")}</strong>
-            <p>Binding preserves `~/.codex/config.toml` project entries. Existing Codex conversations may still be separated by Codex's own account/provider state, so switching providers can show a different conversation list even when local project trust remains intact.</p>
+        <div className="card">
+          <div className="card-title">{t("Context and Reasoning Notes")}</div>
+          <div className="note-grid">
+            <div>
+              <strong>{t("Reply speed")}</strong>
+              <p>{t("Gateway Switch converts protocol shape; it does not add or remove a model's native reasoning ability. If the upstream model is fast, or does not expose reasoning tokens through Chat Completions, the visible response can be very quick.")}</p>
+            </div>
+            <div>
+              <strong>{t("Project history")}</strong>
+              <p>{t("Binding preserves `~/.codex/config.toml` project entries. Existing Codex conversations may still be separated by Codex's own account/provider state, so switching providers can show a different conversation list even when local project trust remains intact.")}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -1823,13 +2023,13 @@ function App() {
         <div className="card-title">{editingC ? t("Edit Codex Route") : t("Add Codex Route")}</div>
         <div className="route-explainer">
           <div className="route-explainer-copy">
-            <strong>Codex Model must match the model used by Codex CLI.</strong>
-            <span>If you do not need a disguised name, set Codex Model and Upstream Model to the same third-party model name.</span>
+            <strong>{t("Codex Model must match the model used by Codex CLI.")}</strong>
+            <span>{t("If you do not need a disguised name, set Codex Model and Upstream Model to the same third-party model name.")}</span>
           </div>
           <div className="route-flow">
             <span>codex -m <b>{cForm.codex_model || "model-name"}</b></span>
             <IconArrowRight />
-            <span>{providers.find(p => p.id === cForm.provider_id)?.name || "Provider"}</span>
+            <span>{providers.find(p => p.id === cForm.provider_id)?.name || t("Provider")}</span>
             <IconArrowRight />
             <span><b>{cForm.upstream_model || "upstream-model"}</b></span>
           </div>
@@ -1844,7 +2044,7 @@ function App() {
             <select value={cForm.codex_model} onChange={e => setCForm({ ...cForm, codex_model: e.target.value })}>
               {codexModelOptions.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
-            <span className="field-hint">This is the model name used in `codex -m ...`.</span>
+            <span className="field-hint">{t("This is the model name used in `codex -m ...`.")}</span>
           </div>
           <div className="form-field">
             <label>{t("Display Name")}</label>
@@ -1853,19 +2053,19 @@ function App() {
           <div className="form-field">
             <label>{t("Provider")}</label>
             <select value={cForm.provider_id} onChange={e => setCForm({ ...cForm, provider_id: e.target.value })}>
-              <option value="">Select provider...</option>
+              <option value="">{t("Select provider...")}</option>
               {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
           <div className="form-field">
             <label>{t("Upstream Model (real provider model)")}</label>
             <input value={cForm.upstream_model} onChange={e => setCForm({ ...cForm, upstream_model: e.target.value })} placeholder="e.g. deepseek-chat" />
-            <span className="field-hint">This is the actual model name sent to the third-party API.</span>
+            <span className="field-hint">{t("This is the actual model name sent to the third-party API.")}</span>
           </div>
         </div>
         <div className="qa-buttons" style={{ marginTop: 16 }}>
           <button className="btn btn-primary" onClick={saveCodexRoute}>
-            {editingC ? <><IconEdit /> Save</> : <><IconPlus /> Add Route</>}
+            {editingC ? <><IconEdit /> {t("Save")}</> : <><IconPlus /> {t("Add Route")}</>}
           </button>
           {editingC && (
             <button className="btn" onClick={() => {
@@ -1892,7 +2092,7 @@ function App() {
                 <div className="route-path">{r.display_name || r.upstream_model} via {r.provider_id}</div>
               </div>
               <span className={`route-status ${r.enabled ? "active" : "disabled"}`}>
-                {r.enabled ? "Active" : "Disabled"}
+                {r.enabled ? t("Active") : t("Disabled")}
               </span>
               <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
                 <button className="btn" style={{ padding: "5px 8px" }} onClick={() => editCodexRoute(r)}><IconEdit /></button>
@@ -1907,73 +2107,6 @@ function App() {
             <p>{t("Add a route above to start mapping Codex models.")}</p>
           </div>
         )}
-      </div>
-    </div>
-  );
-
-  // =====================================================
-  //  DESKTOP PAGE
-  // =====================================================
-  const DesktopPage = () => (
-    <div>
-      <div className="two-col">
-        {/* Binding Status */}
-        <div className="card">
-          <div className="card-title">{t("Binding Status")}</div>
-          <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
-            <span className="info-key">{t("Config File")}</span>
-            <span className="info-val">{desktop?.config_path ?? "-"}</span>
-            <span className="info-key">Base URL</span>
-            <span className="info-val">{desktop?.base_url ?? "Not set"}</span>
-            <span className="info-key">{t("Local Gateway Auth")}</span>
-            <span className="info-val">{desktop?.auth_scheme ?? "Not set"}</span>
-            <span className="info-key">{t("Backup")}</span>
-            <span className="info-val">{desktop?.backup_path ? "Available" : "None"}</span>
-            <span className="info-key">{t("Status")}</span>
-            <span className="info-val">
-              <span className={`badge ${desktop?.managed ? "badge-green" : "badge-gray"}`}>
-                {desktop?.managed ? "Managed" : "Unmanaged"}
-              </span>
-            </span>
-          </div>
-          <div className="qa-buttons" style={{ marginTop: 16 }}>
-            <button className="btn btn-primary" onClick={bindDesktop}>
-              <IconLink /> {t("Bind Desktop")}
-            </button>
-            <button className="btn" onClick={restoreDesktop}>
-              <IconUnlink /> {t("Restore")}
-            </button>
-          </div>
-        </div>
-
-        {/* Exposed Models */}
-        <div className="card">
-          <div className="card-title">{t("Exposed Models")}</div>
-          {desktop?.models && desktop.models.length > 0 ? (
-            <div className="route-list">
-              {desktop.models.map(m => (
-                <div key={m} className="route-item">
-                  <div className={`route-icon ${getModelFamily(m)}`}>
-                    {getModelAbbrev(m)}
-                  </div>
-                  <div className="route-info">
-                    <div className="route-name">{m}</div>
-                    <div className="route-path">{t("Exposed to Claude Desktop")}</div>
-                  </div>
-                  <span className="route-status active">
-                    <IconCheck /> {t("Active")}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state">
-              <div className="empty-icon">--</div>
-              <h3>{t("No models exposed")}</h3>
-              <p>{t("Bind Desktop first to expose models.")}</p>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -2159,7 +2292,7 @@ function App() {
             <div className="cold-result-block">
               <strong>{t("Auto fixes applied")}</strong>
               {report.auto_fixes_applied.length > 0 ? (
-                report.auto_fixes_applied.map(item => <p key={item}><IconCheck /> {item}</p>)
+                report.auto_fixes_applied.map(item => <p key={item}><IconCheck /> {t(item)}</p>)
               ) : (
                 <p className="muted-line">{t("No automatic fix has been applied in the latest check.")}</p>
               )}
@@ -2167,7 +2300,7 @@ function App() {
             <div className="cold-result-block">
               <strong>{t("Manual fixes required")}</strong>
               {report.manual_fixes_required.length > 0 ? (
-                report.manual_fixes_required.slice(0, 5).map(item => <p key={item}><IconArrowRight /> {item}</p>)
+                report.manual_fixes_required.slice(0, 5).map(item => <p key={item}><IconArrowRight /> {t(item)}</p>)
               ) : (
                 <p className="muted-line">{t("No manual action required.")}</p>
               )}

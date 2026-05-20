@@ -2,6 +2,17 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.7.1 - 2026-05-20
+
+- Enhanced Claude Desktop binding for newer developer-mode model entries: route display names are written as `displayName`, and exposed models default to `supports1m: true` for the 1M-context variant.
+- Fixed the Claude page health check button by showing the latest health result inline and surfacing success/failure feedback.
+- Reordered the Claude page into the requested five-row layout: gateway/binding status, route editor, Claude aliases, route cards/exposed models, and route table.
+- Reordered the Codex page so gateway status and real-model verification stay on row 1, while Codex App binding and context/reasoning notes share row 2.
+- Completed Chinese localization for Claude Code runtime notes, Codex context and route-copy text, and Cold Start Doctor diagnostic details.
+- Removed temporary Codex stream-disconnect debug instrumentation and debug files before the formal release.
+- Updated version to `1.7.1` across `package.json`, `Cargo.toml`, `Cargo.lock`, `tauri.conf.json`, and the app sidebar labels.
+- Verification: `pnpm build`, `PATH="$HOME/.cargo/bin:$PATH" cargo test` (29 passed), and `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`.
+
 ## 1.7.0 - 2026-05-18
 
 - Added bilingual UI support for Chinese and English, with Chinese as the default language and a Settings toggle for switching the interface language.
@@ -35,7 +46,7 @@ This file tracks user-visible Gateway Switch changes so future AI agents can qui
 - Redesigned the in-app brand mark, App Icon, and tray/status icon around a white `Gateway Pin` route symbol with a Claude oxblood center point.
 - Updated typography to Geist, Fraunces, and Geist Mono and aligned buttons, tables, forms, badges, health bars, provider cards, and route cards with the new visual system.
 - Updated version to `1.6.3` across `package.json`, `Cargo.toml`, `Cargo.lock`, and `tauri.conf.json`.
-- Verification: `pnpm build`, `cargo test`, and `pnpm tauri build`.
+- Verification: `pnpm build`, `PATH="$HOME/.cargo/bin:$PATH" cargo test` (29 passed), and `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`.
 
 ## 1.6.2 - 2026-05-11
 

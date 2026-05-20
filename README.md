@@ -6,7 +6,7 @@
 
 > Gateway Switch 不仅仅是一个模型路由器。它是一个**运行时兼容性层**，驻留在 AI 原生桌面应用与第三方模型服务之间，弥合协议鸿沟、修复畸形工具调用、强制安全边界，并在上游 Provider 异常时优雅降级。
 
-[![Version](https://img.shields.io/badge/Version-1.7.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.7.1-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -142,6 +142,16 @@ Claude 和 Codex 的 `/health` 端点会暴露这些画像，外部工具无需�
 
 ---
 
+## 1.7.1 更新重点
+
+- **增强 Claude Desktop 绑定。** 绑定时会把路由显示名称写入 Claude Desktop 的 `displayName`，并默认写入 `supports1m: true`，对应新版开发者模式中的 1M context variant。
+- **修复 Claude 健康检查反馈。** Claude 页面点击“检查健康状态”后会在卡片内展示健康检查结果，并显示成功或失败提示。
+- **重排 Claude 与 Codex 页面。** Claude 页面按 Gateway/绑定、编辑路由、Aliases、路由卡片/暴露模型、路由表的顺序展示；Codex 页面前两行改为状态/验证、绑定/上下文说明的两列结构。
+- **补齐中文界面文案。** Claude Code 运行环境、Codex 上下文与路由表单、Cold Start Doctor 诊断结果在中文模式下不再大量显示英文。
+- **清理调试残留。** 正式包移除了上一轮 Codex stream-disconnect 调试埋点与临时调试文件。
+- 版本更新并发布为 `1.7.1`。
+- 最新验证：`pnpm build`、`PATH="$HOME/.cargo/bin:$PATH" cargo test`（29 passed）、`CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`。
+
 ## 1.7.0 更新重点
 
 - **新增 Cold Start Doctor。** 新增冷启动检查与安全修复页，覆盖 Claude Desktop、Claude Code、Codex App、本地 Gateway、Provider、路由与安全风险检查。
@@ -168,7 +178,7 @@ Claude 和 Codex 的 `/health` 端点会暴露这些画像，外部工具无需�
 - 重构 App Icon 与状态栏图标：白底图标，中间为 `Gateway Pin` 路由图案与 Claude 暗红中心点，表达多客户端请求被网关路由到正确上游 Provider。
 - 前端视觉系统切换到 Geist / Fraunces / Geist Mono 字体组合，并统一卡片、表格、表单、按钮、徽标、健康状态条的 warm native 风格。
 - 版本统一更新为 `1.6.3`。
-- 最新验证：`pnpm build`、`cargo test`、`pnpm tauri build`。
+- 最新验证：`pnpm build`、`PATH="$HOME/.cargo/bin:$PATH" cargo test`（29 passed）、`CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`。
 
 ## 1.6.2 更新重点
 
@@ -427,7 +437,7 @@ pnpm tauri build
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.7.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.7.1_aarch64.dmg
 ```
 
 ---

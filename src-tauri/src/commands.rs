@@ -204,7 +204,7 @@ pub fn get_desktop_info(st: State<'_, AppState>) -> Result<desktop_binding::Desk
 pub fn apply_binding(st: State<'_, AppState>) -> Result<desktop_binding::DesktopInfo, String> {
     let profile = database::get_profile(&st.db_path)?;
     let routes = database::list_routes(&st.db_path)?;
-    let models: Vec<String> = routes.into_iter().filter(|r| r.enabled).map(|r| r.claude_alias).collect();
+    let models = desktop_binding::model_configs_from_routes(&routes);
     desktop_binding::apply(
         &dirs::home_dir().ok_or("no home")?,
         &desktop_binding::gateway_base_url(&profile.listen_host, profile.listen_port),
@@ -570,7 +570,7 @@ async fn run_coldstart_checks(st: &AppState, apply_fixes: bool) -> Result<ColdSt
 
     if apply_fixes && !desktop.managed && !enabled_routes.is_empty() {
         cold_log(&mut steps, "desktop_apply", "Apply Claude Desktop binding", "Claude", "running", "Desktop is not managed by Gateway Switch; creating backup and applying current enabled routes");
-        let models: Vec<String> = enabled_routes.iter().map(|r| r.claude_alias.clone()).collect();
+        let models = desktop_binding::model_configs_from_routes(&enabled_routes);
         match desktop_binding::apply(
             &home,
             &desktop_binding::gateway_base_url(&profile.listen_host, profile.listen_port),

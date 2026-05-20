@@ -6,7 +6,7 @@
 
 > Gateway Switch is not just a model router. It is a **runtime compatibility layer** that sits between AI-native desktop applications and third-party model providers, bridging protocol gaps, repairing malformed tool calls, enforcing safety boundaries, and degrading gracefully when upstream providers misbehave.
 
-[![Version](https://img.shields.io/badge/Version-1.7.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.7.1-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -142,6 +142,16 @@ For long-running agent workflows:
 
 ---
 
+## Version 1.7.1 Highlights
+
+- **Enhanced Claude Desktop binding.** Route display names are written into Claude Desktop `displayName`, and exposed models default to `supports1m: true` for the newer 1M-context variant toggle.
+- **Fixed Claude health-check feedback.** The Claude page now shows the latest health result inside the gateway status card and surfaces success or failure feedback.
+- **Reordered Claude and Codex layouts.** Claude now uses the requested gateway/binding, route editor, aliases, route/exposed-models, and route-table order; Codex now places binding and context notes side by side on row 2.
+- **Completed Chinese localization pass.** Claude Code runtime notes, Codex context and route-copy text, and Cold Start Doctor diagnostics no longer show large English-only sections in Chinese mode.
+- **Removed debug leftovers.** Formal builds no longer include the temporary Codex stream-disconnect instrumentation or debug files.
+- App version is now `1.7.1`.
+- Latest verification: `pnpm build`, `PATH="$HOME/.cargo/bin:$PATH" cargo test` (29 passed), and `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`.
+
 ## Version 1.7.0 Highlights
 
 - **Added Cold Start Doctor.** New readiness and safe-repair workflow for Claude Desktop, Claude Code, Codex App, local gateways, providers, routes, and security risk checks.
@@ -168,7 +178,7 @@ For long-running agent workflows:
 - Redesigned the App Icon and status bar icon around a white `Gateway Pin` symbol with a Claude oxblood route point, representing multi-client routing through the local gateway to upstream providers.
 - Updated the frontend design system to Geist / Fraunces / Geist Mono and refreshed cards, tables, forms, buttons, badges, and health indicators.
 - App version is now `1.6.3`.
-- Latest verification: `pnpm build`, `cargo test`, and `pnpm tauri build`.
+- Latest verification: `pnpm build`, `PATH="$HOME/.cargo/bin:$PATH" cargo test` (29 passed), and `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`.
 
 ## Version 1.6.2 Highlights
 
@@ -427,7 +437,7 @@ Artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.7.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.7.1_aarch64.dmg
 ```
 
 ---

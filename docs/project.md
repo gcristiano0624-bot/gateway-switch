@@ -1,6 +1,6 @@
 # Gateway Switch Project Documentation
 
-Version: 1.7.0
+Version: 1.7.1
 
 This document is the single technical source of truth for Gateway Switch. It merges the former project architecture notes and the Codex Gateway notes into one maintained file.
 
@@ -9,7 +9,7 @@ This document is the single technical source of truth for Gateway Switch. It mer
 If another AI receives this repository, start here:
 
 - Product: macOS Tauri app that routes Claude Desktop, Claude Code, and Codex App to third-party model providers.
-- Current version: `1.7.0`.
+- Current version: `1.7.1`.
 - Main frontend: `src/App.tsx` and `src/App.css`.
 - Main backend: `src-tauri/src/*.rs`.
 - Claude gateway: `src-tauri/src/gateway.rs`, local Anthropic Messages surface on `127.0.0.1:3456`.
@@ -20,7 +20,7 @@ If another AI receives this repository, start here:
 - Bindings: Claude Desktop in `desktop_binding.rs`, Claude Code in `claude_code_binding.rs`, Codex in `codex_binding.rs`.
 - Local data: `~/Library/Application Support/Gateway Switch/`.
 - Build: `PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build` when `cargo` is not already on `PATH`.
-- Latest verified tests: `pnpm build`, `cargo test`, and `CI=false pnpm tauri build --bundles app,dmg` after the final 1.7.0 Codex/Volcengine compatibility release.
+- Latest verified tests: `pnpm build`, `cargo test`, and `CI=false pnpm tauri build --bundles app,dmg` after the 1.7.1 Claude Desktop binding and UI localization release.
 
 The design intent is to make third-party models less likely to degrade Claude/Codex behavior by normalizing protocol shapes, repairing common tool-call failures, redacting secrets, exposing provider capability profiles, and adding safety/diagnostic gates around agent-like workflows.
 
@@ -36,7 +36,27 @@ The app solves two related but different protocol problems:
 
 The shared design goal is simple: providers share identity, auth header, auth scheme, and API key, but they do not share one universal Base URL. Provider URLs are split by protocol: OpenAI Base URL for Codex and Chat Completions fallback, Anthropic Base URL for Claude and Claude Code direct requests.
 
-## 2. Version 1.7.0 Scope
+## 2. Version 1.7.1 Scope
+
+Version 1.7.1 focuses on Claude Desktop developer-mode binding metadata, Claude/Codex page layout polish, visible health-check feedback, and Chinese localization completeness.
+
+Main changes:
+
+- Claude Desktop binding now writes each enabled route as `{ name, displayName, supports1m }`, using the route display name for `displayName` and enabling `supports1m` by default.
+- The Claude page health-check action now renders the latest result inside the Claude Gateway status card and shows success/failure feedback.
+- The Claude page layout now follows the requested sequence: gateway status plus binding status, route editor, Claude aliases, route cards plus exposed models, and route table.
+- The Codex page layout now keeps gateway status plus real-model verification on the first row, and places Codex App binding plus context/reasoning notes on the second row.
+- Chinese localization was completed for Claude Code runtime cards, Codex context and route-helper copy, and Cold Start Doctor diagnostic output.
+- Temporary Codex stream-disconnect debug instrumentation and local debug files were removed from the formal release tree.
+- Versioned package metadata and release artifacts as `1.7.1`.
+
+Verification for 1.7.1:
+
+- `pnpm build`: passed.
+- `PATH="$HOME/.cargo/bin:$PATH" cargo test`: passed, 29 tests.
+- `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`: passed.
+
+## 3. Version 1.7.0 Scope
 
 Version 1.7.0 adds the Cold Start Doctor, fixes the left navigation readability issue, introduces a bilingual Chinese/English interface, and finalizes Codex compatibility for large payloads and Volcengine Ark Coding Plan.
 
@@ -63,7 +83,7 @@ Verification for 1.7.0:
 - `cargo test`: passed, 28 tests.
 - `CI=false pnpm tauri build --bundles app,dmg`: passed.
 
-## 3. Version 1.6.4 Scope
+## 4. Version 1.6.4 Scope
 
 Version 1.6.4 fixes Xiaomi MiMO Codex routing against the latest MiMO OpenAI-compatible Chat Completions behavior.
 
@@ -955,7 +975,7 @@ macOS artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.7.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.7.1_aarch64.dmg
 ```
 
 ## 25. Release Checklist

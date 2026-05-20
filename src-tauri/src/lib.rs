@@ -37,8 +37,7 @@ pub fn run() {
             if settings.auto_takeover_desktop {
                 if let Ok(profile) = database::get_profile(&st.db_path) {
                     if let Ok(routes) = database::list_routes(&st.db_path) {
-                        let models: Vec<String> = routes.into_iter()
-                            .filter(|r| r.enabled).map(|r| r.claude_alias).collect();
+                        let models = desktop_binding::model_configs_from_routes(&routes);
                         let _ = desktop_binding::apply(
                             &dirs::home_dir().unwrap_or_default(),
                             &desktop_binding::gateway_base_url(&profile.listen_host, profile.listen_port),

@@ -44,8 +44,7 @@ pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                 let st = app.state::<crate::state::AppState>();
                 if let Ok(p) = crate::database::get_profile(&st.db_path) {
                     if let Ok(routes) = crate::database::list_routes(&st.db_path) {
-                        let models: Vec<String> = routes.into_iter()
-                            .filter(|r| r.enabled).map(|r| r.claude_alias).collect();
+                        let models = crate::desktop_binding::model_configs_from_routes(&routes);
                         let _ = crate::desktop_binding::apply(
                             &dirs::home_dir().unwrap_or_default(),
                             &crate::desktop_binding::gateway_base_url(&p.listen_host, p.listen_port),

@@ -917,7 +917,13 @@ function App() {
   }, [ccModel, claudeAliasOptions, routes]);
 
   // ---- Actions ----
-  const startGw = async () => { try { await invoke("start_gateway"); await loadAll(); flash("Gateway started"); } catch (e) { flash(String(e), "error"); } };
+  const startGw = async () => {
+    try {
+      await invoke("start_gateway");
+      await loadAll();
+      await checkHealth();
+    } catch (e) { flash(String(e), "error"); }
+  };
   const stopGw = async () => { try { await invoke("stop_gateway"); await loadAll(); flash("Gateway stopped"); } catch (e) { flash(String(e), "error"); } };
   const checkHealth = async () => {
     try {
@@ -1970,7 +1976,7 @@ function App() {
       <div className="two-col">
         <div className="card">
           <div className="card-title">{t("Codex App Binding")}</div>
-          <div className="binding-panel">
+          <div className="binding-panel binding-panel-compact">
             <div className="binding-state">
               <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
                 <span className="info-key">{t("Config")}</span>
@@ -1995,7 +2001,7 @@ function App() {
                 ))}
               </select>
               <p>{t("Bind writes Gateway Switch into `~/.codex/config.toml` and forces API-key mode for the local gateway. Restart Codex App after binding.")}</p>
-              <div className="qa-buttons" style={{ margin: 0 }}>
+              <div className="qa-buttons compact-actions" style={{ margin: 0 }}>
                 <button className="btn btn-primary" onClick={bindCodexApp}><IconLink /> {t("Start & Bind Codex App")}</button>
                 <button className="btn" onClick={restoreCodexApp} disabled={!codexBinding?.managed && !codexBinding?.backup_path}><IconUnlink /> {t("Restore OpenAI Login")}</button>
               </div>

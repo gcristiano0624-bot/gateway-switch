@@ -680,6 +680,11 @@ code, pre, .mono, [style*="font-mono"], [style*="fontFamily: var(--font-mono)"] 
   align-items: start;
 }
 
+.binding-panel-compact {
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
 .binding-actions {
   display: flex;
   flex-direction: column;
@@ -716,6 +721,12 @@ code, pre, .mono, [style*="font-mono"], [style*="fontFamily: var(--font-mono)"] 
   color: var(--muted);
   font-size: 12px;
   line-height: 1.55;
+}
+
+.compact-actions .btn {
+  flex: 1 1 180px;
+  min-width: 0;
+  white-space: normal;
 }
 
 /* ── Protocol Preview ── */

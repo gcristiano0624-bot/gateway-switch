@@ -39,8 +39,17 @@ struct Route {
 
 pub fn start(st: &AppState) -> Result<String, String> {
     {
-        let g = st.runtime.codex_gateway_handle.lock().map_err(|_| "lock")?;
-        if g.is_some() { return Ok("already_running".into()); }
+        let mut g = st.runtime.codex_gateway_handle.lock().map_err(|_| "lock")?;
+        if let Some(h) = g.as_ref() {
+            let is_running = st.runtime.codex_gateway_status.lock().map_err(|_| "lock")?.running;
+            if is_running && !h._task.is_finished() {
+                return Ok("already_running".into());
+            }
+        }
+        if let Some(mut stale) = g.take() {
+            if let Some(tx) = stale.shutdown.take() { let _ = tx.send(()); }
+            stale._task.abort();
+        }
     }
 
     let profile = database::get_codex_profile(&st.db_path)?;

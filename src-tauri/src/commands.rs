@@ -6,15 +6,19 @@ use crate::{
 };
 
 #[tauri::command]
-pub fn get_status(st: State<'_, AppState>) -> Result<AppStatus, String> {
+pub async fn get_status(st: State<'_, AppState>) -> Result<AppStatus, String> {
     let gw = gateway::status(&st)?;
     let info = desktop_binding::inspect(&dirs::home_dir().ok_or("no home")?)?;
     let providers = database::list_providers(&st.db_path)?;
     let routes = database::list_routes(&st.db_path)?;
     let profile = database::get_profile(&st.db_path)?;
+    let health = probe_gateway_health(&profile).await;
+    let gateway_running = health.ok;
+    let gateway_error = if gateway_running { None } else { gw.error.or(Some(health.message)) };
     Ok(AppStatus {
-        gateway_running: gw.running,
+        gateway_running,
         gateway_port: profile.listen_port,
+        gateway_error,
         binding_active: info.managed,
         provider_count: providers.len(),
         route_count: routes.len(),
@@ -265,21 +269,25 @@ pub fn restore_claude_code_binding(st: State<'_, AppState>) -> Result<ClaudeCode
 #[tauri::command]
 pub async fn check_gateway_health(st: State<'_, AppState>) -> Result<HealthStatus, String> {
     let profile = database::get_profile(&st.db_path)?;
+    Ok(probe_gateway_health(&profile).await)
+}
+
+async fn probe_gateway_health(profile: &GatewayProfile) -> HealthStatus {
     let url = format!("http://{}:{}/health", profile.listen_host, profile.listen_port);
     let start = Instant::now();
     match reqwest::get(&url).await {
-        Ok(r) => Ok(HealthStatus {
+        Ok(r) => HealthStatus {
             target: "gateway".into(),
             ok: r.status().is_success(),
             message: format!("HTTP {}", r.status()),
             latency_ms: Some(start.elapsed().as_millis() as u64),
-        }),
-        Err(e) => Ok(HealthStatus {
+        },
+        Err(e) => HealthStatus {
             target: "gateway".into(),
             ok: false,
             message: e.to_string(),
             latency_ms: Some(start.elapsed().as_millis() as u64),
-        }),
+        },
     }
 }
 

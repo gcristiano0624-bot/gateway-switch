@@ -40,6 +40,7 @@ type ModelAlias = {
 type Status = {
   gateway_running: boolean;
   gateway_port: number;
+  gateway_error?: string | null;
   binding_active: boolean;
   provider_count: number;
   route_count: number;
@@ -221,6 +222,7 @@ const ZH_TEXT: Record<string, string> = {
   "Gateway started": "Gateway 已启动",
   "Gateway stopped": "Gateway 已停止",
   "Desktop bound": "Desktop 已绑定",
+  "Desktop binding synced": "Desktop 绑定已同步",
   "Desktop restored": "Desktop 已恢复",
   "Claude Code bound": "Claude Code 已绑定",
   "Claude Code restored": "Claude Code 已恢复",
@@ -941,6 +943,12 @@ function App() {
   };
   const bindDesktop = async () => { try { await invoke("apply_binding"); await loadAll(); flash("Desktop bound"); } catch (e) { flash(String(e), "error"); } };
   const restoreDesktop = async () => { try { await invoke("restore_binding"); await loadAll(); flash("Desktop restored"); } catch (e) { flash(String(e), "error"); } };
+  const syncDesktopBindingIfManaged = async () => {
+    if (!desktop?.managed) return;
+    const info = await invoke<DesktopInfo>("apply_binding");
+    setDesktop(info);
+    flash("Desktop binding synced");
+  };
   const bindClaudeCode = async () => {
     try {
       if (ccMode === "provider") {
@@ -1011,11 +1019,17 @@ function App() {
       }
       setEditingR(null);
       setRForm({ id: "", claude_alias: "claude-sonnet-4-6", display_name: "", provider_id: "", upstream_model: "" });
+      await syncDesktopBindingIfManaged();
       await loadAll();
     } catch (e) { flash(String(e), "error"); }
   };
   const delRoute = async (id: string) => {
-    try { await invoke("delete_route", { id }); flash("Route deleted"); await loadAll(); } catch (e) { flash(String(e), "error"); }
+    try {
+      await invoke("delete_route", { id });
+      flash("Route deleted");
+      await syncDesktopBindingIfManaged();
+      await loadAll();
+    } catch (e) { flash(String(e), "error"); }
   };
   const editRoute = (r: ModelRoute) => {
     setEditingR(r.id);

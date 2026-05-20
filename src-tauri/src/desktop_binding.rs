@@ -12,6 +12,8 @@ pub struct DesktopModelConfig {
     pub name: String,
     #[serde(rename = "displayName")]
     pub display_name: String,
+    #[serde(rename = "display_name")]
+    pub display_name_snake: String,
     #[serde(rename = "supports1m")]
     pub supports_1m: bool,
 }
@@ -47,7 +49,8 @@ pub fn model_configs_from_routes(routes: &[ModelRoute]) -> Vec<DesktopModelConfi
             };
             DesktopModelConfig {
                 name: r.claude_alias.clone(),
-                display_name,
+                display_name: display_name.clone(),
+                display_name_snake: display_name,
                 supports_1m: true,
             }
         })
@@ -175,6 +178,7 @@ mod tests {
         let applied = apply(home, "http://127.0.0.1:3456", "x-api-key", "tok", &[DesktopModelConfig {
             name: "claude-sonnet-4-6".into(),
             display_name: "MiMO Sonnet".into(),
+            display_name_snake: "MiMO Sonnet".into(),
             supports_1m: true,
         }]).unwrap();
         assert!(applied.managed);
@@ -183,6 +187,7 @@ mod tests {
         let config = read_json(&dir.join("test.json"));
         assert_eq!(config["inferenceModels"][0]["name"], "claude-sonnet-4-6");
         assert_eq!(config["inferenceModels"][0]["displayName"], "MiMO Sonnet");
+        assert_eq!(config["inferenceModels"][0]["display_name"], "MiMO Sonnet");
         assert_eq!(config["inferenceModels"][0]["supports1m"], true);
 
         let restored = restore(home).unwrap();

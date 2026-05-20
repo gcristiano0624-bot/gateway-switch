@@ -46,6 +46,7 @@ impl Default for AppSettings {
 pub struct AppStatus {
     pub gateway_running: bool,
     pub gateway_port: u16,
+    pub gateway_error: Option<String>,
     pub binding_active: bool,
     pub provider_count: usize,
     pub route_count: usize,

@@ -14,6 +14,8 @@ pub struct DesktopModelConfig {
     pub display_name: String,
     #[serde(rename = "display_name")]
     pub display_name_snake: String,
+    #[serde(rename = "labelOverride")]
+    pub label_override: String,
     #[serde(rename = "supports1m")]
     pub supports_1m: bool,
 }
@@ -51,6 +53,15 @@ pub fn model_configs_from_routes(routes: &[ModelRoute]) -> Vec<DesktopModelConfi
                 name: r.claude_alias.clone(),
                 display_name: display_name.clone(),
                 display_name_snake: display_name,
+                label_override: if r.display_name.trim().is_empty() {
+                    if r.upstream_model.trim().is_empty() {
+                        r.claude_alias.clone()
+                    } else {
+                        r.upstream_model.clone()
+                    }
+                } else {
+                    r.display_name.clone()
+                },
                 supports_1m: true,
             }
         })
@@ -179,6 +190,7 @@ mod tests {
             name: "claude-sonnet-4-6".into(),
             display_name: "MiMO Sonnet".into(),
             display_name_snake: "MiMO Sonnet".into(),
+            label_override: "MiMO Sonnet".into(),
             supports_1m: true,
         }]).unwrap();
         assert!(applied.managed);
@@ -188,6 +200,7 @@ mod tests {
         assert_eq!(config["inferenceModels"][0]["name"], "claude-sonnet-4-6");
         assert_eq!(config["inferenceModels"][0]["displayName"], "MiMO Sonnet");
         assert_eq!(config["inferenceModels"][0]["display_name"], "MiMO Sonnet");
+        assert_eq!(config["inferenceModels"][0]["labelOverride"], "MiMO Sonnet");
         assert_eq!(config["inferenceModels"][0]["supports1m"], true);
 
         let restored = restore(home).unwrap();

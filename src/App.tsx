@@ -11,6 +11,7 @@ type CodexRoute = {
   display_name: string;
   provider_id: string;
   upstream_model: string;
+  tool_call_mode: string;
   enabled: boolean;
 };
 
@@ -374,6 +375,13 @@ const ZH_TEXT: Record<string, string> = {
   "Add Codex Route": "添加 Codex 路由",
   "Codex Model (requested by Codex)": "Codex 请求的模型",
   "Upstream Model (real provider model)": "上游模型（服务商真实模型）",
+  "Tool Call Mode": "工具调用模式",
+  "Auto": "自动",
+  "Force When Tools Present": "有工具时强制执行",
+  "Strict Execution": "严格执行",
+  "Keeps the model's default behavior. Best compatibility, but weak tool models may only talk.": "保留模型默认行为，兼容性最好，但弱工具模型可能只说不做。",
+  "Default. When Codex sends tools, Gateway asks the upstream model to emit tool_calls first.": "默认选项。Codex 带工具时，Gateway 会要求上游模型优先输出 tool_calls。",
+  "If tools are present but no tool_calls are emitted, Gateway marks the response as failed.": "如果请求带工具但上游没有输出 tool_calls，Gateway 会将响应标记为失败。",
   "Active Codex Routes": "已启用 Codex 路由",
   "No Codex routes configured": "暂无 Codex 路由",
   "Add a route above to start mapping Codex models.": "请先在上方添加路由来映射 Codex 模型。",
@@ -407,6 +415,7 @@ const ZH_TEXT: Record<string, string> = {
   "Last Codex Model": "最近 Codex 模型",
   "No Codex request yet": "暂无 Codex 请求",
   "Result": "结果",
+  "Trace / Error": "追踪 / 错误",
   "Default Codex provider": "默认 Codex 服务商",
   "Default Model": "默认模型",
   "Bind writes Gateway Switch into `~/.codex/config.toml` and forces API-key mode for the local gateway. Restart Codex App after binding.": "绑定会把 Gateway Switch 写入 `~/.codex/config.toml`，并强制本地网关使用 API Key 模式。绑定后请重启 Codex App。",
@@ -502,6 +511,28 @@ function tx(text: string, language: Language): string {
   return text;
 }
 
+function toolCallModeLabel(mode: string | undefined): string {
+  if (mode === "auto") return "Auto";
+  if (mode === "strict_execution") return "Strict Execution";
+  return "Force When Tools Present";
+}
+
+function isToolTrace(summary: string | null | undefined): boolean {
+  return Boolean(summary?.startsWith("tool_trace:"));
+}
+
+function formatLogSummary(summary: string | null | undefined): string {
+  if (!summary) return "-";
+  if (!isToolTrace(summary)) return summary;
+  try {
+    const trace = JSON.parse(summary.slice("tool_trace:".length).trim());
+    const mode = toolCallModeLabel(trace.mode);
+    return `tool trace · ${mode} · choice=${trace.tool_choice} · tools=${trace.request_tools} · calls=${trace.response_tool_calls} · finish=${trace.finish_reason}`;
+  } catch {
+    return summary;
+  }
+}
+
 const MOCK_STATUS: Status = {
   gateway_running: false,
   gateway_port: 3456,
@@ -547,7 +578,7 @@ const MOCK_ROUTES: ModelRoute[] = [
 ];
 
 const MOCK_CODEX_ROUTES: CodexRoute[] = [
-  { id: "codex-mimo", codex_model: "gpt-5.2", display_name: "Codex via MiMo", provider_id: "xiaomimo", upstream_model: "mimo-v2.5-pro", enabled: true },
+  { id: "codex-mimo", codex_model: "gpt-5.2", display_name: "Codex via MiMo", provider_id: "xiaomimo", upstream_model: "mimo-v2.5-pro", tool_call_mode: "force_when_tools_present", enabled: true },
 ];
 
 const MOCK_SETTINGS: Settings = {
@@ -807,7 +838,7 @@ function App() {
   const [newClaudeAlias, setNewClaudeAlias] = useState("");
   const [newCodexAlias, setNewCodexAlias] = useState("");
   const codexPort = 3457;
-  const [cForm, setCForm] = useState({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "" });
+  const [cForm, setCForm] = useState({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "", tool_call_mode: "force_when_tools_present" });
   const [editingC, setEditingC] = useState<string | null>(null);
   const [ccMode, setCcMode] = useState<"gateway" | "provider">("gateway");
   const [ccModel, setCcModel] = useState("claude-sonnet-4-6");
@@ -1101,7 +1132,7 @@ function App() {
         flash("Codex route created");
       }
       setEditingC(null);
-      setCForm({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "" });
+      setCForm({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "", tool_call_mode: "force_when_tools_present" });
       await loadAll();
     } catch (e) { flash(String(e), "error"); }
   };
@@ -1110,7 +1141,7 @@ function App() {
   };
   const editCodexRoute = (r: CodexRoute) => {
     setEditingC(r.id);
-    setCForm({ id: r.id, codex_model: r.codex_model, display_name: r.display_name, provider_id: r.provider_id, upstream_model: r.upstream_model });
+    setCForm({ id: r.id, codex_model: r.codex_model, display_name: r.display_name, provider_id: r.provider_id, upstream_model: r.upstream_model, tool_call_mode: r.tool_call_mode || "force_when_tools_present" });
   };
 
   const addModelAlias = async (aliasType: "claude" | "codex") => {
@@ -2082,6 +2113,19 @@ function App() {
             <input value={cForm.upstream_model} onChange={e => setCForm({ ...cForm, upstream_model: e.target.value })} placeholder="e.g. deepseek-chat" />
             <span className="field-hint">{t("This is the actual model name sent to the third-party API.")}</span>
           </div>
+          <div className="form-field">
+            <label>{t("Tool Call Mode")}</label>
+            <select value={cForm.tool_call_mode} onChange={e => setCForm({ ...cForm, tool_call_mode: e.target.value })}>
+              <option value="auto">{t("Auto")}</option>
+              <option value="force_when_tools_present">{t("Force When Tools Present")}</option>
+              <option value="strict_execution">{t("Strict Execution")}</option>
+            </select>
+            <span className="field-hint">
+              {cForm.tool_call_mode === "auto" && t("Keeps the model's default behavior. Best compatibility, but weak tool models may only talk.")}
+              {cForm.tool_call_mode === "force_when_tools_present" && t("Default. When Codex sends tools, Gateway asks the upstream model to emit tool_calls first.")}
+              {cForm.tool_call_mode === "strict_execution" && t("If tools are present but no tool_calls are emitted, Gateway marks the response as failed.")}
+            </span>
+          </div>
         </div>
         <div className="qa-buttons" style={{ marginTop: 16 }}>
           <button className="btn btn-primary" onClick={saveCodexRoute}>
@@ -2090,7 +2134,7 @@ function App() {
           {editingC && (
             <button className="btn" onClick={() => {
               setEditingC(null);
-              setCForm({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "" });
+              setCForm({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "", tool_call_mode: "force_when_tools_present" });
             }}>{t("Cancel")}</button>
           )}
         </div>
@@ -2109,7 +2153,7 @@ function App() {
               </div>
               <div className="route-info">
                 <div className="route-name">{r.codex_model}</div>
-                <div className="route-path">{r.display_name || r.upstream_model} via {r.provider_id}</div>
+                <div className="route-path">{r.display_name || r.upstream_model} via {r.provider_id} · {t(toolCallModeLabel(r.tool_call_mode))}</div>
               </div>
               <span className={`route-status ${r.enabled ? "active" : "disabled"}`}>
                 {r.enabled ? t("Active") : t("Disabled")}
@@ -2177,7 +2221,7 @@ function App() {
                 <th>{t("Mode")}</th>
                 <th>{t("Status")}</th>
                 <th>{t("Duration")}</th>
-                {filteredLogs.some(l => l.error_summary) && <th>{t("Error")}</th>}
+                {filteredLogs.some(l => l.error_summary) && <th>{t("Trace / Error")}</th>}
               </tr>
             </thead>
             <tbody>
@@ -2197,8 +2241,8 @@ function App() {
                   </td>
                   <td>{l.duration_ms ? `${l.duration_ms}ms` : "-"}</td>
                   {filteredLogs.some(lg => lg.error_summary) && (
-                    <td style={{ fontSize: 12, color: "var(--red)", maxWidth: 200 }}>
-                      <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", wordBreak: "normal" }}>{l.error_summary || "-"}</span>
+                    <td style={{ fontSize: 12, color: isToolTrace(l.error_summary) ? "var(--muted)" : "var(--red)", maxWidth: 320 }}>
+                      <span title={l.error_summary || ""} style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", wordBreak: "normal" }}>{formatLogSummary(l.error_summary)}</span>
                     </td>
                   )}
                 </tr>

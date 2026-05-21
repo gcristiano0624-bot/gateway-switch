@@ -221,6 +221,7 @@ pub struct CodexRoute {
     pub display_name: String,
     pub provider_id: String,
     pub upstream_model: String,
+    pub tool_call_mode: String,
     pub enabled: bool,
 }
 
@@ -231,6 +232,7 @@ pub struct CreateCodexRoute {
     pub display_name: String,
     pub provider_id: String,
     pub upstream_model: String,
+    pub tool_call_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -240,5 +242,6 @@ pub struct UpdateCodexRoute {
     pub display_name: String,
     pub provider_id: String,
     pub upstream_model: String,
+    pub tool_call_mode: Option<String>,
     pub enabled: bool,
 }

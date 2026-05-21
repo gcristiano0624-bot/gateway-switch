@@ -58,6 +58,7 @@ pub fn initialize(db: &Path) -> Result<(), String> {
             display_name TEXT NOT NULL,
             provider_id TEXT NOT NULL,
             upstream_model TEXT NOT NULL,
+            tool_call_mode TEXT NOT NULL DEFAULT 'force_when_tools_present',
             enabled INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
@@ -79,6 +80,10 @@ pub fn initialize(db: &Path) -> Result<(), String> {
     "#).map_err(|e| e.to_string())?;
     let _ = conn.execute("ALTER TABLE providers ADD COLUMN openai_base_url TEXT", []);
     let _ = conn.execute("ALTER TABLE providers ADD COLUMN anthropic_base_url TEXT", []);
+    let _ = conn.execute(
+        "ALTER TABLE codex_routes ADD COLUMN tool_call_mode TEXT NOT NULL DEFAULT 'force_when_tools_present'",
+        [],
+    );
     conn.execute(
         "UPDATE providers SET openai_base_url = COALESCE(NULLIF(openai_base_url, ''), base_url)",
         [],
@@ -308,7 +313,7 @@ pub fn count_rows(db: &Path, table: &str) -> Result<i64, String> {
 pub fn list_codex_routes(db: &Path) -> Result<Vec<CodexRoute>, String> {
     let conn = open(db)?;
     let mut stmt = conn.prepare(
-        "SELECT id, codex_model, display_name, provider_id, upstream_model, enabled FROM codex_routes ORDER BY created_at DESC"
+        "SELECT id, codex_model, display_name, provider_id, upstream_model, COALESCE(NULLIF(tool_call_mode, ''), 'force_when_tools_present'), enabled FROM codex_routes ORDER BY created_at DESC"
     ).map_err(|e| e.to_string())?;
     let rows = stmt.query_map([], |r| Ok(CodexRoute {
         id: r.get(0)?,
@@ -316,7 +321,8 @@ pub fn list_codex_routes(db: &Path) -> Result<Vec<CodexRoute>, String> {
         display_name: r.get(2)?,
         provider_id: r.get(3)?,
         upstream_model: r.get(4)?,
-        enabled: r.get::<_, i64>(5)? == 1,
+        tool_call_mode: r.get(5)?,
+        enabled: r.get::<_, i64>(6)? == 1,
     })).map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
@@ -331,20 +337,30 @@ pub fn create_codex_route(db: &Path, r: &CreateCodexRoute) -> Result<(), String>
     if exists == 0 {
         return Err(format!("Provider '{}' not found", r.provider_id));
     }
+    let tool_call_mode = normalize_tool_call_mode(r.tool_call_mode.as_deref());
     conn.execute(
-        "INSERT INTO codex_routes (id, codex_model, display_name, provider_id, upstream_model) VALUES (?1,?2,?3,?4,?5)",
-        params![r.id.trim(), r.codex_model.trim(), r.display_name.trim(), r.provider_id.trim(), r.upstream_model.trim()],
+        "INSERT INTO codex_routes (id, codex_model, display_name, provider_id, upstream_model, tool_call_mode) VALUES (?1,?2,?3,?4,?5,?6)",
+        params![r.id.trim(), r.codex_model.trim(), r.display_name.trim(), r.provider_id.trim(), r.upstream_model.trim(), tool_call_mode],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 pub fn update_codex_route(db: &Path, r: &UpdateCodexRoute) -> Result<(), String> {
     let conn = open(db)?;
+    let tool_call_mode = normalize_tool_call_mode(r.tool_call_mode.as_deref());
     conn.execute(
-        "UPDATE codex_routes SET codex_model=?2, display_name=?3, provider_id=?4, upstream_model=?5, enabled=?6 WHERE id=?1",
-        params![r.id.trim(), r.codex_model.trim(), r.display_name.trim(), r.provider_id.trim(), r.upstream_model.trim(), if r.enabled {1} else {0}],
+        "UPDATE codex_routes SET codex_model=?2, display_name=?3, provider_id=?4, upstream_model=?5, tool_call_mode=?6, enabled=?7 WHERE id=?1",
+        params![r.id.trim(), r.codex_model.trim(), r.display_name.trim(), r.provider_id.trim(), r.upstream_model.trim(), tool_call_mode, if r.enabled {1} else {0}],
     ).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+fn normalize_tool_call_mode(mode: Option<&str>) -> &'static str {
+    match mode.unwrap_or("").trim() {
+        "auto" => "auto",
+        "strict_execution" => "strict_execution",
+        _ => "force_when_tools_present",
+    }
 }
 
 pub fn delete_codex_route(db: &Path, id: &str) -> Result<(), String> {

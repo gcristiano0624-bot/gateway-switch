@@ -33,6 +33,7 @@ struct Route {
     display: String,
     provider_id: String,
     upstream_model: String,
+    tool_call_mode: String,
     base_url: String,
     headers: Vec<(String, String)>,
 }
@@ -167,18 +168,26 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
     // Convert Responses API request → Chat Completions request
     let body_ref = body.clone();
     let mut chat_req = convert_request(&body_ref, &route.upstream_model);
+    apply_codex_tool_call_mode(&mut chat_req, &route);
     apply_xiaomi_mimo_codex_compat(&mut chat_req, &route);
+    let request_tool_count = tool_count(&chat_req);
+    let tool_choice = chat_req
+        .get("tool_choice")
+        .and_then(|v| v.as_str())
+        .unwrap_or("none")
+        .to_string();
 
     // Forward to upstream provider's Chat Completions endpoint.
     let resp = ctx.client.post(upstream_url(&route.base_url, "chat/completions"))
         .headers(to_headers(&route.headers)?)
         .json(&chat_req)
         .send().await.map_err(|e| {
+            let trace = tool_trace_summary(&route.tool_call_mode, &tool_choice, request_tool_count, 0, None, false, Some(&e.to_string()));
             let _ = database::insert_log(&ctx.db, &RequestLog {
                 request_id: req_id.clone(), claude_alias: route.display.clone(),
                 provider_id: route.provider_id.clone(), upstream_model: route.upstream_model.clone(),
                 status_code: None, duration_ms: Some(started.elapsed().as_millis() as u64),
-                is_stream, error_summary: Some(e.to_string()), created_at: String::new(),
+                is_stream, error_summary: Some(trace), created_at: String::new(),
             });
             upstream_err(e)
         })?;
@@ -188,32 +197,47 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
     if !is_stream {
         if !status.is_success() {
             let text = resp.text().await.unwrap_or_default();
+            let trace = tool_trace_summary(&route.tool_call_mode, &tool_choice, request_tool_count, 0, None, false, Some(&text));
             let _ = database::insert_log(&ctx.db, &RequestLog {
                 request_id: req_id, claude_alias: route.display.clone(),
                 provider_id: route.provider_id.clone(), upstream_model: route.upstream_model.clone(),
                 status_code: Some(status.as_u16()), duration_ms: Some(started.elapsed().as_millis() as u64),
-                is_stream: false, error_summary: Some(text.clone()), created_at: String::new(),
+                is_stream: false, error_summary: Some(trace), created_at: String::new(),
             });
             return Err(upstream_status_err(status, text));
         }
         let chat_response = resp.json::<Value>().await.map_err(upstream_err)?;
+        let response_tool_count = response_tool_call_count(&chat_response);
+        let finish_reason = chat_response["choices"][0]["finish_reason"].as_str().map(String::from);
+        let strict_violation = route.tool_call_mode == "strict_execution" && request_tool_count > 0 && response_tool_count == 0;
+        let trace = tool_trace_summary(&route.tool_call_mode, &tool_choice, request_tool_count, response_tool_count, finish_reason.as_deref(), strict_violation, None);
+        if let Err(err) = enforce_strict_tool_calls(&chat_response, &chat_req, &route) {
+            let _ = database::insert_log(&ctx.db, &RequestLog {
+                request_id: req_id.clone(), claude_alias: route.display.clone(),
+                provider_id: route.provider_id.clone(), upstream_model: route.upstream_model.clone(),
+                status_code: Some(status.as_u16()), duration_ms: Some(started.elapsed().as_millis() as u64),
+                is_stream: false, error_summary: Some(trace), created_at: String::new(),
+            });
+            return Err(err);
+        }
         let responses_response = convert_sync_response(&chat_response, &route.display, &resp_id, &msg_id);
         let _ = database::insert_log(&ctx.db, &RequestLog {
             request_id: req_id, claude_alias: route.display.clone(),
             provider_id: route.provider_id.clone(), upstream_model: route.upstream_model.clone(),
             status_code: Some(status.as_u16()), duration_ms: Some(started.elapsed().as_millis() as u64),
-            is_stream: false, error_summary: None, created_at: String::new(),
+            is_stream: false, error_summary: Some(trace), created_at: String::new(),
         });
         return Ok((status, Json(responses_response)).into_response());
     }
 
     if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();
+        let trace = tool_trace_summary(&route.tool_call_mode, &tool_choice, request_tool_count, 0, None, false, Some(&text));
         let _ = database::insert_log(&ctx.db, &RequestLog {
             request_id: req_id, claude_alias: route.display.clone(),
             provider_id: route.provider_id.clone(), upstream_model: route.upstream_model.clone(),
             status_code: Some(status.as_u16()), duration_ms: Some(started.elapsed().as_millis() as u64),
-            is_stream: true, error_summary: Some(text.clone()), created_at: String::new(),
+            is_stream: true, error_summary: Some(trace), created_at: String::new(),
         });
         return Err(upstream_status_err(status, text));
     }
@@ -229,6 +253,8 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
     let client = ctx.client.clone();
     let body_stream = resp.bytes_stream();
     let has_tools_in_req = chat_req.get("tools").and_then(|v| v.as_array()).map(|a| !a.is_empty()).unwrap_or(false);
+    let strict_tool_calls = route.tool_call_mode == "strict_execution" && has_tools_in_req;
+    let tool_call_mode = route.tool_call_mode.clone();
 
     let sse = stream! {
         let mut seq: i64 = 0;
@@ -519,9 +545,11 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
             }],
             "status": "completed"
         })];
+        let response_tool_count = tool_outputs.len();
         output.extend(tool_outputs);
 
-        let resp_status = if stream_error {
+        let strict_tool_error = strict_tool_calls && !has_tool_calls;
+        let resp_status = if stream_error || strict_tool_error {
             "failed"
         } else if finish_reason.as_deref() == Some("length") && !has_tool_calls {
             "incomplete"
@@ -541,6 +569,12 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
         if resp_status == "incomplete" {
             resp_body["incomplete_details"] = json!({"reason": "max_output_tokens"});
         }
+        if strict_tool_error {
+            resp_body["error"] = json!({
+                "code": "tool_call_required",
+                "message": "Upstream model did not emit tool_calls while Codex strict execution mode was enabled."
+            });
+        }
 
         let completed = json!({
             "type": "response.completed",
@@ -551,11 +585,21 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
             "event: response.completed\ndata: {}\n\n", serde_json::to_string(&completed).unwrap()
         )));
 
-        let error_summary = if stream_error {
-            Some(format!("stream_error: finish_reason={:?}", finish_reason))
-        } else {
-            None
-        };
+        let mut trace_error: Option<String> = None;
+        if stream_error {
+            trace_error = Some("stream_error".into());
+        } else if strict_tool_error {
+            trace_error = Some("strict_tool_call_missing".into());
+        }
+        let error_summary = Some(tool_trace_summary(
+            &tool_call_mode,
+            &tool_choice,
+            request_tool_count,
+            response_tool_count,
+            finish_reason.as_deref(),
+            strict_tool_error,
+            trace_error.as_deref(),
+        ));
         let _ = database::insert_log(&db, &RequestLog {
             request_id: log_req_id, claude_alias: display,
             provider_id, upstream_model: upstream_model_name, status_code: Some(status.as_u16()),
@@ -745,6 +789,93 @@ fn convert_request(body: &Value, upstream_model: &str) -> Value {
     }
 
     chat_req
+}
+
+fn apply_codex_tool_call_mode(chat_req: &mut Value, route: &Route) {
+    let has_tools = chat_req
+        .get("tools")
+        .and_then(|v| v.as_array())
+        .map(|a| !a.is_empty())
+        .unwrap_or(false);
+    if !has_tools {
+        return;
+    }
+
+    match route.tool_call_mode.as_str() {
+        "force_when_tools_present" | "strict_execution" => {
+            chat_req["tool_choice"] = json!("required");
+            if let Some(messages) = chat_req.get_mut("messages").and_then(|v| v.as_array_mut()) {
+                messages.insert(0, json!({
+                    "role": "system",
+                    "content": "Codex execution mode is active. You MUST emit structured tool_calls whenever tools are available. Do not answer with a plan before calling a tool."
+                }));
+            }
+        }
+        _ => {}
+    }
+}
+
+fn tool_count(chat_req: &Value) -> usize {
+    chat_req
+        .get("tools")
+        .and_then(|v| v.as_array())
+        .map(Vec::len)
+        .unwrap_or(0)
+}
+
+fn response_tool_call_count(chat_response: &Value) -> usize {
+    chat_response["choices"][0]["message"]
+        .get("tool_calls")
+        .and_then(|v| v.as_array())
+        .map(Vec::len)
+        .unwrap_or(0)
+}
+
+fn tool_trace_summary(
+    mode: &str,
+    tool_choice: &str,
+    request_tool_count: usize,
+    response_tool_call_count: usize,
+    finish_reason: Option<&str>,
+    strict_violation: bool,
+    error: Option<&str>,
+) -> String {
+    let mut trace = json!({
+        "type": "tool_trace",
+        "mode": normalize_tool_call_mode(mode),
+        "tool_choice": tool_choice,
+        "request_tools": request_tool_count,
+        "response_tool_calls": response_tool_call_count,
+        "finish_reason": finish_reason.unwrap_or("unknown"),
+        "forced_required": tool_choice == "required",
+        "strict_violation": strict_violation,
+    });
+    if let Some(error) = error {
+        trace["error"] = json!(error.chars().take(500).collect::<String>());
+    }
+    format!("tool_trace: {}", serde_json::to_string(&trace).unwrap_or_else(|_| "{}".into()))
+}
+
+fn enforce_strict_tool_calls(chat_response: &Value, chat_req: &Value, route: &Route) -> Result<(), Response> {
+    let has_tools = chat_req
+        .get("tools")
+        .and_then(|v| v.as_array())
+        .map(|a| !a.is_empty())
+        .unwrap_or(false);
+    if route.tool_call_mode != "strict_execution" || !has_tools {
+        return Ok(());
+    }
+
+    let has_tool_calls = chat_response["choices"][0]["message"]
+        .get("tool_calls")
+        .and_then(|v| v.as_array())
+        .map(|a| !a.is_empty())
+        .unwrap_or(false);
+    if has_tool_calls {
+        Ok(())
+    } else {
+        Err(upstream_err("Upstream model did not emit tool_calls while Codex strict execution mode was enabled."))
+    }
 }
 
 fn normalize_chat_role(role: &str) -> &str {
@@ -1047,9 +1178,18 @@ fn resolve(db: &PathBuf, model: &str) -> Result<Route, String> {
         display: route.codex_model,
         provider_id: provider.id.clone(),
         upstream_model: route.upstream_model.trim().to_string(),
+        tool_call_mode: normalize_tool_call_mode(&route.tool_call_mode).to_string(),
         base_url: provider.openai_base_url.trim_end_matches('/').to_string(),
         headers: auth_headers(&provider),
     })
+}
+
+fn normalize_tool_call_mode(mode: &str) -> &'static str {
+    match mode.trim() {
+        "auto" => "auto",
+        "strict_execution" => "strict_execution",
+        _ => "force_when_tools_present",
+    }
 }
 
 fn auth_headers(p: &Provider) -> Vec<(String, String)> {
@@ -1150,6 +1290,7 @@ mod tests {
         database::create_codex_route(&db, &crate::models::CreateCodexRoute {
             id: "r1".into(), codex_model: "gpt-4o".into(), display_name: "GPT-4o".into(),
             provider_id: "p1".into(), upstream_model: "deepseek-chat".into(),
+            tool_call_mode: None,
         }).unwrap();
 
         let app = build_router(Ctx {
@@ -1347,6 +1488,38 @@ mod tests {
     }
 
     #[test]
+    fn test_force_tool_call_mode_requires_tool_choice_when_tools_are_present() {
+        let responses_req = json!({
+            "model": "gpt-4o",
+            "input": "Inspect the repository",
+            "tools": [{
+                "type": "function",
+                "name": "exec_command",
+                "description": "Run a command",
+                "parameters": {"type": "object"}
+            }],
+            "stream": true
+        });
+        let route = Route {
+            display: "gpt-4o".into(),
+            provider_id: "OpenAI".into(),
+            upstream_model: "gpt-4o".into(),
+            tool_call_mode: "force_when_tools_present".into(),
+            base_url: "https://api.openai.com/v1".into(),
+            headers: vec![],
+        };
+
+        let mut chat_req = convert_request(&responses_req, "gpt-4o");
+        apply_codex_tool_call_mode(&mut chat_req, &route);
+
+        assert_eq!(chat_req["tool_choice"], "required");
+        assert!(chat_req["messages"][0]["content"]
+            .as_str()
+            .unwrap()
+            .contains("Codex execution mode is active"));
+    }
+
+    #[test]
     fn test_xiaomi_mimo_codex_compat_disables_thinking_and_renames_max_tokens() {
         let responses_req = json!({
             "model": "gpt-5.4",
@@ -1358,6 +1531,7 @@ mod tests {
             display: "gpt-5.4".into(),
             provider_id: "Xiaomi".into(),
             upstream_model: "mimo-v2.5".into(),
+            tool_call_mode: "force_when_tools_present".into(),
             base_url: "https://token-plan-sgp.xiaomimimo.com/v1".into(),
             headers: vec![],
         };
@@ -1376,6 +1550,7 @@ mod tests {
             display: "gpt-5.4".into(),
             provider_id: "Xiaomi".into(),
             upstream_model: "mimo-v2.5".into(),
+            tool_call_mode: "force_when_tools_present".into(),
             base_url: "https://api.xiaomimimo.com/v1".into(),
             headers: vec![],
         };
@@ -1402,6 +1577,7 @@ mod tests {
             display: "gpt-4o".into(),
             provider_id: "OpenAI".into(),
             upstream_model: "gpt-4o".into(),
+            tool_call_mode: "force_when_tools_present".into(),
             base_url: "https://api.openai.com/v1".into(),
             headers: vec![],
         };

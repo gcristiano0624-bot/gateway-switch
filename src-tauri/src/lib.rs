@@ -6,6 +6,7 @@ mod compatibility;
 mod database;
 mod desktop_binding;
 mod gateway;
+mod mcp_sync;
 mod models;
 mod settings;
 mod state;
@@ -71,6 +72,9 @@ pub fn run() {
             commands::compress_context_payload,
             commands::recover_agent_state_payload,
             commands::export_diagnostics,
+            commands::get_mcp_sync_status,
+            commands::preview_mcp_sync,
+            commands::run_mcp_sync,
             commands::create_provider,
             commands::update_provider,
             commands::delete_provider,

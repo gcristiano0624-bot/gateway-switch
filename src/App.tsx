@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
 // ── Types ──
-type Page = "dashboard" | "claude" | "claudeCode" | "codex" | "coldstart" | "providers" | "logs" | "settings";
+type Page = "dashboard" | "claude" | "claudeCode" | "codex" | "mcpSync" | "coldstart" | "providers" | "logs" | "settings";
 
 type CodexRoute = {
   id: string;
@@ -148,6 +148,58 @@ type ColdStartReport = {
   capabilities: ColdStartCapability[];
 };
 
+type McpTargetStatus = {
+  target: string;
+  label: string;
+  config_path: string;
+  config_exists: boolean;
+  format: string;
+  parse_status: string;
+  server_count: number;
+  writable: boolean;
+  backup_path: string | null;
+  error: string | null;
+};
+
+type McpServerPreview = {
+  name: string;
+  server_type: string;
+  sources: string[];
+  completeness: number;
+  credential_keys: string[];
+  action: string;
+  command: string | null;
+  url: string | null;
+};
+
+type McpSyncPreview = {
+  generated_at: string;
+  targets: McpTargetStatus[];
+  merged_count: number;
+  source_count: number;
+  conflict_count: number;
+  resolved_count: number;
+  servers: McpServerPreview[];
+  warnings: string[];
+  can_sync: boolean;
+};
+
+type McpWriteResult = {
+  target: string;
+  label: string;
+  ok: boolean;
+  config_path: string;
+  backup_path: string | null;
+  message: string;
+};
+
+type McpSyncResult = {
+  generated_at: string;
+  preview: McpSyncPreview;
+  written_targets: McpWriteResult[];
+  logs: string[];
+};
+
 // ── Constants ──
 const DEFAULT_CLAUDE_ALIASES = [
   "claude-opus-4-7",
@@ -185,6 +237,7 @@ const ZH_TEXT: Record<string, string> = {
   "Claude": "Claude",
   "Claude Code": "Claude Code",
   "Codex": "Codex",
+  "MCP Sync": "MCP 同步",
   "Cold Start": "冷启动",
   "Providers": "模型服务商",
   "Logs": "日志",
@@ -218,6 +271,10 @@ const ZH_TEXT: Record<string, string> = {
   "Route created": "路由已创建",
   "Route deleted": "路由已删除",
   "Settings saved": "设置已保存",
+  "MCP sync status refreshed": "MCP 同步状态已刷新",
+  "MCP sync preview generated": "MCP 同步预览已生成",
+  "MCP sync completed": "MCP 同步已完成",
+  "Path copied": "路径已复制",
   "Config imported": "配置已导入",
   "Exported to": "已导出到",
   "Gateway started": "Gateway 已启动",
@@ -406,6 +463,44 @@ const ZH_TEXT: Record<string, string> = {
   "Claude Gateway health check failed": "Claude Gateway 健康检查失败",
   "Codex Gateway health check passed": "Codex Gateway 健康检查通过",
   "Codex Gateway health check failed": "Codex Gateway 健康检查失败",
+  "MCP Configuration Sync": "MCP 配置同步",
+  "Synchronize MCP Servers across Claude Desktop, Claude Code, and Codex.": "在 Claude Desktop、Claude Code 与 Codex 之间同步 MCP Servers 配置。",
+  "Refresh Status": "刷新状态",
+  "Preview Sync": "预览同步",
+  "Run Sync": "执行同步",
+  "Syncing...": "同步中...",
+  "Targets Ready": "三端状态",
+  "Merged Servers": "合并后 Servers",
+  "Conflicts": "冲突数量",
+  "Last Sync": "最近同步",
+  "Ready": "可同步",
+  "Blocked": "阻断",
+  "Sources": "来源",
+  "Resolved": "已解决",
+  "Not run yet": "尚未执行",
+  "Written targets": "写入目标",
+  "Target Configurations": "三端配置",
+  "Parse Status": "解析状态",
+  "Servers": "Servers",
+  "Writable": "可写",
+  "Exists": "存在",
+  "Yes": "是",
+  "No": "否",
+  "Copy Path": "复制路径",
+  "Sync Preview": "同步预览",
+  "Server": "服务器",
+  "Type": "类型",
+  "Completeness": "完整度",
+  "Credentials": "凭证",
+  "Action": "动作",
+  "No MCP servers found": "没有发现 MCP Servers",
+  "Click Preview Sync to inspect merged servers before writing.": "点击预览同步，在写入前检查合并后的服务器。",
+  "Safety & Warnings": "安全与警告",
+  "No blocking warnings. Backups are created before writing existing files.": "没有阻断警告。写入已有文件前会自动创建备份。",
+  "Execution Result": "执行结果",
+  "No sync result yet.": "尚无同步结果。",
+  "Write Status": "写入状态",
+  "Generated at": "生成时间",
   "Claude Code will use the local Claude Gateway and configured Claude routes, including Chat Completions fallback for providers such as XiaoMiMo.": "Claude Code 将使用本地 Claude Gateway 和已配置的 Claude 路由，并支持小米 MiMO 等服务商的 Chat Completions fallback。",
   "Required for Direct Provider": "直连服务商模式必填",
   "Missing Anthropic URL": "缺少 Anthropic URL",
@@ -661,6 +756,80 @@ const MOCK_COLDSTART: ColdStartReport = {
   ],
 };
 
+const MOCK_MCP_PREVIEW: McpSyncPreview = {
+  generated_at: "browser preview",
+  targets: [
+    {
+      target: "claude_desktop",
+      label: "Claude Desktop",
+      config_path: "~/Library/Application Support/Claude/claude_desktop_config.json",
+      config_exists: true,
+      format: "JSON",
+      parse_status: "正常",
+      server_count: 3,
+      writable: true,
+      backup_path: null,
+      error: null,
+    },
+    {
+      target: "claude_code",
+      label: "Claude Code",
+      config_path: "~/.claude/settings.json",
+      config_exists: true,
+      format: "JSON",
+      parse_status: "正常",
+      server_count: 2,
+      writable: true,
+      backup_path: null,
+      error: null,
+    },
+    {
+      target: "codex",
+      label: "Codex",
+      config_path: "~/.codex/config.toml",
+      config_exists: true,
+      format: "TOML",
+      parse_status: "正常",
+      server_count: 2,
+      writable: true,
+      backup_path: null,
+      error: null,
+    },
+  ],
+  merged_count: 4,
+  source_count: 3,
+  conflict_count: 1,
+  resolved_count: 1,
+  servers: [
+    { name: "filesystem", server_type: "STDIO", sources: ["claude_desktop", "claude_code"], completeness: 2, credential_keys: [], action: "同步", command: "npx", url: null },
+    { name: "github", server_type: "STDIO", sources: ["claude_desktop", "codex"], completeness: 3, credential_keys: ["GITHUB_PERSONAL_ACCESS_TOKEN"], action: "冲突合并", command: "npx", url: null },
+    { name: "fetch", server_type: "STDIO", sources: ["claude_code"], completeness: 2, credential_keys: [], action: "同步", command: "uvx", url: null },
+    { name: "brave-search", server_type: "STDIO", sources: ["codex"], completeness: 3, credential_keys: ["BRAVE_API_KEY"], action: "同步", command: "npx", url: null },
+  ],
+  warnings: [],
+  can_sync: true,
+};
+
+const MOCK_MCP_RESULT: McpSyncResult = {
+  generated_at: "browser preview",
+  preview: MOCK_MCP_PREVIEW,
+  written_targets: MOCK_MCP_PREVIEW.targets.map(target => ({
+    target: target.target,
+    label: target.label,
+    ok: true,
+    config_path: target.config_path,
+    backup_path: null,
+    message: "已写入 4 个 MCP Servers",
+  })),
+  logs: [
+    "Read 3 MCP sync targets",
+    "Merged 4 unique MCP servers",
+    "Claude Desktop: 已写入 4 个 MCP Servers",
+    "Claude Code: 已写入 4 个 MCP Servers",
+    "Codex: 已写入 4 个 MCP Servers",
+  ],
+};
+
 // ── Helpers ──
 function getModelFamily(alias: string): string {
   if (alias.includes("opus")) return "opus";
@@ -824,6 +993,10 @@ function App() {
   const [codexHealth, setCodexHealth] = useState<Health | null>(null);
   const [coldStart, setColdStart] = useState<ColdStartReport | null>(null);
   const [coldStartRunning, setColdStartRunning] = useState(false);
+  const [mcpPreview, setMcpPreview] = useState<McpSyncPreview | null>(null);
+  const [mcpResult, setMcpResult] = useState<McpSyncResult | null>(null);
+  const [mcpLoading, setMcpLoading] = useState(false);
+  const [mcpSyncing, setMcpSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -891,13 +1064,14 @@ function App() {
       setCodexRoutes(MOCK_CODEX_ROUTES);
       setCodexBinding(MOCK_CODEX_BINDING);
       setColdStart(MOCK_COLDSTART);
+      setMcpPreview(MOCK_MCP_PREVIEW);
       setClaudeAliases(DEFAULT_CLAUDE_ALIASES.map((alias, index) => ({ id: `mock-claude-${index}`, alias, alias_type: "claude", created_at: null })));
       setCodexAliases(DEFAULT_CODEX_MODELS.map((alias, index) => ({ id: `mock-codex-${index}`, alias, alias_type: "codex", created_at: null })));
       return;
     }
 
     try {
-      const [s, p, r, d, cc, l, cfg, cs, cr, cb, cold, ca, cma] = await Promise.all([
+      const [s, p, r, d, cc, l, cfg, cs, cr, cb, cold, mcp, ca, cma] = await Promise.all([
         invoke<Status>("get_status"),
         invoke<Provider[]>("list_providers"),
         invoke<ModelRoute[]>("list_routes"),
@@ -909,6 +1083,7 @@ function App() {
         invoke<CodexRoute[]>("list_codex_routes"),
         invoke<CodexBindingInfo>("get_codex_binding_info"),
         invoke<ColdStartReport>("get_coldstart_status"),
+        invoke<McpSyncPreview>("get_mcp_sync_status"),
         invoke<ModelAlias[]>("list_model_aliases", { aliasType: "claude" }),
         invoke<ModelAlias[]>("list_model_aliases", { aliasType: "codex" }),
       ]);
@@ -923,6 +1098,7 @@ function App() {
       setCodexRoutes(cr);
       setCodexBinding(cb);
       setColdStart(cold);
+      setMcpPreview(mcp);
       setClaudeAliases(ca);
       setCodexAliases(cma);
     } catch (e) {
@@ -1013,6 +1189,55 @@ function App() {
       await loadAll();
       flash("Claude Code restored");
     } catch (e) { flash(String(e), "error"); }
+  };
+
+  const refreshMcpStatus = async () => {
+    setMcpLoading(true);
+    try {
+      const preview = isTauriRuntime ? await invoke<McpSyncPreview>("get_mcp_sync_status") : MOCK_MCP_PREVIEW;
+      setMcpPreview(preview);
+      flash("MCP sync status refreshed");
+    } catch (e) {
+      flash(String(e), "error");
+    } finally {
+      setMcpLoading(false);
+    }
+  };
+
+  const previewMcpSync = async () => {
+    setMcpLoading(true);
+    try {
+      const preview = isTauriRuntime ? await invoke<McpSyncPreview>("preview_mcp_sync") : MOCK_MCP_PREVIEW;
+      setMcpPreview(preview);
+      flash("MCP sync preview generated");
+    } catch (e) {
+      flash(String(e), "error");
+    } finally {
+      setMcpLoading(false);
+    }
+  };
+
+  const runMcpSync = async () => {
+    setMcpSyncing(true);
+    try {
+      const result = isTauriRuntime ? await invoke<McpSyncResult>("run_mcp_sync") : MOCK_MCP_RESULT;
+      setMcpResult(result);
+      setMcpPreview(result.preview);
+      flash("MCP sync completed");
+    } catch (e) {
+      flash(String(e), "error");
+    } finally {
+      setMcpSyncing(false);
+    }
+  };
+
+  const copyPath = async (path: string) => {
+    try {
+      await navigator.clipboard.writeText(path);
+      flash("Path copied");
+    } catch {
+      flash(path);
+    }
   };
 
   // Provider CRUD
@@ -1222,6 +1447,11 @@ function App() {
           <IconTerminal />
           <span className="nav-label">{t("Codex")}</span>
           {codexRoutes.length > 0 && <span className="nav-badge">{codexRoutes.length}</span>}
+        </button>
+        <button className={`nav-item ${page === "mcpSync" ? "active" : ""}`} aria-label={t("MCP Sync")} title={t("MCP Sync")} onClick={() => setPage("mcpSync")}>
+          <IconShuffle />
+          <span className="nav-label">MCP<br />Sync</span>
+          {mcpPreview?.merged_count ? <span className="nav-badge">{mcpPreview.merged_count}</span> : null}
         </button>
         <button className={`nav-item ${page === "coldstart" ? "active" : ""}`} aria-label={t("Cold Start")} title={t("Cold Start")} onClick={() => setPage("coldstart")}>
           <IconZap />
@@ -2176,6 +2406,211 @@ function App() {
   );
 
   // =====================================================
+  //  MCP SYNC PAGE
+  // =====================================================
+  const McpSyncPage = () => {
+    const preview = mcpPreview ?? MOCK_MCP_PREVIEW;
+    const readyTargets = preview.targets.filter(tg => tg.writable && tg.parse_status !== "解析失败" && tg.parse_status !== "权限不足").length;
+    const blockedTargets = preview.targets.length - readyTargets;
+    const lastWritten = mcpResult?.written_targets.filter(r => r.ok).length ?? 0;
+    const mcpStatusBadge = (target: McpTargetStatus) => {
+      if (target.parse_status === "正常") return "badge-green";
+      if (target.parse_status === "文件不存在") return target.writable ? "badge-amber" : "badge-red";
+      if (target.parse_status === "解析失败" || target.parse_status === "权限不足") return "badge-red";
+      return "badge-gray";
+    };
+    const sourceLabel = (source: string) => {
+      if (source === "claude_desktop") return "Desktop";
+      if (source === "claude_code") return "Code";
+      if (source === "codex") return "Codex";
+      return source;
+    };
+
+    return (
+      <div>
+        <div className="page-header page-header-row">
+          <div>
+            <h1>{t("MCP Configuration Sync")}</h1>
+            <p>{t("Synchronize MCP Servers across Claude Desktop, Claude Code, and Codex.")}</p>
+          </div>
+          <div className="qa-buttons" style={{ margin: 0 }}>
+            <button className="btn" onClick={refreshMcpStatus} disabled={mcpLoading || mcpSyncing}>
+              <IconRefresh /> {t("Refresh Status")}
+            </button>
+            <button className="btn" onClick={previewMcpSync} disabled={mcpLoading || mcpSyncing}>
+              <IconSearch /> {t("Preview Sync")}
+            </button>
+            <button className="btn btn-primary" onClick={runMcpSync} disabled={!preview.can_sync || mcpLoading || mcpSyncing}>
+              <IconShuffle /> {mcpSyncing ? t("Syncing...") : t("Run Sync")}
+            </button>
+          </div>
+        </div>
+
+        <div className="kpi-row mcp-kpi-row">
+          <div className="kpi-card">
+            <div className="kpi-icon green"><IconCheck /></div>
+            <div className="kpi-info">
+              <div className="kpi-label">{t("Targets Ready")}</div>
+              <div className="kpi-value">{readyTargets}/{preview.targets.length}</div>
+              <span className={`kpi-badge ${blockedTargets ? "red" : "green"}`}>{blockedTargets ? `${blockedTargets} ${t("Blocked")}` : t("Ready")}</span>
+            </div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-icon blue"><IconShuffle /></div>
+            <div className="kpi-info">
+              <div className="kpi-label">{t("Merged Servers")}</div>
+              <div className="kpi-value">{preview.merged_count}</div>
+              <span className="kpi-badge blue">{preview.source_count} {t("Sources")}</span>
+            </div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-icon amber"><IconZap /></div>
+            <div className="kpi-info">
+              <div className="kpi-label">{t("Conflicts")}</div>
+              <div className="kpi-value">{preview.conflict_count}</div>
+              <span className="kpi-badge amber">{preview.resolved_count} {t("Resolved")}</span>
+            </div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-icon purple"><IconDownload /></div>
+            <div className="kpi-info">
+              <div className="kpi-label">{t("Last Sync")}</div>
+              <div className="kpi-value">{mcpResult ? lastWritten : "--"}</div>
+              <span className="kpi-badge muted">{mcpResult ? t("Written targets") : t("Not run yet")}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="section-label">{t("Target Configurations")}</div>
+        <div className="mcp-target-grid">
+          {preview.targets.map(target => (
+            <div className="card mcp-target-card" key={target.target}>
+              <div className="mcp-target-head">
+                <div>
+                  <div className="card-title">{target.label}</div>
+                  <span className={`badge ${mcpStatusBadge(target)}`}>{t(target.parse_status)}</span>
+                </div>
+                <span className="badge badge-blue">{target.format}</span>
+              </div>
+              <div className="info-grid">
+                <span className="info-key">{t("Config File")}</span>
+                <span className="info-val">{target.config_path}</span>
+                <span className="info-key">{t("Servers")}</span>
+                <span className="info-val">{target.server_count}</span>
+                <span className="info-key">{t("Exists")}</span>
+                <span className="info-val">{target.config_exists ? t("Yes") : t("No")}</span>
+                <span className="info-key">{t("Writable")}</span>
+                <span className="info-val">{target.writable ? t("Yes") : t("No")}</span>
+                <span className="info-key">{t("Backup")}</span>
+                <span className="info-val">{target.backup_path ?? t("None")}</span>
+              </div>
+              {target.error && <p className="mcp-warning-line">{target.error}</p>}
+              <button className="btn" onClick={() => void copyPath(target.config_path)}>
+                <IconDownload /> {t("Copy Path")}
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="two-col">
+          <div className="card">
+            <div className="card-title">{t("Safety & Warnings")}</div>
+            {preview.warnings.length > 0 ? (
+              <div className="mcp-warning-list">
+                {preview.warnings.map(warning => <p key={warning}><IconX /> {t(warning)}</p>)}
+              </div>
+            ) : (
+              <div className="mcp-safe-note"><IconCheck /> {t("No blocking warnings. Backups are created before writing existing files.")}</div>
+            )}
+          </div>
+          <div className="card">
+            <div className="card-title">{t("Execution Result")}</div>
+            {mcpResult ? (
+              <div className="mcp-result-list">
+                <div className="report-path">
+                  <span>{t("Generated at")}</span>
+                  <code>{mcpResult.generated_at}</code>
+                </div>
+                {mcpResult.written_targets.map(result => (
+                  <div className="mcp-write-row" key={result.target}>
+                    <span className={`badge ${result.ok ? "badge-green" : "badge-red"}`}>{result.ok ? t("OK") : t("Error")}</span>
+                    <strong>{result.label}</strong>
+                    <code>{result.message}</code>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state">
+                <div className="empty-icon">--</div>
+                <h3>{t("No sync result yet.")}</h3>
+                <p>{t("Click Preview Sync to inspect merged servers before writing.")}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="section-label">{t("Sync Preview")}</div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>{t("Server")}</th>
+                <th>{t("Type")}</th>
+                <th>{t("Sources")}</th>
+                <th>{t("Completeness")}</th>
+                <th>{t("Credentials")}</th>
+                <th>{t("Action")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {preview.servers.map(server => (
+                <tr key={server.name}>
+                  <td style={{ fontWeight: 600 }}>{server.name}</td>
+                  <td><span className="badge badge-blue">{server.server_type}</span></td>
+                  <td>
+                    <div className="mcp-source-list">
+                      {server.sources.map(source => <span key={source} className="badge badge-gray">{sourceLabel(source)}</span>)}
+                    </div>
+                  </td>
+                  <td>{server.completeness}/4</td>
+                  <td>
+                    {server.credential_keys.length > 0 ? (
+                      <div className="mcp-secret-list">{server.credential_keys.map(key => <code key={key}>{key}</code>)}</div>
+                    ) : (
+                      <span className="muted-pill">{t("None")}</span>
+                    )}
+                  </td>
+                  <td><span className={`badge ${server.action === "冲突合并" ? "badge-amber" : "badge-green"}`}>{t(server.action)}</span></td>
+                </tr>
+              ))}
+              {preview.servers.length === 0 && (
+                <tr>
+                  <td colSpan={6}>
+                    <div className="empty-state">
+                      <div className="empty-icon">--</div>
+                      <h3>{t("No MCP servers found")}</h3>
+                      <p>{t("Click Preview Sync to inspect merged servers before writing.")}</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {mcpResult && (
+          <div className="card" style={{ marginTop: 20 }}>
+            <div className="card-title">{t("Logs")}</div>
+            <div className="mcp-log-list">
+              {mcpResult.logs.map(log => <code key={log}>{log}</code>)}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // =====================================================
   //  LOGS PAGE
   // =====================================================
   const LogsPage = () => {
@@ -2507,6 +2942,7 @@ function App() {
       case "claude": return ClaudePage();
       case "claudeCode": return ClaudeCodePage();
       case "codex": return CodexPage();
+      case "mcpSync": return McpSyncPage();
       case "coldstart": return ColdStartPage();
       case "providers": return ProvidersPage();
       case "logs": return LogsPage();

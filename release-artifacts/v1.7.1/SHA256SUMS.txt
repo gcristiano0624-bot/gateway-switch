@@ -1,0 +1,2 @@
+383ef7b0da5cef580b9f75e38b9df71c63d4a93dd6070f0d55a1bb1fe89b9fc0  Gateway Switch_1.7.1_aarch64.dmg
+0a0e2403097946e8f9b7da59fda731332c6cca1bfe64eaed3ff8ce9971a1ed76  Gateway Switch_1.7.1_aarch64.app.tar.gz

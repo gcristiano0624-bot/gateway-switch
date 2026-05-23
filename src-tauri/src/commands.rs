@@ -1,7 +1,7 @@
 use std::{fs, time::Instant};
 use tauri::State;
 use crate::{
-    claude_code_binding, codex_binding, codex_gateway, compatibility, database, desktop_binding, gateway, models::*, settings,
+    claude_code_binding, codex_binding, codex_gateway, compatibility, database, desktop_binding, gateway, mcp_sync, models::*, settings,
     state::{AppState, GatewayStatus},
 };
 
@@ -130,6 +130,24 @@ pub fn export_diagnostics(st: State<'_, AppState>) -> Result<String, String> {
     let path = st.backups_dir.join(format!("diagnostics-{}.json", chrono::Utc::now().timestamp_millis()));
     fs::write(&path, serde_json::to_string_pretty(&bundle).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     Ok(path.display().to_string())
+}
+
+#[tauri::command]
+pub fn get_mcp_sync_status(st: State<'_, AppState>) -> Result<mcp_sync::McpSyncPreview, String> {
+    let _ = st;
+    mcp_sync::inspect(&dirs::home_dir().ok_or("no home")?)
+}
+
+#[tauri::command]
+pub fn preview_mcp_sync(st: State<'_, AppState>) -> Result<mcp_sync::McpSyncPreview, String> {
+    let _ = st;
+    mcp_sync::preview(&dirs::home_dir().ok_or("no home")?)
+}
+
+#[tauri::command]
+pub fn run_mcp_sync(st: State<'_, AppState>) -> Result<mcp_sync::McpSyncResult, String> {
+    let _ = st;
+    mcp_sync::sync(&dirs::home_dir().ok_or("no home")?)
 }
 
 #[tauri::command]

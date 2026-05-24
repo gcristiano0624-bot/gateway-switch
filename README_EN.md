@@ -6,7 +6,7 @@
 
 > Gateway Switch is not just a model router. It is a **runtime compatibility layer** that sits between AI-native desktop applications and third-party model providers, bridging protocol gaps, repairing malformed tool calls, enforcing safety boundaries, and degrading gracefully when upstream providers misbehave.
 
-[![Version](https://img.shields.io/badge/Version-1.7.1-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.7.2-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -141,6 +141,15 @@ For long-running agent workflows:
 `export_diagnostics` generates a comprehensive JSON bundle containing: runtime feature status, all provider capability profiles, benchmark results, provider configurations, route configurations, Codex route configurations, and recent request logs — everything needed to reproduce and debug an issue remotely.
 
 ---
+
+## Version 1.7.2 Highlights
+
+- **Added the MCP Sync module.** A dedicated `MCP Sync` page now checks, previews, and synchronizes MCP Servers across Claude Desktop, Claude Code, and Codex.
+- **Added target status cards and sync preview.** The page shows config paths, formats, parse status, server counts, writability, conflict counts, merged servers, and execution logs.
+- **Added native Rust synchronization.** The backend reads JSON/TOML configs directly, merges `mcpServers` / `mcp_servers`, creates backups before writes, and preserves non-MCP fields.
+- **Protected secret display.** The UI shows only `env` / `headers` key names and never displays token or API key values.
+- App version is now `1.7.2`.
+- Latest verification: `pnpm build`, `PATH="$HOME/.cargo/bin:$PATH" cargo test` (32 passed), and `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`.
 
 ## Version 1.7.1 Highlights
 
@@ -437,7 +446,7 @@ Artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.7.1_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.7.2_aarch64.dmg
 ```
 
 ---

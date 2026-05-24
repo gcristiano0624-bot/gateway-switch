@@ -1,6 +1,6 @@
 # Gateway Switch Project Documentation
 
-Version: 1.7.1
+Version: 1.7.2
 
 This document is the single technical source of truth for Gateway Switch. It merges the former project architecture notes and the Codex Gateway notes into one maintained file.
 
@@ -9,7 +9,7 @@ This document is the single technical source of truth for Gateway Switch. It mer
 If another AI receives this repository, start here:
 
 - Product: macOS Tauri app that routes Claude Desktop, Claude Code, and Codex App to third-party model providers.
-- Current version: `1.7.1`.
+- Current version: `1.7.2`.
 - Main frontend: `src/App.tsx` and `src/App.css`.
 - Main backend: `src-tauri/src/*.rs`.
 - Claude gateway: `src-tauri/src/gateway.rs`, local Anthropic Messages surface on `127.0.0.1:3456`.
@@ -20,7 +20,7 @@ If another AI receives this repository, start here:
 - Bindings: Claude Desktop in `desktop_binding.rs`, Claude Code in `claude_code_binding.rs`, Codex in `codex_binding.rs`.
 - Local data: `~/Library/Application Support/Gateway Switch/`.
 - Build: `PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build` when `cargo` is not already on `PATH`.
-- Latest verified tests: `pnpm build`, `cargo test`, and `CI=false pnpm tauri build --bundles app,dmg` after the 1.7.1 Claude Desktop binding and UI localization release.
+- Latest verified tests: `pnpm build`, `PATH="$HOME/.cargo/bin:$PATH" cargo test` (32 passed), and `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build` after the 1.7.2 MCP Sync release.
 
 The design intent is to make third-party models less likely to degrade Claude/Codex behavior by normalizing protocol shapes, repairing common tool-call failures, redacting secrets, exposing provider capability profiles, and adding safety/diagnostic gates around agent-like workflows.
 
@@ -36,7 +36,26 @@ The app solves two related but different protocol problems:
 
 The shared design goal is simple: providers share identity, auth header, auth scheme, and API key, but they do not share one universal Base URL. Provider URLs are split by protocol: OpenAI Base URL for Codex and Chat Completions fallback, Anthropic Base URL for Claude and Claude Code direct requests.
 
-## 2. Version 1.7.1 Scope
+## 2. Version 1.7.2 Scope
+
+Version 1.7.2 focuses on integrating the standalone MCP synchronization workflow into Gateway Switch as a native first-class module.
+
+Main changes:
+
+- Added a dedicated `MCP Sync` page after Codex in the sidebar.
+- Added target status cards for Claude Desktop, Claude Code, and Codex, including config path, format, parse status, server count, writable state, and backup information.
+- Added sync preview for merged MCP Servers, source badges, conflict resolution, completeness score, and secret-key masking.
+- Added native Rust MCP sync logic in `src-tauri/src/mcp_sync.rs`, covering JSON/TOML extraction, name-based merge, backup creation, and write-back while preserving non-MCP fields.
+- Added Tauri commands `get_mcp_sync_status`, `preview_mcp_sync`, and `run_mcp_sync`.
+- Versioned package metadata and release artifacts as `1.7.2`.
+
+Verification for 1.7.2:
+
+- `pnpm build`: passed.
+- `PATH="$HOME/.cargo/bin:$PATH" cargo test`: passed, 32 tests.
+- `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`: passed.
+
+## 3. Version 1.7.1 Scope
 
 Version 1.7.1 focuses on Claude Desktop developer-mode binding metadata, Claude/Codex page layout polish, visible health-check feedback, and Chinese localization completeness.
 
@@ -975,13 +994,13 @@ macOS artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.7.1_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.7.2_aarch64.dmg
 ```
 
 ## 25. Release Checklist
 
 - Frontend build passes.
-- Rust tests pass. Latest 1.7.0 verification: 28 tests passed.
+- Rust tests pass. Latest 1.7.2 verification: 32 tests passed.
 - Claude Gateway health check passes.
 - Codex Gateway health check passes.
 - Claude route can rewrite model request and response fields.

@@ -2,6 +2,15 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.7.2 - 2026-05-23
+
+- Added the new MCP Sync module for Claude Desktop, Claude Code, and Codex, with status cards, sync preview, conflict summary, execution results, and secret-key masking.
+- Added native Rust MCP synchronization for `mcpServers` / `mcp_servers`, preserving non-MCP JSON/TOML fields and creating backups before writes.
+- Added Tauri commands for MCP status inspection, preview generation, and one-click sync execution.
+- Added local release artifacts for the 1.7.2 macOS DMG and app tarball with SHA256 checksums.
+- Updated version to `1.7.2` across `package.json`, `Cargo.toml`, `Cargo.lock`, and `tauri.conf.json`.
+- Verification: `pnpm build`, `PATH="$HOME/.cargo/bin:$PATH" cargo test` (32 passed), and `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`.
+
 ## 1.7.1 - 2026-05-20
 
 - Enhanced Claude Desktop binding for newer developer-mode model entries: route display names are written as `displayName`, and exposed models default to `supports1m: true` for the 1M-context variant.

@@ -2,7 +2,7 @@
 
 ## Context
 
-Gateway Switch 当前是 Claude Desktop / Claude Code / Codex App 的运行时兼容性网关（v1.8.0）。用户希望：
+Gateway Switch 当前是 Claude Desktop / Claude Code / Codex App 的运行时兼容性网关（v1.8.1）。用户希望：
 
 1. **在 Codex 路由下引入 codex-plusplus 核心功能** — 不是注入到 Codex 内部，而是在 Gateway Switch 中提供 codex++ 的管理能力
 2. **全面重构 UI** — 从当前的 "Claude Warm Native" 暖色风格，改为更简约的 Codex / Trae Solo 风格

@@ -2,6 +2,15 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.8.1 - 2026-05-27
+
+- Fixed Codex launch failure when `app.asar.unpacked` was missing native modules required by `better-sqlite3`. Native repair now validates and restores unpacked artifacts from backups before continuing.
+- Added detailed codex++ repair logs for unpacked artifact health checks, backup candidate selection, restore source, Node/npm path resolution, and npm execution PATH.
+- Fixed GUI and launchd Node/npm resolution by searching common macOS paths and injecting an augmented PATH into npm subprocesses.
+- Added UI Safe Mode in the Codex++ enhancement page to disable only `co.bennett.ui-improvements` while preserving routing, script market, history repair, watcher, and CLI shim support.
+- Fixed Claude Desktop route loops around `Request too large` by raising the local body limit to 64MiB and preventing explicit upstream errors from being retried through Chat Completions fallback.
+- Verification: `PATH="$HOME/.cargo/bin:$PATH" cargo test`, `PATH="$HOME/.cargo/bin:$PATH" cargo test codex_pp::native_install_acceptance_tests::native_real_repair_smoke -- --ignored --nocapture --test-threads=1`, `pnpm build`, and `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`.
+
 ## 1.8.0 - 2026-05-27
 
 - Added the native codex++ install and repair workflow inside Gateway Switch, covering source download, build orchestration, runtime staging, `Codex.app` patching, and recoverable rollback.

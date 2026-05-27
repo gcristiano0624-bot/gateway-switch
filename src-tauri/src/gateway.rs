@@ -3,7 +3,7 @@ use std::{collections::HashMap, net::SocketAddr, path::PathBuf, sync::Arc, time:
 use async_stream::stream;
 use axum::{
     body::Body,
-    extract::State,
+    extract::{DefaultBodyLimit, State},
     http::{header, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -37,6 +37,8 @@ struct Route {
     anthropic_base_url: String,
     headers: Vec<(String, String)>,
 }
+
+const CLAUDE_REQUEST_BODY_LIMIT_BYTES: usize = 64 * 1024 * 1024;
 
 pub fn start(st: &AppState) -> Result<String, String> {
     {
@@ -158,6 +160,7 @@ fn build_router(ctx: Ctx) -> Router {
         .route("/v1/messages/v1/messages", post(messages))
         .route("/v1/messages/count_tokens", post(count_tokens))
         .route("/v1/messages/v1/messages/count_tokens", post(count_tokens))
+        .layer(DefaultBodyLimit::max(CLAUDE_REQUEST_BODY_LIMIT_BYTES))
         .with_state(ctx)
 }
 
@@ -303,6 +306,24 @@ async fn messages(
                 return Ok((status, Json(json_body)).into_response());
             }
         }
+        if !should_fallback_from_anthropic_status(status, &bytes) {
+            let text = String::from_utf8_lossy(&bytes).to_string();
+            let _ = database::insert_log(
+                &ctx.db,
+                &RequestLog {
+                    request_id: req_id.clone(),
+                    claude_alias: route.display.clone(),
+                    provider_id: route.provider_id.clone(),
+                    upstream_model: route.upstream_model.clone(),
+                    status_code: Some(status.as_u16()),
+                    duration_ms: Some(started.elapsed().as_millis() as u64),
+                    is_stream: false,
+                    error_summary: Some(body_preview(&bytes)),
+                    created_at: String::new(),
+                },
+            );
+            return Err(upstream_status_err(status, text));
+        }
         return chat_completion_fallback(
             ctx,
             route,
@@ -323,6 +344,24 @@ async fn messages(
         .to_ascii_lowercase();
     if !status.is_success() || !content_type.contains("text/event-stream") {
         let bytes = resp.bytes().await.map_err(upstream_err)?;
+        if !should_fallback_from_anthropic_status(status, &bytes) {
+            let text = String::from_utf8_lossy(&bytes).to_string();
+            let _ = database::insert_log(
+                &ctx.db,
+                &RequestLog {
+                    request_id: req_id.clone(),
+                    claude_alias: route.display.clone(),
+                    provider_id: route.provider_id.clone(),
+                    upstream_model: route.upstream_model.clone(),
+                    status_code: Some(status.as_u16()),
+                    duration_ms: Some(started.elapsed().as_millis() as u64),
+                    is_stream: true,
+                    error_summary: Some(body_preview(&bytes)),
+                    created_at: String::new(),
+                },
+            );
+            return Err(upstream_status_err(status, text));
+        }
         return chat_completion_fallback(
             ctx,
             route,
@@ -501,6 +540,20 @@ async fn chat_completion_fallback(
                     while let Some(pos) = buf.find('\n') {
                         let line = buf[..pos].to_string();
                         buf = buf[pos + 1..].to_string();
+                        if let Some(message) = extract_chat_stream_error(&line) {
+                            let error_event = json!({
+                                "type": "error",
+                                "error": {
+                                    "type": "upstream_error",
+                                    "message": message
+                                }
+                            });
+                            yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!(
+                                "event: error\ndata: {}\n\n",
+                                serde_json::to_string(&error_event).unwrap()
+                            )));
+                            return;
+                        }
                         if let Some(text) = extract_chat_delta(&line) {
                             if !text_started {
                                 text_index = next_content_index;
@@ -865,15 +918,6 @@ fn extract_chat_delta(line: &str) -> Option<String> {
         return None;
     }
     let v: Value = serde_json::from_str(payload).ok()?;
-    if let Some(message) = v
-        .get("error")
-        .and_then(|e| e.get("message"))
-        .and_then(|m| m.as_str())
-        .filter(|s| !s.is_empty())
-    {
-        return Some(format!("\n\n[Upstream error: {message}]"));
-    }
-
     let delta = &v["choices"][0]["delta"];
     extract_chat_message_text(delta)
         .split_once('\0')
@@ -888,6 +932,28 @@ fn extract_chat_delta(line: &str) -> Option<String> {
             } else {
                 Some(text)
             }
+        })
+}
+
+fn extract_chat_stream_error(line: &str) -> Option<String> {
+    if !line.starts_with("data:") {
+        return None;
+    }
+    let payload = line[5..].trim();
+    if payload.is_empty() || payload == "[DONE]" {
+        return None;
+    }
+    let v: Value = serde_json::from_str(payload).ok()?;
+    v.get("error")
+        .and_then(|e| e.get("message"))
+        .and_then(|m| m.as_str())
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .or_else(|| {
+            v.get("message")
+                .and_then(|m| m.as_str())
+                .filter(|s| !s.is_empty())
+                .map(String::from)
         })
 }
 
@@ -983,6 +1049,30 @@ fn body_preview(bytes: &Bytes) -> String {
     } else {
         redacted
     }
+}
+
+fn should_fallback_from_anthropic_status(status: reqwest::StatusCode, bytes: &Bytes) -> bool {
+    if status.is_success() {
+        return true;
+    }
+
+    // Only fall back when the Anthropic-shaped endpoint is probably not implemented.
+    // Retrying validation/size/auth errors through Chat Completions duplicates the
+    // request and can make Claude Desktop enter repeated "request too large" loops.
+    if matches!(status.as_u16(), 404 | 405 | 406 | 415 | 501) {
+        return true;
+    }
+
+    let preview = body_preview(bytes).to_ascii_lowercase();
+    if preview.contains("not found")
+        || preview.contains("unsupported endpoint")
+        || preview.contains("unknown endpoint")
+        || preview.contains("method not allowed")
+    {
+        return true;
+    }
+
+    false
 }
 
 fn upstream_url(base_url: &str, endpoint: &str) -> String {
@@ -1114,8 +1204,20 @@ fn upstream_status_err(status: reqwest::StatusCode, body: String) -> Response {
                 body.chars().take(500).collect()
             }
         });
+    let client_status = match status.as_u16() {
+        400 => StatusCode::BAD_REQUEST,
+        401 => StatusCode::UNAUTHORIZED,
+        403 => StatusCode::FORBIDDEN,
+        408 => StatusCode::REQUEST_TIMEOUT,
+        409 => StatusCode::CONFLICT,
+        413 => StatusCode::PAYLOAD_TOO_LARGE,
+        422 => StatusCode::UNPROCESSABLE_ENTITY,
+        429 => StatusCode::TOO_MANY_REQUESTS,
+        500..=599 => StatusCode::BAD_GATEWAY,
+        _ => StatusCode::BAD_GATEWAY,
+    };
     (
-        StatusCode::BAD_GATEWAY,
+        client_status,
         Json(json!({
             "error": {
                 "type": "upstream",
@@ -1135,6 +1237,10 @@ mod tests {
         models::{CreateModelRoute, CreateProvider},
     };
     use axum::{body::to_bytes, http, routing::post, Router};
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -1370,6 +1476,166 @@ mod tests {
         assert_eq!(body["model"], "claude-sonnet-4-6");
         assert_eq!(body["content"][0]["text"], "hello from chat");
         assert_eq!(body["usage"]["output_tokens"], 3);
+    }
+
+    #[tokio::test]
+    async fn test_messages_accepts_large_payloads_above_axum_default() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("t.db");
+        database::initialize(&db).unwrap();
+
+        let app = build_router(Ctx {
+            db,
+            client: Client::new(),
+            profile: GatewayProfile {
+                listen_host: "127.0.0.1".into(),
+                listen_port: 3456,
+                auth_token: "tok".into(),
+            },
+        });
+        let large_body = json!({
+            "model": "missing-route",
+            "messages": [{
+                "role": "user",
+                "content": "x".repeat(3 * 1024 * 1024)
+            }],
+            "max_tokens": 32
+        })
+        .to_string();
+
+        let resp = app
+            .oneshot(
+                http::Request::builder()
+                    .method(http::Method::POST)
+                    .uri("/v1/messages")
+                    .header("x-api-key", "tok")
+                    .header(http::header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(large_body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["error"]["type"], "invalid_request");
+        assert!(body["error"]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Unknown model"));
+    }
+
+    #[tokio::test]
+    async fn test_messages_does_not_fallback_on_request_too_large() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("t.db");
+        database::initialize(&db).unwrap();
+
+        let chat_hits = Arc::new(AtomicUsize::new(0));
+        let hits = Arc::clone(&chat_hits);
+        let upstream = Router::new()
+            .route(
+                "/v1/messages",
+                post(|| async {
+                    (
+                        StatusCode::PAYLOAD_TOO_LARGE,
+                        Json(json!({
+                            "error": {
+                                "type": "invalid_request_error",
+                                "message": "Request too large (max 32MB). Try with a smaller file."
+                            }
+                        })),
+                    )
+                }),
+            )
+            .route(
+                "/v1/chat/completions",
+                post(move || {
+                    let hits = Arc::clone(&hits);
+                    async move {
+                        hits.fetch_add(1, Ordering::SeqCst);
+                        Json(json!({"choices":[{"message":{"content":"should not be used"},"finish_reason":"stop"}]}))
+                    }
+                }),
+            );
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, upstream).await.unwrap();
+        });
+
+        database::create_provider(
+            &db,
+            &CreateProvider {
+                id: "p1".into(),
+                name: "P".into(),
+                base_url: format!("http://{addr}"),
+                openai_base_url: None,
+                anthropic_base_url: None,
+                auth_header: "Authorization".into(),
+                auth_scheme: Some("Bearer".into()),
+                api_key: Some("k".into()),
+            },
+        )
+        .unwrap();
+        database::create_route(
+            &db,
+            &CreateModelRoute {
+                id: "r1".into(),
+                claude_alias: "claude-sonnet-4-6".into(),
+                display_name: "S".into(),
+                provider_id: "p1".into(),
+                upstream_model: "m".into(),
+            },
+        )
+        .unwrap();
+
+        let app = build_router(Ctx {
+            db,
+            client: Client::new(),
+            profile: GatewayProfile {
+                listen_host: "127.0.0.1".into(),
+                listen_port: 3456,
+                auth_token: "tok".into(),
+            },
+        });
+
+        let resp = app
+            .oneshot(
+                http::Request::builder()
+                    .method(http::Method::POST)
+                    .uri("/v1/messages")
+                    .header("x-api-key", "tok")
+                    .header(http::header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        json!({"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"hi"}],"max_tokens":32})
+                            .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::PAYLOAD_TOO_LARGE);
+        assert_eq!(chat_hits.load(Ordering::SeqCst), 0);
+        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["error"]["upstream_status"], 413);
+        assert!(body["error"]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Request too large"));
+    }
+
+    #[test]
+    fn test_chat_stream_error_is_not_text_delta() {
+        let line = r#"data: {"error":{"message":"Request too large (max 32MB). Try with a smaller file."}}"#;
+        assert_eq!(
+            extract_chat_stream_error(line).as_deref(),
+            Some("Request too large (max 32MB). Try with a smaller file.")
+        );
+        assert_eq!(extract_chat_delta(line), None);
     }
 
     #[test]

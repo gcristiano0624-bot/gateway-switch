@@ -3,6 +3,8 @@ use plist::{Dictionary as PlistDictionary, Value as PlistValue};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
+#[cfg(unix)]
+use std::os::unix::fs::{symlink, PermissionsExt};
 use std::{
     collections::HashMap,
     fs,
@@ -14,8 +16,6 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Emitter};
-#[cfg(unix)]
-use std::os::unix::fs::{symlink, PermissionsExt};
 
 const STORE_INDEX_URL: &str = "https://b-nnett.github.io/codex-plusplus/store/index.json";
 const SOURCE_ARCHIVE_URL: &str =
@@ -30,7 +30,10 @@ const DEFAULT_TWEAKS: [(&str, &str); 2] = [
         "co.bennett.custom-keyboard-shortcuts",
         "b-nnett/codex-plusplus-keyboard-shortcuts",
     ),
-    ("co.bennett.ui-improvements", "b-nnett/codex-plusplus-bennett-ui"),
+    (
+        "co.bennett.ui-improvements",
+        "b-nnett/codex-plusplus-bennett-ui",
+    ),
 ];
 const LOADER_CJS: &str = r#"/* eslint-disable */
 "use strict";
@@ -622,7 +625,11 @@ pub fn preflight() -> CodexPpPreflight {
     });
 
     let ready = checks.iter().all(|check| check.status != "error");
-    let install_mode = if ready { "native".to_string() } else { "blocked".to_string() };
+    let install_mode = if ready {
+        "native".to_string()
+    } else {
+        "blocked".to_string()
+    };
     let summary = match install_mode.as_str() {
         "native" => {
             "Ready to run Gateway Switch native bootstrap, build codex++, and patch Codex.app without install.sh.".to_string()
@@ -861,12 +868,7 @@ fn native_action_local_signing(action: &str) -> bool {
 
 fn preferred_local_signing() -> bool {
     read_json(&user_root().join("state.json"))
-        .map(|value| {
-            value
-                .get("signingMode")
-                .and_then(Value::as_str)
-                == Some("local-identity")
-        })
+        .map(|value| value.get("signingMode").and_then(Value::as_str) == Some("local-identity"))
         .unwrap_or(false)
 }
 
@@ -931,9 +933,7 @@ fn run_native_install(
 
 fn native_install_impl(ctx: &mut NativeInstallContext, local_signing: bool) -> Result<(), String> {
     if !cfg!(target_os = "macos") {
-        return Err(
-            "Gateway Switch native codex++ install currently targets macOS only.".into(),
-        );
+        return Err("Gateway Switch native codex++ install currently targets macOS only.".into());
     }
 
     let root = user_root();
@@ -944,7 +944,8 @@ fn native_install_impl(ctx: &mut NativeInstallContext, local_signing: bool) -> R
     let bootstrap_state_path = root.join(NATIVE_BOOTSTRAP_STATE_FILE);
     let source_dir = root.join("source");
     let backup_source_dir = root.join("source-prev");
-    write_native_bootstrap_state(
+    record_native_bootstrap_state(
+        ctx,
         &bootstrap_state_path,
         &ctx.started_at,
         "preflight",
@@ -952,28 +953,29 @@ fn native_install_impl(ctx: &mut NativeInstallContext, local_signing: bool) -> R
         "Starting native codex++ bootstrap.",
         Some(&source_dir),
         Some(&backup_source_dir),
-    )
-    .map_err(|e| {
-        format!(
-            "Failed to write native bootstrap state at {}: {}",
-            bootstrap_state_path.display(),
-            e
-        )
-    })?;
+    );
+
+    let codex = locate_native_codex_install()
+        .map_err(|e| format!("Failed to locate Codex.app install: {}", e))?;
+    ctx.log(
+        "stdout",
+        format!("Located Codex at {}", codex.app_root.display()),
+    );
+    ensure_unpacked_artifacts(ctx, &codex, &root)?;
 
     let node = detect_node();
     if node.status == "error" {
         return Err(format!("Node preflight failed: {}", node.detail));
     }
+    ctx.log("stdout", format!("Node preflight ok: {}", node.detail));
     let npm = detect_tool("npm", &["--version"]);
     if npm.status == "error" {
         return Err(format!("npm preflight failed: {}", npm.detail));
     }
+    ctx.log("stdout", format!("npm preflight ok: {}", npm.detail));
 
-    let codex = locate_native_codex_install()
-        .map_err(|e| format!("Failed to locate Codex.app install: {}", e))?;
-    ctx.log("stdout", format!("Located Codex at {}", codex.app_root.display()));
-    write_native_bootstrap_state(
+    record_native_bootstrap_state(
+        ctx,
         &bootstrap_state_path,
         &ctx.started_at,
         "download",
@@ -981,7 +983,7 @@ fn native_install_impl(ctx: &mut NativeInstallContext, local_signing: bool) -> R
         "Downloading codex++ source archive.",
         Some(&source_dir),
         Some(&backup_source_dir),
-    )?;
+    );
 
     let mut should_restore_source = false;
     let mut should_restore_app = false;
@@ -989,7 +991,8 @@ fn native_install_impl(ctx: &mut NativeInstallContext, local_signing: bool) -> R
         let extracted_root = download_and_extract_source(ctx, &root)?;
         switch_source_tree(ctx, &extracted_root, &source_dir, &backup_source_dir)?;
         should_restore_source = true;
-        write_native_bootstrap_state(
+        record_native_bootstrap_state(
+            ctx,
             &bootstrap_state_path,
             &ctx.started_at,
             "build",
@@ -997,12 +1000,13 @@ fn native_install_impl(ctx: &mut NativeInstallContext, local_signing: bool) -> R
             "Running npm install/build inside the native source tree.",
             Some(&source_dir),
             Some(&backup_source_dir),
-        )?;
+        );
         run_streaming_command(ctx, "npm", &["install"], &source_dir, "npm install")?;
         run_streaming_command(ctx, "npm", &["run", "build"], &source_dir, "npm run build")?;
         maybe_fail_native_phase("after-build")?;
 
-        write_native_bootstrap_state(
+        record_native_bootstrap_state(
+            ctx,
             &bootstrap_state_path,
             &ctx.started_at,
             "stage-runtime",
@@ -1010,7 +1014,7 @@ fn native_install_impl(ctx: &mut NativeInstallContext, local_signing: bool) -> R
             "Copying runtime assets into the codex-plusplus user directory.",
             Some(&source_dir),
             Some(&backup_source_dir),
-        )?;
+        );
         stage_runtime_assets(ctx, &source_dir, &root)?;
         initialize_native_config(&root, &source_dir)?;
         install_default_tweaks_native(ctx, &root.join("tweaks"))?;
@@ -1018,7 +1022,8 @@ fn native_install_impl(ctx: &mut NativeInstallContext, local_signing: bool) -> R
         ctx.log("stdout", cli_shim_summary);
         maybe_fail_native_phase("after-runtime")?;
 
-        write_native_bootstrap_state(
+        record_native_bootstrap_state(
+            ctx,
             &bootstrap_state_path,
             &ctx.started_at,
             "backup-app",
@@ -1026,12 +1031,13 @@ fn native_install_impl(ctx: &mut NativeInstallContext, local_signing: bool) -> R
             "Creating recoverable backups for Codex.app artifacts.",
             Some(&source_dir),
             Some(&backup_source_dir),
-        )?;
+        );
         backup_codex_artifacts(&codex, &root)?;
         should_restore_app = true;
         maybe_fail_native_phase("after-backup-app")?;
 
-        write_native_bootstrap_state(
+        record_native_bootstrap_state(
+            ctx,
             &bootstrap_state_path,
             &ctx.started_at,
             "patch-app",
@@ -1039,7 +1045,7 @@ fn native_install_impl(ctx: &mut NativeInstallContext, local_signing: bool) -> R
             "Patching app.asar and updating ElectronAsarIntegrity.",
             Some(&source_dir),
             Some(&backup_source_dir),
-        )?;
+        );
         let patch = patch_codex_asar(&codex, &root)?;
         if patch.already_patched {
             ctx.log(
@@ -1064,7 +1070,8 @@ fn native_install_impl(ctx: &mut NativeInstallContext, local_signing: bool) -> R
         clear_quarantine_if_needed(&codex.app_root);
         maybe_fail_native_phase("after-patch")?;
 
-        write_native_bootstrap_state(
+        record_native_bootstrap_state(
+            ctx,
             &bootstrap_state_path,
             &ctx.started_at,
             "codesign",
@@ -1072,13 +1079,14 @@ fn native_install_impl(ctx: &mut NativeInstallContext, local_signing: bool) -> R
             "Re-signing Codex.app after native patching.",
             Some(&source_dir),
             Some(&backup_source_dir),
-        )?;
+        );
         let signing = sign_codex_app_native(ctx, &codex, local_signing)?;
         let watcher = install_watcher_native(&root, &codex)?;
         ctx.log("stdout", format!("Installed watcher: {}", watcher));
 
         write_native_installer_state(&root, &codex, &source_dir, &patch, &signing, &watcher)?;
-        write_native_bootstrap_state(
+        record_native_bootstrap_state(
+            ctx,
             &bootstrap_state_path,
             &ctx.started_at,
             "complete",
@@ -1086,7 +1094,7 @@ fn native_install_impl(ctx: &mut NativeInstallContext, local_signing: bool) -> R
             "Native bootstrap, build, and patch completed successfully.",
             Some(&source_dir),
             Some(&backup_source_dir),
-        )?;
+        );
         ctx.log("stdout", "Native codex++ install completed successfully.");
         Ok(())
     })();
@@ -1140,7 +1148,11 @@ fn download_and_extract_source(
     fs::write(&archive_path, &bytes).map_err(|e| e.to_string())?;
     ctx.log(
         "stdout",
-        format!("Downloaded {} bytes to {}", bytes.len(), archive_path.display()),
+        format!(
+            "Downloaded {} bytes to {}",
+            bytes.len(),
+            archive_path.display()
+        ),
     );
 
     let extract_root = temp_root.join("extract");
@@ -1205,7 +1217,10 @@ fn restore_previous_source_tree(
         fs::rename(backup_source_dir, source_dir).map_err(|e| e.to_string())?;
         ctx.log(
             "stdout",
-            format!("Restored previous source tree from {}", source_dir.display()),
+            format!(
+                "Restored previous source tree from {}",
+                source_dir.display()
+            ),
         );
     }
     Ok(())
@@ -1299,8 +1314,105 @@ fn restore_codex_artifacts(
         }
         copy_dir(&backup_unpacked, &codex.asar_unpacked_path)?;
     }
-    ctx.log("stdout", "Restored Codex.app artifacts from the native backup set.");
+    ctx.log(
+        "stdout",
+        "Restored Codex.app artifacts from the native backup set.",
+    );
     Ok(())
+}
+
+fn ensure_unpacked_artifacts(
+    ctx: &mut NativeInstallContext,
+    codex: &NativeCodexInstall,
+    root: &Path,
+) -> Result<(), String> {
+    if is_valid_asar_unpacked(&codex.asar_unpacked_path) {
+        ctx.log(
+            "stdout",
+            format!(
+                "app.asar.unpacked native modules look healthy at {}",
+                codex.asar_unpacked_path.display()
+            ),
+        );
+        return Ok(());
+    }
+    ctx.log(
+        "stderr",
+        format!(
+            "app.asar.unpacked native modules are missing or incomplete at {}; checking backups.",
+            codex.asar_unpacked_path.display()
+        ),
+    );
+
+    let candidates = [
+        root.join("backup").join("app.asar.unpacked"),
+        root.join("backup")
+            .join("Codex.app")
+            .join("Contents")
+            .join("Resources")
+            .join("app.asar.unpacked"),
+        root.join("backup")
+            .join("native-last")
+            .join("app.asar.unpacked"),
+    ];
+    for candidate in &candidates {
+        ctx.log(
+            "stdout",
+            format!(
+                "Checking app.asar.unpacked backup candidate: {} ({})",
+                candidate.display(),
+                if is_valid_asar_unpacked(candidate) {
+                    "valid"
+                } else {
+                    "invalid"
+                }
+            ),
+        );
+    }
+    let Some(source) = candidates
+        .iter()
+        .find(|candidate| is_valid_asar_unpacked(candidate))
+    else {
+        return Err(format!(
+            "Codex.app is missing valid app.asar.unpacked native modules, and no valid backup was found under {}",
+            root.join("backup").display()
+        ));
+    };
+
+    ctx.log(
+        "stdout",
+        format!(
+            "Restoring missing app.asar.unpacked native modules from {}",
+            source.display()
+        ),
+    );
+    if codex.asar_unpacked_path.exists() {
+        fs::remove_dir_all(&codex.asar_unpacked_path).map_err(|e| e.to_string())?;
+    }
+    copy_dir(source, &codex.asar_unpacked_path)?;
+    ctx.log(
+        "stdout",
+        format!(
+            "Restored app.asar.unpacked native modules to {}",
+            codex.asar_unpacked_path.display()
+        ),
+    );
+    Ok(())
+}
+
+fn is_valid_asar_unpacked(path: &Path) -> bool {
+    path.join("node_modules")
+        .join("better-sqlite3")
+        .join("build")
+        .join("Release")
+        .join("better_sqlite3.node")
+        .is_file()
+        && path
+            .join("node_modules")
+            .join("better-sqlite3")
+            .join("lib")
+            .join("index.js")
+            .is_file()
 }
 
 struct NativePatchOutcome {
@@ -1310,21 +1422,23 @@ struct NativePatchOutcome {
     already_patched: bool,
 }
 
-fn patch_codex_asar(
-    codex: &NativeCodexInstall,
-    root: &Path,
-) -> Result<NativePatchOutcome, String> {
+fn patch_codex_asar(codex: &NativeCodexInstall, root: &Path) -> Result<NativePatchOutcome, String> {
     let parsed = parse_asar_archive(&codex.asar_path)?;
     let original_asar_hash = sha256_hex(&parsed.header_json);
     let package_json = read_inline_asar_file(&parsed, "package.json")?;
-    let mut package: Value =
-        serde_json::from_slice(&package_json).map_err(|e| format!("Invalid package.json: {}", e))?;
+    let mut package: Value = serde_json::from_slice(&package_json)
+        .map_err(|e| format!("Invalid package.json: {}", e))?;
     let original_entry_point = package
         .get("__codexpp")
         .and_then(|value| value.get("originalMain"))
         .and_then(Value::as_str)
         .map(str::to_string)
-        .or_else(|| package.get("main").and_then(Value::as_str).map(str::to_string))
+        .or_else(|| {
+            package
+                .get("main")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
         .ok_or("Codex package.json has no main entry")?;
     let existing_user_root = package
         .get("__codexpp")
@@ -1396,7 +1510,10 @@ struct ParsedAsarArchive {
 fn parse_asar_archive(path: &Path) -> Result<ParsedAsarArchive, String> {
     let bytes = fs::read(path).map_err(|e| e.to_string())?;
     if bytes.len() < 16 {
-        return Err(format!("{} is too small to be a valid asar", path.display()));
+        return Err(format!(
+            "{} is too small to be a valid asar",
+            path.display()
+        ));
     }
     let header_size = le_u32(&bytes[4..8]) as usize;
     let json_size = le_u32(&bytes[12..16]) as usize;
@@ -1461,7 +1578,11 @@ fn rebuild_asar_header(
             .get("executable")
             .and_then(Value::as_bool)
             .unwrap_or(false);
-        if node.get("unpacked").and_then(Value::as_bool).unwrap_or(false) {
+        if node
+            .get("unpacked")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
             if modified_files.contains_key(current_path) {
                 return Err(format!(
                     "Cannot replace unpacked asar file {} in native patch mode",
@@ -1483,7 +1604,11 @@ fn rebuild_asar_header(
 fn read_inline_asar_file(archive: &ParsedAsarArchive, path: &str) -> Result<Vec<u8>, String> {
     let node = find_asar_node(&archive.header, path)
         .ok_or_else(|| format!("{} not found in app.asar", path))?;
-    if node.get("unpacked").and_then(Value::as_bool).unwrap_or(false) {
+    if node
+        .get("unpacked")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
         return Err(format!(
             "{} is marked unpacked and cannot be read from inline asar data",
             path
@@ -1598,10 +1723,7 @@ fn update_electron_asar_integrity(meta_path: &Path, hash: &str) -> Result<(), St
     let mut entry = PlistDictionary::new();
     entry.insert("algorithm".into(), PlistValue::String("SHA256".into()));
     entry.insert("hash".into(), PlistValue::String(hash.into()));
-    integrity_dict.insert(
-        "Resources/app.asar".into(),
-        PlistValue::Dictionary(entry),
-    );
+    integrity_dict.insert("Resources/app.asar".into(), PlistValue::Dictionary(entry));
     plist.to_file_xml(meta_path).map_err(|e| e.to_string())
 }
 
@@ -1634,16 +1756,57 @@ fn write_native_installer_state(
 
 fn read_source_version(source_dir: &Path) -> String {
     read_json(&source_dir.join("package.json"))
-        .and_then(|value| value.get("version").and_then(Value::as_str).map(str::to_string))
+        .and_then(|value| {
+            value
+                .get("version")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
         .unwrap_or_else(|| "native-bootstrap".into())
 }
 
 fn read_codex_version(meta_path: &Path) -> Option<String> {
     let plist = PlistValue::from_file(meta_path).ok()?;
-    plist.as_dictionary()?
+    plist
+        .as_dictionary()?
         .get("CFBundleShortVersionString")?
         .as_string()
         .map(str::to_string)
+}
+
+fn record_native_bootstrap_state(
+    ctx: &NativeInstallContext,
+    path: &Path,
+    started_at: &str,
+    phase: &str,
+    status: &str,
+    detail: &str,
+    source_dir: Option<&Path>,
+    backup_source_dir: Option<&Path>,
+) {
+    if let Err(error) = write_native_bootstrap_state(
+        path,
+        started_at,
+        phase,
+        status,
+        detail,
+        source_dir,
+        backup_source_dir,
+    ) {
+        let line = format!(
+            "Unable to write native bootstrap state at {}: {}",
+            path.display(),
+            error
+        );
+        if let Some(log_file) = &ctx.log_file {
+            let _ = append_line(log_file, &format!("[stderr] {}", line));
+        }
+        if let Some(app) = &ctx.app {
+            emit_log(app, &ctx.session_id, "stderr", line);
+        } else {
+            eprintln!("{}", line);
+        }
+    }
 }
 
 fn write_native_bootstrap_state(
@@ -1667,7 +1830,10 @@ fn write_native_bootstrap_state(
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    write_json_pretty(path, &serde_json::to_value(state).map_err(|e| e.to_string())?)
+    write_json_pretty(
+        path,
+        &serde_json::to_value(state).map_err(|e| e.to_string())?,
+    )
 }
 
 fn maybe_fail_native_phase(phase: &str) -> Result<(), String> {
@@ -1683,9 +1849,7 @@ fn initialize_native_config(root: &Path, source_dir: &Path) -> Result<(), String
     let root_obj = config
         .as_object_mut()
         .ok_or("codex++ config root must be a JSON object")?;
-    let codexpp = root_obj
-        .entry("codexPlusPlus")
-        .or_insert_with(|| json!({}));
+    let codexpp = root_obj.entry("codexPlusPlus").or_insert_with(|| json!({}));
     if !codexpp.is_object() {
         *codexpp = json!({});
     }
@@ -1707,7 +1871,10 @@ fn initialize_native_config(root: &Path, source_dir: &Path) -> Result<(), String
     update
         .as_object_mut()
         .ok_or("updateCheck must be an object")?
-        .insert("currentVersion".into(), Value::String(read_source_version(source_dir)));
+        .insert(
+            "currentVersion".into(),
+            Value::String(read_source_version(source_dir)),
+        );
     root_obj.entry("tweaks").or_insert_with(|| json!({}));
     write_json_pretty(&config_path, &config)
 }
@@ -1752,7 +1919,10 @@ fn latest_release_archive_url(repo: &str) -> Result<String, String> {
     };
     if let Some(assets) = release.get("assets").and_then(Value::as_array) {
         for asset in assets {
-            let name = asset.get("name").and_then(Value::as_str).unwrap_or_default();
+            let name = asset
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
             let download_url = asset
                 .get("browser_download_url")
                 .and_then(Value::as_str)
@@ -1772,7 +1942,8 @@ fn latest_release_archive_url(repo: &str) -> Result<String, String> {
 }
 
 fn download_and_extract_archive_blocking(url: &str, prefix: &str) -> Result<PathBuf, String> {
-    let temp_root = std::env::temp_dir().join(format!("gateway-switch-{}-{}", prefix, now_millis()));
+    let temp_root =
+        std::env::temp_dir().join(format!("gateway-switch-{}-{}", prefix, now_millis()));
     fs::create_dir_all(&temp_root).map_err(|e| e.to_string())?;
     let archive_path = temp_root.join("archive.tar.gz");
     let extract_root = temp_root.join("extract");
@@ -1833,7 +2004,11 @@ fn install_cli_shims_native(root: &Path) -> Result<String, String> {
     }
 
     Ok(match path_target {
-        Some(dir) => format!("Installed CLI shims to {} and linked into {}", shim_dir.display(), dir.display()),
+        Some(dir) => format!(
+            "Installed CLI shims to {} and linked into {}",
+            shim_dir.display(),
+            dir.display()
+        ),
         None => format!("Installed CLI shims to {}", shim_dir.display()),
     })
 }
@@ -1904,7 +2079,13 @@ fn sign_codex_app_native(
     run_streaming_command(
         ctx,
         "/usr/bin/codesign",
-        &["--force", "--deep", "--sign", identity_arg, &codex.app_root.display().to_string()],
+        &[
+            "--force",
+            "--deep",
+            "--sign",
+            identity_arg,
+            &codex.app_root.display().to_string(),
+        ],
         codex.app_root.parent().unwrap_or(Path::new("/")),
         "codesign bundle",
     )?;
@@ -2145,10 +2326,18 @@ fn install_watcher_native(root: &Path, codex: &NativeCodexInstall) -> Result<Str
         asar = xml_escape(&codex.asar_path.display().to_string()),
         cwd = xml_escape(&root.display().to_string()),
         stdout = xml_escape(&root.join("log").join("watcher.log").display().to_string()),
-        stderr = xml_escape(&root.join("log").join("watcher-error.log").display().to_string()),
+        stderr = xml_escape(
+            &root
+                .join("log")
+                .join("watcher-error.log")
+                .display()
+                .to_string()
+        ),
     );
     fs::write(&plist_path, plist).map_err(|e| e.to_string())?;
-    let _ = Command::new("launchctl").args(["unload", &plist_path.display().to_string()]).output();
+    let _ = Command::new("launchctl")
+        .args(["unload", &plist_path.display().to_string()])
+        .output();
     let load = Command::new("launchctl")
         .args(["load", "-w", &plist_path.display().to_string()])
         .output()
@@ -2161,7 +2350,11 @@ fn install_watcher_native(root: &Path, codex: &NativeCodexInstall) -> Result<Str
 
 fn clear_quarantine_if_needed(app_root: &Path) {
     let _ = Command::new("xattr")
-        .args(["-dr", "com.apple.quarantine", &app_root.display().to_string()])
+        .args([
+            "-dr",
+            "com.apple.quarantine",
+            &app_root.display().to_string(),
+        ])
         .output();
 }
 
@@ -2197,14 +2390,18 @@ fn run_streaming_command(
     cwd: &Path,
     label: &str,
 ) -> Result<(), String> {
-    let display = format!("{} {}", program, args.join(" "));
+    let resolved_program = find_command_on_path(program).unwrap_or_else(|| program.to_string());
+    let command_path = augmented_command_path();
+    let display = format!("{} {}", resolved_program, args.join(" "));
     ctx.log(
         "system",
         format!("{} [{}] (cwd: {})", display, label, cwd.display()),
     );
-    let output = Command::new(program)
+    ctx.log("system", format!("{} uses PATH={}", label, command_path));
+    let output = Command::new(&resolved_program)
         .args(args)
         .current_dir(cwd)
+        .env("PATH", command_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -2256,7 +2453,12 @@ fn execute_command_plan(
     action: String,
     plan: CommandPlan,
 ) -> Result<CodexPpCliResult, String> {
-    emit_log(app, session_id, "system", format!("$ {}", plan.display_command));
+    emit_log(
+        app,
+        session_id,
+        "system",
+        format!("$ {}", plan.display_command),
+    );
     let mut child = Command::new(&plan.program)
         .args(&plan.args)
         .stdout(Stdio::piped())
@@ -2413,10 +2615,7 @@ fn normalize_cli_command(
 fn resolve_headless_cli_plan(args: &[String]) -> Result<CommandPlan, String> {
     let cli = source_cli_entry_path();
     if !cli.exists() {
-        return Err(format!(
-            "codex++ CLI source not found at {}",
-            cli.display()
-        ));
+        return Err(format!("codex++ CLI source not found at {}", cli.display()));
     }
     let argv = args.iter().map(|value| value.as_str()).collect::<Vec<_>>();
     command_plan_from_cli(cli.display().to_string(), argv, &args.join(" "))
@@ -2462,12 +2661,42 @@ fn native_gateway_switch_executable() -> Result<PathBuf, String> {
 }
 
 fn find_command_on_path(command: &str) -> Option<String> {
-    std::env::var_os("PATH").and_then(|paths| {
-        std::env::split_paths(&paths)
-            .map(|p| p.join(command))
-            .find(|p| p.exists())
-            .map(|p| p.display().to_string())
-    })
+    command_search_paths()
+        .into_iter()
+        .map(|p| p.join(command))
+        .find(|p| p.exists())
+        .map(|p| p.display().to_string())
+}
+
+fn command_search_paths() -> Vec<PathBuf> {
+    let mut paths = std::env::var_os("PATH")
+        .map(|paths| std::env::split_paths(&paths).collect::<Vec<_>>())
+        .unwrap_or_default();
+    paths.extend(
+        [
+            "/opt/homebrew/bin",
+            "/opt/homebrew/sbin",
+            "/usr/local/bin",
+            "/usr/bin",
+            "/bin",
+            "/usr/sbin",
+            "/sbin",
+        ]
+        .iter()
+        .map(PathBuf::from),
+    );
+    paths.sort();
+    paths.dedup();
+    paths
+}
+
+fn augmented_command_path() -> String {
+    std::env::join_paths(command_search_paths())
+        .map(|value| value.to_string_lossy().to_string())
+        .unwrap_or_else(|_| {
+            "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+                .into()
+        })
 }
 
 fn detect_tool(command: &str, version_args: &[&str]) -> ToolCheck {
@@ -2479,6 +2708,7 @@ fn detect_tool(command: &str, version_args: &[&str]) -> ToolCheck {
     };
     let detail = Command::new(&path)
         .args(version_args)
+        .env("PATH", augmented_command_path())
         .output()
         .ok()
         .and_then(|output| {
@@ -2490,6 +2720,7 @@ fn detect_tool(command: &str, version_args: &[&str]) -> ToolCheck {
                 Some(stdout)
             }
         })
+        .map(|version| format!("{} at {}", version, path))
         .unwrap_or_else(|| format!("found at {}", path));
     ToolCheck {
         status: "ok".into(),
@@ -2504,7 +2735,11 @@ fn detect_node() -> ToolCheck {
             detail: "node not found on PATH; codex++ bootstrap requires Node.js 20+".into(),
         };
     };
-    let output = match Command::new(&path).arg("--version").output() {
+    let output = match Command::new(&path)
+        .arg("--version")
+        .env("PATH", augmented_command_path())
+        .output()
+    {
         Ok(output) => output,
         Err(error) => {
             return ToolCheck {
@@ -2526,11 +2761,17 @@ fn detect_node() -> ToolCheck {
         },
         Some(value) => ToolCheck {
             status: "error".into(),
-            detail: format!("{} detected at {}; codex++ requires Node.js 20+", value, path),
+            detail: format!(
+                "{} detected at {}; codex++ requires Node.js 20+",
+                value, path
+            ),
         },
         None => ToolCheck {
             status: "warn".into(),
-            detail: format!("unable to parse Node.js version from {} at {}", version, path),
+            detail: format!(
+                "unable to parse Node.js version from {} at {}",
+                version, path
+            ),
         },
     }
 }
@@ -2755,21 +2996,25 @@ mod native_install_acceptance_tests {
     fn cargo_binary() -> PathBuf {
         find_command_on_path("cargo")
             .map(PathBuf::from)
-            .or_else(|| {
-                dirs::home_dir().map(|home| home.join(".cargo").join("bin").join("cargo"))
-            })
+            .or_else(|| dirs::home_dir().map(|home| home.join(".cargo").join("bin").join("cargo")))
             .expect("cargo should exist")
     }
 
     fn ensure_gateway_switch_binary() -> PathBuf {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let binary = manifest_dir.join("target").join("debug").join("gateway-switch");
+        let binary = manifest_dir
+            .join("target")
+            .join("debug")
+            .join("gateway-switch");
         let status = Command::new(cargo_binary())
             .args(["build", "--bin", "gateway-switch"])
             .current_dir(&manifest_dir)
             .status()
             .expect("cargo build should run");
-        assert!(status.success(), "cargo build --bin gateway-switch should succeed");
+        assert!(
+            status.success(),
+            "cargo build --bin gateway-switch should succeed"
+        );
         assert!(binary.exists(), "built gateway-switch binary should exist");
         binary
     }
@@ -2794,8 +3039,14 @@ mod native_install_acceptance_tests {
             state.get("signingMode").and_then(Value::as_str),
             Some("local-identity")
         );
-        assert_eq!(state.get("watcher").and_then(Value::as_str), Some("launchd"));
-        assert!(user_root().join("tweaks").join(DEFAULT_TWEAKS[0].0).exists());
+        assert_eq!(
+            state.get("watcher").and_then(Value::as_str),
+            Some("launchd")
+        );
+        assert!(user_root()
+            .join("tweaks")
+            .join(DEFAULT_TWEAKS[0].0)
+            .exists());
         assert!(user_root().join("bin").join("codexplusplus").exists());
         let shim = fs::read_to_string(user_root().join("bin").join("codexplusplus"))
             .expect("native CLI shim should be readable");

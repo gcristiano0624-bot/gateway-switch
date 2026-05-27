@@ -6,7 +6,7 @@
 
 > Gateway Switch is not just a model router. It is a **runtime compatibility layer** that sits between AI-native desktop applications and third-party model providers, bridging protocol gaps, repairing malformed tool calls, enforcing safety boundaries, and degrading gracefully when upstream providers misbehave.
 
-[![Version](https://img.shields.io/badge/Version-1.8.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.8.1-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -141,6 +141,15 @@ For long-running agent workflows:
 `export_diagnostics` generates a comprehensive JSON bundle containing: runtime feature status, all provider capability profiles, benchmark results, provider configurations, route configurations, Codex route configurations, and recent request logs — everything needed to reproduce and debug an issue remotely.
 
 ---
+
+## Version 1.8.1 Hotfix Highlights
+
+- **Fixed Codex launch failures caused by missing SQLite native modules.** `repair` now checks `app.asar.unpacked` before install/repair and restores missing native modules such as `better-sqlite3` and `node-pty` from codex++ backups before re-signing the app.
+- **Fixed Node/npm resolution under GUI and launchd environments.** Native repair now searches common macOS tool locations such as `/usr/local/bin` and `/opt/homebrew/bin`, and injects an augmented PATH into npm subprocesses.
+- **Added focused Codex++ repair logs.** Logs now include `app.asar.unpacked` health checks, backup candidates, restore sources, Node/npm resolution, and npm execution PATH.
+- **Added UI Safe Mode.** The Codex++ enhancement page can disable only `co.bennett.ui-improvements` while keeping routing, script market, history repair, watcher, and CLI shim behavior enabled.
+- **Fixed Claude Desktop large-request fallback loops.** The Claude gateway now has a 64MiB local body limit and no longer falls back to Chat Completions for `413 Request too large` and other explicit upstream errors.
+- Latest verification: `PATH="$HOME/.cargo/bin:$PATH" cargo test`, `PATH="$HOME/.cargo/bin:$PATH" cargo test codex_pp::native_install_acceptance_tests::native_real_repair_smoke -- --ignored --nocapture --test-threads=1`, `pnpm build`, and `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`.
 
 ## Version 1.8.0 Highlights
 
@@ -456,7 +465,7 @@ Artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.1_aarch64.dmg
 ```
 
 ---

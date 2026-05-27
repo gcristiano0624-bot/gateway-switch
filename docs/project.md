@@ -1,6 +1,6 @@
 # Gateway Switch Project Documentation
 
-Version: 1.8.0
+Version: 1.8.1
 
 This document is the single technical source of truth for Gateway Switch. It merges the former project architecture notes and the Codex Gateway notes into one maintained file.
 
@@ -9,7 +9,7 @@ This document is the single technical source of truth for Gateway Switch. It mer
 If another AI receives this repository, start here:
 
 - Product: macOS Tauri app that routes Claude Desktop, Claude Code, and Codex App to third-party model providers.
-- Current version: `1.8.0`.
+- Current version: `1.8.1`.
 - Main frontend: `src/App.tsx` and `src/App.css`.
 - Main backend: `src-tauri/src/*.rs`.
 - Claude gateway: `src-tauri/src/gateway.rs`, local Anthropic Messages surface on `127.0.0.1:3456`.
@@ -20,7 +20,7 @@ If another AI receives this repository, start here:
 - Bindings: Claude Desktop in `desktop_binding.rs`, Claude Code in `claude_code_binding.rs`, Codex in `codex_binding.rs`.
 - Local data: `~/Library/Application Support/Gateway Switch/`.
 - Build: `PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build` when `cargo` is not already on `PATH`.
-- Latest verified tests: `pnpm build`, `PATH="$HOME/.cargo/bin:$PATH" cargo test` (32 passed, 3 ignored), `PATH="$HOME/.cargo/bin:$PATH" cargo test -- --ignored --nocapture --test-threads=1` (3 passed on real Codex.app), and `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build` after the 1.8.0 native codex++ release.
+- Latest verified tests: `pnpm build`, `PATH="$HOME/.cargo/bin:$PATH" cargo test` (32 passed, 3 ignored), `PATH="$HOME/.cargo/bin:$PATH" cargo test -- --ignored --nocapture --test-threads=1` (3 passed on real Codex.app), and `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build` after the 1.8.1 codex++ repair hotfix.
 
 The design intent is to make third-party models less likely to degrade Claude/Codex behavior by normalizing protocol shapes, repairing common tool-call failures, redacting secrets, exposing provider capability profiles, and adding safety/diagnostic gates around agent-like workflows.
 
@@ -36,7 +36,26 @@ The app solves two related but different protocol problems:
 
 The shared design goal is simple: providers share identity, auth header, auth scheme, and API key, but they do not share one universal Base URL. Provider URLs are split by protocol: OpenAI Base URL for Codex and Chat Completions fallback, Anthropic Base URL for Claude and Claude Code direct requests.
 
-## 2. Version 1.8.0 Scope
+## 2. Version 1.8.1 Hotfix Scope
+
+Version 1.8.1 is a focused hotfix for Codex++ native repair stability and Claude Desktop route error handling.
+
+Main changes:
+
+- Native repair validates `Codex.app/Contents/Resources/app.asar.unpacked` before continuing. If required native modules such as `better_sqlite3.node` are missing, it restores them from codex++ backup directories and then re-signs the app.
+- Repair logs now show unpacked artifact health, backup candidates, restore source, Node/npm resolution, and the PATH used by npm subprocesses.
+- Node/npm discovery no longer depends only on the GUI or launchd PATH; it also searches `/usr/local/bin`, `/opt/homebrew/bin`, and standard system paths.
+- The Codex++ enhancement UI includes a UI Safe Mode that disables only `co.bennett.ui-improvements`, keeping route, script market, history repair, watcher, and CLI features active.
+- Claude Desktop route handling now avoids fallback loops for explicit upstream errors such as `413 Request too large`.
+
+Verification for 1.8.1:
+
+- `PATH="$HOME/.cargo/bin:$PATH" cargo test`
+- `PATH="$HOME/.cargo/bin:$PATH" cargo test codex_pp::native_install_acceptance_tests::native_real_repair_smoke -- --ignored --nocapture --test-threads=1`
+- `pnpm build`
+- `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`
+
+## 3. Version 1.8.0 Scope
 
 Version 1.8.0 focuses on turning codex++ support from an external wrapper into a native Gateway Switch product capability with real-machine validation against `Codex.app`.
 
@@ -1016,13 +1035,13 @@ macOS artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.1_aarch64.dmg
 ```
 
 ## 25. Release Checklist
 
 - Frontend build passes.
-- Rust tests pass. Latest 1.8.0 verification: 32 standard tests passed, and 3 ignored real-machine acceptance tests passed separately.
+- Rust tests pass. Latest 1.8.1 verification: standard Rust tests passed, native real repair smoke passed, frontend build passed, and Tauri DMG packaging passed.
 - Claude Gateway health check passes.
 - Codex Gateway health check passes.
 - Claude route can rewrite model request and response fields.

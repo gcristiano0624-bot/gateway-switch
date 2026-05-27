@@ -6,7 +6,7 @@
 
 > Gateway Switch 不仅仅是一个模型路由器。它是一个**运行时兼容性层**，驻留在 AI 原生桌面应用与第三方模型服务之间，弥合协议鸿沟、修复畸形工具调用、强制安全边界，并在上游 Provider 异常时优雅降级。
 
-[![Version](https://img.shields.io/badge/Version-1.8.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.8.1-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -141,6 +141,15 @@ Claude 和 Codex 的 `/health` 端点会暴露这些画像，外部工具无需�
 `export_diagnostics` 生成全面的 JSON 包，包含：运行时特性状态、所有 Provider 能力画像、基准测试结果、Provider 配置、路由配置、Codex 路由配置、和近期请求日志 — 远程复现和调试问题所需的一切。
 
 ---
+
+## 1.8.1 Hotfix 更新重点
+
+- **修复 Codex 启动时 SQLite native 模块缺失。** `repair` 现在会在安装/修复前检查 `app.asar.unpacked`，如果 `better-sqlite3`、`node-pty` 等 native 模块缺失，会从 codex++ 备份自动恢复并继续重签。
+- **补齐 GUI / launchd 环境下的 Node/npm 路径。** Node/npm 探测与 `npm install/build` 现在会额外搜索 `/usr/local/bin`、`/opt/homebrew/bin` 等常见路径，并给外部命令注入增强 PATH，避免 watcher 或桌面 App 环境找不到 Node。
+- **增加 Codex++ repair 关键日志。** 日志会明确打印 `app.asar.unpacked` 健康检查、备份候选、恢复来源、Node/npm 解析路径和 npm 执行 PATH，方便后续排查。
+- **新增 UI Safe Mode。** Codex++ 页面增强页提供一键禁用 `co.bennett.ui-improvements` 的安全模式按钮，保留路由、脚本市场、历史会话修复、watcher 和 CLI shim。
+- **修复 Claude Desktop 路由大请求循环。** Claude 网关提升本地 body limit 到 64MiB，并阻止 `413 Request too large` 等明确上游错误继续 fallback 到 Chat Completions，避免重复请求和错误文本循环。
+- 最新验证：`PATH="$HOME/.cargo/bin:$PATH" cargo test`、`PATH="$HOME/.cargo/bin:$PATH" cargo test codex_pp::native_install_acceptance_tests::native_real_repair_smoke -- --ignored --nocapture --test-threads=1`、`pnpm build`、`CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`。
 
 ## 1.8.0 更新重点
 
@@ -456,7 +465,7 @@ pnpm tauri build
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.1_aarch64.dmg
 ```
 
 ---

@@ -850,6 +850,8 @@ const MOCK_CODEX_PP_INSTALL: CodexPpInstall = {
   safe_mode: false,
 };
 
+const CODEX_PP_UI_IMPROVEMENTS_TWEAK_ID = "co.bennett.ui-improvements";
+
 const MOCK_CODEX_PP_TWEAKS: CodexPpTweak[] = [
   {
     id: "co.bennett.ui-improvements",
@@ -1696,6 +1698,31 @@ function App() {
     }
   };
 
+  const setCodexPpUiSafeMode = async (enabled: boolean) => {
+    setCodexPpLoading(true);
+    try {
+      const tweaks = isTauriRuntime
+        ? await invoke<CodexPpTweak[]>("set_codex_pp_tweak_enabled", {
+          id: CODEX_PP_UI_IMPROVEMENTS_TWEAK_ID,
+          enabled: !enabled,
+        })
+        : codexPpTweaks.map(tw =>
+          tw.id === CODEX_PP_UI_IMPROVEMENTS_TWEAK_ID ? { ...tw, enabled: !enabled } : tw
+        );
+      setCodexPpTweaks(tweaks);
+      flash(
+        enabled
+          ? "UI safe mode enabled: page enhancement disabled"
+          : "UI safe mode disabled: page enhancement enabled",
+        "success",
+      );
+    } catch (e) {
+      flash(String(e), "error");
+    } finally {
+      setCodexPpLoading(false);
+    }
+  };
+
   const installCodexPpTweak = async (entry: CodexPpStoreEntry) => {
     setCodexPpLoading(true);
     try {
@@ -1845,7 +1872,7 @@ function App() {
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.8.0</div>
+          <div className="brand-sub">v1.8.1</div>
         </div>
       </div>
 
@@ -1910,7 +1937,7 @@ function App() {
         <span className="status-text">
           Claude <strong>{status?.gateway_running ? t("Running") : t("Stopped")}</strong> · Codex <strong>{codexStatus?.running ? t("Running") : t("Stopped")}</strong>
         </span>
-        <span className="sidebar-version">v1.8.0</span>
+        <span className="sidebar-version">v1.8.1</span>
       </div>
     </aside>
   );
@@ -2934,7 +2961,10 @@ function App() {
     </div>
   );
 
-  const CodexPpEnhancePage = () => (
+  const CodexPpEnhancePage = () => {
+    const uiEnhancement = codexPpTweaks.find(tw => tw.id === CODEX_PP_UI_IMPROVEMENTS_TWEAK_ID);
+    const uiSafeModeOn = uiEnhancement ? !uiEnhancement.enabled : false;
+    return (
     <div>
       <div className="page-header page-header-row">
         <div>
@@ -2944,11 +2974,36 @@ function App() {
         <div className="qa-buttons" style={{ margin: 0 }}>
           <button className="btn" onClick={() => void refreshCodexPp(false)} disabled={codexPpLoading}><IconRefresh /> {t("Refresh")}</button>
           <button className="btn" onClick={() => void runCodexPpCli("safe-mode-status")} disabled={codexPpLoading}>Safe Mode</button>
+          <button className="btn btn-primary" onClick={() => void setCodexPpUiSafeMode(true)} disabled={codexPpLoading || uiSafeModeOn}>
+            UI Safe On
+          </button>
         </div>
       </div>
       <div className="two-col">
         {CodexPpOverviewCard()}
         {CodexPpPreflightCard()}
+      </div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-title">UI Safe Mode</div>
+        <p style={{ color: "var(--muted)", marginBottom: 14 }}>
+          一键禁用页面增强 tweak，保留路由、脚本市场、历史会话修复、watcher 和 CLI shim。适合 Codex UI 错位或设置页异常时临时排障。
+        </p>
+        <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+          <span className="info-key">Managed Tweak</span>
+          <span className="info-val">{CODEX_PP_UI_IMPROVEMENTS_TWEAK_ID}</span>
+          <span className="info-key">Current State</span>
+          <span className="info-val">{uiEnhancement ? (uiSafeModeOn ? "UI safe mode on" : "Page enhancement active") : "Tweak not installed"}</span>
+          <span className="info-key">Other Features</span>
+          <span className="info-val">Kept enabled</span>
+        </div>
+        <div className="qa-buttons">
+          <button className="btn btn-primary" onClick={() => void setCodexPpUiSafeMode(true)} disabled={codexPpLoading || !uiEnhancement || uiSafeModeOn}>
+            Disable Page Enhancement
+          </button>
+          <button className="btn" onClick={() => void setCodexPpUiSafeMode(false)} disabled={codexPpLoading || !uiEnhancement || !uiSafeModeOn}>
+            Re-enable Page Enhancement
+          </button>
+        </div>
       </div>
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-title">Tweak Summary</div>
@@ -3000,7 +3055,8 @@ function App() {
         )}
       </div>
     </div>
-  );
+    );
+  };
 
   const CodexPpMarketPage = () => (
     <div>

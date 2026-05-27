@@ -1,6 +1,6 @@
 # Gateway Switch Project Documentation
 
-Version: 1.8.1
+Version: 1.8.2
 
 This document is the single technical source of truth for Gateway Switch. It merges the former project architecture notes and the Codex Gateway notes into one maintained file.
 
@@ -9,7 +9,7 @@ This document is the single technical source of truth for Gateway Switch. It mer
 If another AI receives this repository, start here:
 
 - Product: macOS Tauri app that routes Claude Desktop, Claude Code, and Codex App to third-party model providers.
-- Current version: `1.8.1`.
+- Current version: `1.8.2`.
 - Main frontend: `src/App.tsx` and `src/App.css`.
 - Main backend: `src-tauri/src/*.rs`.
 - Claude gateway: `src-tauri/src/gateway.rs`, local Anthropic Messages surface on `127.0.0.1:3456`.
@@ -36,7 +36,19 @@ The app solves two related but different protocol problems:
 
 The shared design goal is simple: providers share identity, auth header, auth scheme, and API key, but they do not share one universal Base URL. Provider URLs are split by protocol: OpenAI Base URL for Codex and Chat Completions fallback, Anthropic Base URL for Claude and Claude Code direct requests.
 
-## 2. Version 1.8.1 Hotfix Scope
+## 2. Version 1.8.2 Hotfix Scope
+
+Version 1.8.2 focuses on debuggability and safe page-enhancement fallback behavior.
+
+Main changes:
+
+- Native repair writes detailed compatibility diagnostics to `~/Library/Application Support/codex-plusplus/log/native-debug.log`.
+- `native-install.log` remains concise and points users to the debug file when deeper detail is available.
+- `app.asar.unpacked` diagnostics include required native file status, file sizes, `.node` binary count, and sample module paths.
+- Node/npm diagnostics include raw GUI/launchd PATH, augmented PATH, and per-candidate path resolution.
+- `codexPlusPlus.uiSafeMode` is now a first-class config key with default `false`. Setting it to `true` disables only `co.bennett.ui-improvements`.
+
+## 3. Version 1.8.1 Hotfix Scope
 
 Version 1.8.1 is a focused hotfix for Codex++ native repair stability and Claude Desktop route error handling.
 
@@ -1035,13 +1047,13 @@ macOS artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.1_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.2_aarch64.dmg
 ```
 
 ## 25. Release Checklist
 
 - Frontend build passes.
-- Rust tests pass. Latest 1.8.1 verification: standard Rust tests passed, native real repair smoke passed, frontend build passed, and Tauri DMG packaging passed.
+- Rust tests pass. Latest 1.8.2 verification: standard Rust tests passed, UI Safe Mode regression passed, native real repair smoke passed, frontend build passed, and Tauri DMG packaging passed.
 - Claude Gateway health check passes.
 - Codex Gateway health check passes.
 - Claude route can rewrite model request and response fields.

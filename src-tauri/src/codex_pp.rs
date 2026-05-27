@@ -25,6 +25,7 @@ const ASAR_BLOCK_SIZE: usize = 4 * 1024 * 1024;
 const NATIVE_BOOTSTRAP_STATE_FILE: &str = "native-bootstrap-state.json";
 const DEFAULT_LOCAL_SIGNING_IDENTITY: &str = "Codex++ Local Signing";
 const WATCHER_LABEL: &str = "com.codexplusplus.watcher";
+const UI_IMPROVEMENTS_TWEAK_ID: &str = "co.bennett.ui-improvements";
 const DEFAULT_TWEAKS: [(&str, &str); 2] = [
     (
         "co.bennett.custom-keyboard-shortcuts",
@@ -342,20 +343,7 @@ pub fn set_tweak_enabled(id: String, enabled: bool) -> Result<Vec<CodexPpTweak>,
     if !config.is_object() {
         config = json!({});
     }
-    let root = config.as_object_mut().ok_or("invalid config")?;
-    let tweaks = root.entry("tweaks").or_insert_with(|| json!({}));
-    if !tweaks.is_object() {
-        *tweaks = json!({});
-    }
-    let tweak_map = tweaks.as_object_mut().ok_or("invalid tweaks config")?;
-    let existing = tweak_map.entry(id).or_insert_with(|| json!({}));
-    if !existing.is_object() {
-        *existing = json!({});
-    }
-    existing
-        .as_object_mut()
-        .ok_or("invalid tweak config")?
-        .insert("enabled".into(), Value::Bool(enabled));
+    set_tweak_enabled_in_config(&mut config, &id, enabled)?;
     if let Some(parent) = config_path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -365,6 +353,34 @@ pub fn set_tweak_enabled(id: String, enabled: bool) -> Result<Vec<CodexPpTweak>,
     )
     .map_err(|e| e.to_string())?;
     list_tweaks()
+}
+
+fn set_tweak_enabled_in_config(config: &mut Value, id: &str, enabled: bool) -> Result<(), String> {
+    let root = config.as_object_mut().ok_or("invalid config")?;
+    let tweaks = root.entry("tweaks").or_insert_with(|| json!({}));
+    if !tweaks.is_object() {
+        *tweaks = json!({});
+    }
+    let tweak_map = tweaks.as_object_mut().ok_or("invalid tweaks config")?;
+    let existing = tweak_map.entry(id.to_string()).or_insert_with(|| json!({}));
+    if !existing.is_object() {
+        *existing = json!({});
+    }
+    existing
+        .as_object_mut()
+        .ok_or("invalid tweak config")?
+        .insert("enabled".into(), Value::Bool(enabled));
+    if id == UI_IMPROVEMENTS_TWEAK_ID {
+        let codexpp = root.entry("codexPlusPlus").or_insert_with(|| json!({}));
+        if !codexpp.is_object() {
+            *codexpp = json!({});
+        }
+        codexpp
+            .as_object_mut()
+            .ok_or("invalid codexPlusPlus config")?
+            .insert("uiSafeMode".into(), Value::Bool(!enabled));
+    }
+    Ok(())
 }
 
 pub async fn fetch_store() -> Result<CodexPpStoreIndex, String> {
@@ -813,6 +829,7 @@ struct NativeInstallContext {
     stderr: String,
     started_at: String,
     log_file: Option<PathBuf>,
+    debug_file: Option<PathBuf>,
 }
 
 impl NativeInstallContext {
@@ -824,11 +841,24 @@ impl NativeInstallContext {
             stderr: String::new(),
             started_at: chrono::Utc::now().to_rfc3339(),
             log_file: None,
+            debug_file: None,
         }
     }
 
     fn set_log_file(&mut self, path: PathBuf) {
         self.log_file = Some(path);
+    }
+
+    fn set_debug_file(&mut self, path: PathBuf) {
+        let _ = write_debug_header(&path, &self.started_at);
+        self.debug_file = Some(path);
+    }
+
+    fn debug(&self, line: impl Into<String>) {
+        if let Some(debug_file) = &self.debug_file {
+            let line = line.into();
+            let _ = append_line(debug_file, &format!("[debug] {}", line));
+        }
     }
 
     fn log(&mut self, stream: &str, line: impl Into<String>) {
@@ -941,6 +971,13 @@ fn native_install_impl(ctx: &mut NativeInstallContext, local_signing: bool) -> R
     fs::create_dir_all(&log_dir)
         .map_err(|e| format!("Failed to create {}: {}", log_dir.display(), e))?;
     ctx.set_log_file(log_dir.join("native-install.log"));
+    ctx.set_debug_file(log_dir.join("native-debug.log"));
+    ctx.debug(format!(
+        "native action started_at={}, local_signing={}, pid={}",
+        ctx.started_at,
+        local_signing,
+        std::process::id()
+    ));
     let bootstrap_state_path = root.join(NATIVE_BOOTSTRAP_STATE_FILE);
     let source_dir = root.join("source");
     let backup_source_dir = root.join("source-prev");
@@ -968,11 +1005,19 @@ fn native_install_impl(ctx: &mut NativeInstallContext, local_signing: bool) -> R
         return Err(format!("Node preflight failed: {}", node.detail));
     }
     ctx.log("stdout", format!("Node preflight ok: {}", node.detail));
+    ctx.debug(format!(
+        "Node preflight resolution detail: {}",
+        command_resolution_debug("node")
+    ));
     let npm = detect_tool("npm", &["--version"]);
     if npm.status == "error" {
         return Err(format!("npm preflight failed: {}", npm.detail));
     }
     ctx.log("stdout", format!("npm preflight ok: {}", npm.detail));
+    ctx.debug(format!(
+        "npm preflight resolution detail: {}",
+        command_resolution_debug("npm")
+    ));
 
     record_native_bootstrap_state(
         ctx,
@@ -1334,6 +1379,10 @@ fn ensure_unpacked_artifacts(
                 codex.asar_unpacked_path.display()
             ),
         );
+        ctx.debug(format!(
+            "app.asar.unpacked healthy diagnostic: {}",
+            asar_unpacked_debug_summary(&codex.asar_unpacked_path)
+        ));
         return Ok(());
     }
     ctx.log(
@@ -1343,6 +1392,20 @@ fn ensure_unpacked_artifacts(
             codex.asar_unpacked_path.display()
         ),
     );
+    ctx.log(
+        "stderr",
+        format!(
+            "Current app.asar.unpacked diagnostic was written to {}",
+            ctx.debug_file
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "native-debug.log".into())
+        ),
+    );
+    ctx.debug(format!(
+        "app.asar.unpacked current diagnostic: {}",
+        asar_unpacked_debug_summary(&codex.asar_unpacked_path)
+    ));
 
     let candidates = [
         root.join("backup").join("app.asar.unpacked"),
@@ -1356,16 +1419,16 @@ fn ensure_unpacked_artifacts(
             .join("app.asar.unpacked"),
     ];
     for candidate in &candidates {
+        ctx.debug(format!(
+            "app.asar.unpacked backup candidate {} => {}",
+            candidate.display(),
+            asar_unpacked_debug_summary(candidate)
+        ));
         ctx.log(
             "stdout",
             format!(
-                "Checking app.asar.unpacked backup candidate: {} ({})",
-                candidate.display(),
-                if is_valid_asar_unpacked(candidate) {
-                    "valid"
-                } else {
-                    "invalid"
-                }
+                "Checking app.asar.unpacked backup candidate: {}",
+                candidate.display()
             ),
         );
     }
@@ -1397,22 +1460,82 @@ fn ensure_unpacked_artifacts(
             codex.asar_unpacked_path.display()
         ),
     );
+    ctx.debug(format!(
+        "app.asar.unpacked restored diagnostic: {}",
+        asar_unpacked_debug_summary(&codex.asar_unpacked_path)
+    ));
     Ok(())
 }
 
 fn is_valid_asar_unpacked(path: &Path) -> bool {
-    path.join("node_modules")
-        .join("better-sqlite3")
-        .join("build")
-        .join("Release")
-        .join("better_sqlite3.node")
-        .is_file()
-        && path
-            .join("node_modules")
-            .join("better-sqlite3")
-            .join("lib")
-            .join("index.js")
-            .is_file()
+    required_unpacked_files()
+        .iter()
+        .all(|relative| path.join(relative).is_file())
+}
+
+fn required_unpacked_files() -> [&'static str; 2] {
+    [
+        "node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+        "node_modules/better-sqlite3/lib/index.js",
+    ]
+}
+
+fn asar_unpacked_debug_summary(path: &Path) -> String {
+    let mut required = Vec::new();
+    for relative in required_unpacked_files() {
+        let candidate = path.join(relative);
+        let status = match fs::metadata(&candidate) {
+            Ok(meta) if meta.is_file() => format!("ok:{}B", meta.len()),
+            Ok(meta) if meta.is_dir() => "is-dir".into(),
+            Ok(_) => "exists-not-file".into(),
+            Err(error) => format!("missing:{}", error.kind()),
+        };
+        required.push(format!("{}={}", relative, status));
+    }
+    let (node_count, node_samples) = count_node_binaries(path, 12);
+    format!(
+        "exists={}, valid={}, required=[{}], node_binaries={}, node_samples=[{}]",
+        path.exists(),
+        is_valid_asar_unpacked(path),
+        required.join("; "),
+        node_count,
+        node_samples.join(", ")
+    )
+}
+
+fn count_node_binaries(path: &Path, max_samples: usize) -> (usize, Vec<String>) {
+    if !path.exists() {
+        return (0, Vec::new());
+    }
+    let mut count = 0;
+    let mut samples = Vec::new();
+    let mut stack = vec![path.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let entry_path = entry.path();
+            let Ok(meta) = fs::symlink_metadata(&entry_path) else {
+                continue;
+            };
+            if meta.is_dir() {
+                stack.push(entry_path);
+            } else if entry_path.extension().and_then(|ext| ext.to_str()) == Some("node") {
+                count += 1;
+                if samples.len() < max_samples {
+                    samples.push(
+                        entry_path
+                            .strip_prefix(path)
+                            .unwrap_or(&entry_path)
+                            .display()
+                            .to_string(),
+                    );
+                }
+            }
+        }
+    }
+    (count, samples)
 }
 
 struct NativePatchOutcome {
@@ -1861,6 +1984,9 @@ fn initialize_native_config(root: &Path, source_dir: &Path) -> Result<(), String
         .or_insert_with(|| Value::Bool(true));
     codexpp_obj
         .entry("safeMode")
+        .or_insert_with(|| Value::Bool(false));
+    codexpp_obj
+        .entry("uiSafeMode")
         .or_insert_with(|| Value::Bool(false));
     let update = codexpp_obj
         .entry("updateCheck")
@@ -2397,7 +2523,12 @@ fn run_streaming_command(
         "system",
         format!("{} [{}] (cwd: {})", display, label, cwd.display()),
     );
-    ctx.log("system", format!("{} uses PATH={}", label, command_path));
+    ctx.debug(format!("{} uses PATH={}", label, command_path));
+    ctx.debug(format!(
+        "{} command resolution detail: {}",
+        label,
+        command_resolution_debug(program)
+    ));
     let output = Command::new(&resolved_program)
         .args(args)
         .current_dir(cwd)
@@ -2573,6 +2704,20 @@ fn append_line(path: &Path, line: &str) -> Result<(), String> {
     writeln!(file, "{}", line).map_err(|e| e.to_string())
 }
 
+fn write_debug_header(path: &Path, started_at: &str) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::write(
+        path,
+        format!(
+            "# Gateway Switch codex++ native debug log\n# started_at={}\n",
+            started_at
+        ),
+    )
+    .map_err(|e| e.to_string())
+}
+
 fn write_json_pretty(path: &Path, value: &Value) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -2697,6 +2842,31 @@ fn augmented_command_path() -> String {
             "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
                 .into()
         })
+}
+
+fn command_resolution_debug(command: &str) -> String {
+    let raw_path = std::env::var("PATH").unwrap_or_default();
+    let augmented_path = augmented_command_path();
+    let searched = command_search_paths()
+        .into_iter()
+        .map(|path| {
+            let candidate = path.join(command);
+            format!(
+                "{}:{}",
+                candidate.display(),
+                if candidate.exists() {
+                    "exists"
+                } else {
+                    "missing"
+                }
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "raw_PATH={}, augmented_PATH={}, searched=[{}]",
+        raw_path, augmented_path, searched
+    )
 }
 
 fn detect_tool(command: &str, version_args: &[&str]) -> ToolCheck {
@@ -2837,6 +3007,11 @@ fn find_nested_bool(value: &Value, keys: &[&str]) -> Option<bool> {
 
 fn is_tweak_enabled(config: &Value, id: &str) -> bool {
     if find_nested_bool(config, &["codexPlusPlus", "safeMode"]).unwrap_or(false) {
+        return false;
+    }
+    if id == UI_IMPROVEMENTS_TWEAK_ID
+        && find_nested_bool(config, &["codexPlusPlus", "uiSafeMode"]).unwrap_or(false)
+    {
         return false;
     }
     config
@@ -3017,6 +3192,42 @@ mod native_install_acceptance_tests {
         );
         assert!(binary.exists(), "built gateway-switch binary should exist");
         binary
+    }
+
+    #[test]
+    fn ui_safe_mode_only_disables_page_enhancement() {
+        let mut config = json!({
+            "codexPlusPlus": {
+                "safeMode": false,
+                "uiSafeMode": false
+            },
+            "tweaks": {
+                UI_IMPROVEMENTS_TWEAK_ID: { "enabled": true },
+                "co.bennett.custom-keyboard-shortcuts": { "enabled": true }
+            }
+        });
+
+        set_tweak_enabled_in_config(&mut config, UI_IMPROVEMENTS_TWEAK_ID, false)
+            .expect("ui safe mode config update should succeed");
+
+        assert_eq!(
+            find_nested_bool(&config, &["codexPlusPlus", "uiSafeMode"]),
+            Some(true)
+        );
+        assert!(!is_tweak_enabled(&config, UI_IMPROVEMENTS_TWEAK_ID));
+        assert!(is_tweak_enabled(
+            &config,
+            "co.bennett.custom-keyboard-shortcuts"
+        ));
+
+        set_tweak_enabled_in_config(&mut config, UI_IMPROVEMENTS_TWEAK_ID, true)
+            .expect("ui safe mode config reset should succeed");
+
+        assert_eq!(
+            find_nested_bool(&config, &["codexPlusPlus", "uiSafeMode"]),
+            Some(false)
+        );
+        assert!(is_tweak_enabled(&config, UI_IMPROVEMENTS_TWEAK_ID));
     }
 
     #[test]

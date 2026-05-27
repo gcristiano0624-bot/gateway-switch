@@ -6,7 +6,7 @@
 
 > Gateway Switch is not just a model router. It is a **runtime compatibility layer** that sits between AI-native desktop applications and third-party model providers, bridging protocol gaps, repairing malformed tool calls, enforcing safety boundaries, and degrading gracefully when upstream providers misbehave.
 
-[![Version](https://img.shields.io/badge/Version-1.8.1-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.8.2-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -141,6 +141,14 @@ For long-running agent workflows:
 `export_diagnostics` generates a comprehensive JSON bundle containing: runtime feature status, all provider capability profiles, benchmark results, provider configurations, route configurations, Codex route configurations, and recent request logs — everything needed to reproduce and debug an issue remotely.
 
 ---
+
+## Version 1.8.2 Hotfix Highlights
+
+- **Added a dedicated debug log file.** Detailed Codex++ native repair diagnostics now go to `~/Library/Application Support/codex-plusplus/log/native-debug.log`, while `native-install.log` remains focused on high-level progress.
+- **Added deeper unpacked artifact diagnostics.** The debug log includes `app.asar.unpacked` existence, required native file sizes, `.node` binary count, and sample native module paths.
+- **Added deeper Node/npm path diagnostics.** The debug log includes GUI/launchd `raw_PATH`, the augmented PATH, and per-candidate `node`/`npm` path existence.
+- **Made UI Safe Mode configurable.** `codexPlusPlus.uiSafeMode` defaults to `false`; when enabled, it disables only `co.bennett.ui-improvements` while preserving routing, script market, history repair, watcher, and CLI shim features.
+- **Added a regression test.** The test confirms that `uiSafeMode` only disables page enhancement and does not affect other tweaks.
 
 ## Version 1.8.1 Hotfix Highlights
 
@@ -465,7 +473,7 @@ Artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.1_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.2_aarch64.dmg
 ```
 
 ---

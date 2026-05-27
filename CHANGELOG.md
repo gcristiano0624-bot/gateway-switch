@@ -2,6 +2,15 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.8.2 - 2026-05-27
+
+- Added a dedicated Codex++ native debug log at `~/Library/Application Support/codex-plusplus/log/native-debug.log`.
+- Moved detailed `app.asar.unpacked` diagnostics and Node/npm path resolution details out of the normal install log and into the debug log.
+- Expanded unpacked diagnostics with required file sizes, `.node` binary count, and sampled native module paths.
+- Added `codexPlusPlus.uiSafeMode`, defaulting to `false`, to allow preconfiguring UI Safe Mode from `config.json`.
+- Ensured UI Safe Mode disables only `co.bennett.ui-improvements` while preserving route, script market, history repair, watcher, and CLI shim behavior.
+- Added regression coverage for the UI Safe Mode config behavior.
+
 ## 1.8.1 - 2026-05-27
 
 - Fixed Codex launch failure when `app.asar.unpacked` was missing native modules required by `better-sqlite3`. Native repair now validates and restores unpacked artifacts from backups before continuing.

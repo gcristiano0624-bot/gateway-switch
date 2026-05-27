@@ -6,7 +6,7 @@
 
 > Gateway Switch 不仅仅是一个模型路由器。它是一个**运行时兼容性层**，驻留在 AI 原生桌面应用与第三方模型服务之间，弥合协议鸿沟、修复畸形工具调用、强制安全边界，并在上游 Provider 异常时优雅降级。
 
-[![Version](https://img.shields.io/badge/Version-1.8.1-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.8.2-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -141,6 +141,14 @@ Claude 和 Codex 的 `/health` 端点会暴露这些画像，外部工具无需�
 `export_diagnostics` 生成全面的 JSON 包，包含：运行时特性状态、所有 Provider 能力画像、基准测试结果、Provider 配置、路由配置、Codex 路由配置、和近期请求日志 — 远程复现和调试问题所需的一切。
 
 ---
+
+## 1.8.2 Hotfix 更新重点
+
+- **新增独立调试日志文件。** Codex++ native repair 的详细诊断现在写入 `~/Library/Application Support/codex-plusplus/log/native-debug.log`，普通 `native-install.log` 保持简洁进度。
+- **更细的 unpacked 兼容性诊断。** debug 日志包含 `app.asar.unpacked` 是否存在、必需 native 文件大小、`.node` 模块数量和样本路径。
+- **更细的 Node/npm 路径诊断。** debug 日志包含 GUI/launchd 下的 `raw_PATH`、增强后的 PATH，以及每个候选 `node`/`npm` 路径是否存在。
+- **Safe Mode 配置化。** 新增 `codexPlusPlus.uiSafeMode`，默认 `false`；设为 `true` 时只禁用 `co.bennett.ui-improvements`，保留路由、脚本市场、历史会话修复、watcher 和 CLI shim。
+- **新增回归测试。** 覆盖 `uiSafeMode` 只禁用页面增强、不影响其他 tweaks 的行为。
 
 ## 1.8.1 Hotfix 更新重点
 
@@ -465,7 +473,7 @@ pnpm tauri build
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.1_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.2_aarch64.dmg
 ```
 
 ---

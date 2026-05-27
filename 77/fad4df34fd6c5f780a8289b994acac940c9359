@@ -1,0 +1,1238 @@
+src-tauri/Cargo.toml
+  2ac44fed2b7842f2 3 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a170594c08b9f09c4f2b50b","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":3}]}]}
+package.json
+  2ac44fed2b7842f2 4 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a170594c08b9f09c4f2b50b","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":4}]}]}
+docs/peaceful-wibbling-cook.md
+  2ac44fed2b7842f2 5 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a170594c08b9f09c4f2b50b","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":5}]}]}
+src-tauri/src/codex_pp.rs
+  2ac44fed2b7842f2 6-7,33-36,628-632,871,936,947-948,956-964,970,975,977-978,986,994-995,1003,1008-1009,1017,1025-1026,1034,1039-1040,1048,1073-1074,1082,1088-1089,1097,1151-1155,1220-1223,1317-1320,1324-1417,1425,1429-1430,1436-1441,1513-1516,1581-1585,1607-1611,1726,1759-1764,1770-1771,1777-1811,1833-1836,1852,1874-1877,1922-1925,1945-1946,2007-2011,2082-2088,2329-2335,2338-2340,2353-2357,2393-2395,2400-2401,2404,2456-2461,2618,2664-2699,2711,2723,2738-2742,2764-2767,2771-2774,2999,3005-3008,3014-3017,3042-3049 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a170594c08b9f09c4f2b50b","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[6,7]},{"Range":[33,36]},{"Range":[628,632]},{"Single":871},{"Single":936},{"Range":[947,948]},{"Range":[956,964]},{"Single":970},{"Single":975},{"Range":[977,978]},{"Single":986},{"Range":[994,995]},{"Single":1003},{"Range":[1008,1009]},{"Single":1017},{"Range":[1025,1026]},{"Single":1034},{"Range":[1039,1040]},{"Single":1048},{"Range":[1073,1074]},{"Single":1082},{"Range":[1088,1089]},{"Single":1097},{"Range":[1151,1155]},{"Range":[1220,1223]},{"Range":[1317,1320]},{"Range":[1324,1417]},{"Single":1425},{"Range":[1429,1430]},{"Range":[1436,1441]},{"Range":[1513,1516]},{"Range":[1581,1585]},{"Range":[1607,1611]},{"Single":1726},{"Range":[1759,1764]},{"Range":[1770,1771]},{"Range":[1777,1811]},{"Range":[1833,1836]},{"Single":1852},{"Range":[1874,1877]},{"Range":[1922,1925]},{"Range":[1945,1946]},{"Range":[2007,2011]},{"Range":[2082,2088]},{"Range":[2329,2335]},{"Range":[2338,2340]},{"Range":[2353,2357]},{"Range":[2393,2395]},{"Range":[2400,2401]},{"Single":2404},{"Range":[2456,2461]},{"Single":2618},{"Range":[2664,2699]},{"Single":2711},{"Single":2723},{"Range":[2738,2742]},{"Range":[2764,2767]},{"Range":[2771,2774]},{"Single":2999},{"Range":[3005,3008]},{"Range":[3014,3017]},{"Range":[3042,3049]}]}]}
+src-tauri/tauri.conf.json
+  2ac44fed2b7842f2 4 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a170594c08b9f09c4f2b50b","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":4}]}]}
+docs/project.md
+  2ac44fed2b7842f2 3,12,23,39-58,1038,1044 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a170594c08b9f09c4f2b50b","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":3},{"Single":12},{"Single":23},{"Range":[39,58]},{"Single":1038},{"Single":1044}]}]}
+README.md
+  2ac44fed2b7842f2 9,145-153,468 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a170594c08b9f09c4f2b50b","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":9},{"Range":[145,153]},{"Single":468}]}]}
+docs/release-1.8.1-hotfix.md
+  2ac44fed2b7842f2 1-26 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a170594c08b9f09c4f2b50b","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,26]}]}]}
+CHANGELOG.md
+  2ac44fed2b7842f2 5-13 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a170594c08b9f09c4f2b50b","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[5,13]}]}]}
+README_EN.md
+  2ac44fed2b7842f2 9,145-153,468 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a170594c08b9f09c4f2b50b","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":9},{"Range":[145,153]},{"Single":468}]}]}
+src-tauri/src/gateway.rs
+  2ac44fed2b7842f2 6,41-42,163,309-326,347-364,543-556,938-959,1054-1077,1207-1218,1220,1240-1243,1481-1638 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a170594c08b9f09c4f2b50b","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":6},{"Range":[41,42]},{"Single":163},{"Range":[309,326]},{"Range":[347,364]},{"Range":[543,556]},{"Range":[938,959]},{"Range":[1054,1077]},{"Range":[1207,1218]},{"Single":1220},{"Range":[1240,1243]},{"Range":[1481,1638]}]}]}
+src/App.tsx
+  2ac44fed2b7842f2 853-854,1701-1725,1875,1940,2964-2967,2977-2979,2986-3007,3058-3059 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a170594c08b9f09c4f2b50b","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[853,854]},{"Range":[1701,1725]},{"Single":1875},{"Single":1940},{"Range":[2964,2967]},{"Range":[2977,2979]},{"Range":[2986,3007]},{"Range":[3058,3059]}]}]}
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "77fad4df34fd6c5f780a8289b994acac940c9359",
+  "prompts": {
+    "2ac44fed2b7842f2": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a169b45c08b9f09c4f2a210",
+        "model": "gpt-5.5__dev"
+      },
+      "human_author": "hugo0624 <gcristiano0624@gmail.com>",
+      "messages": [],
+      "total_additions": 1024,
+      "total_deletions": 228,
+      "accepted_lines": 4697,
+      "overriden_lines": 0
+    }
+  },
+  "attestation_metadata": {
+    "CHANGELOG.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Range": [
+              5,
+              13
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a170594c08b9f09c4f2b50b",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  5,
+                  13
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "README.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 9
+          },
+          {
+            "Range": [
+              145,
+              153
+            ]
+          },
+          {
+            "Single": 468
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a170594c08b9f09c4f2b50b",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 9
+              },
+              {
+                "Range": [
+                  145,
+                  153
+                ]
+              },
+              {
+                "Single": 468
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "README_EN.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 9
+          },
+          {
+            "Range": [
+              145,
+              153
+            ]
+          },
+          {
+            "Single": 468
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a170594c08b9f09c4f2b50b",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 9
+              },
+              {
+                "Range": [
+                  145,
+                  153
+                ]
+              },
+              {
+                "Single": 468
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "docs/peaceful-wibbling-cook.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 5
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a170594c08b9f09c4f2b50b",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 5
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "docs/project.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 3
+          },
+          {
+            "Single": 12
+          },
+          {
+            "Single": 23
+          },
+          {
+            "Range": [
+              39,
+              58
+            ]
+          },
+          {
+            "Single": 1038
+          },
+          {
+            "Single": 1044
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a170594c08b9f09c4f2b50b",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 3
+              },
+              {
+                "Single": 12
+              },
+              {
+                "Single": 23
+              },
+              {
+                "Range": [
+                  39,
+                  58
+                ]
+              },
+              {
+                "Single": 1038
+              },
+              {
+                "Single": 1044
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "docs/release-1.8.1-hotfix.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              26
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a170594c08b9f09c4f2b50b",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  26
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "package.json": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 4
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a170594c08b9f09c4f2b50b",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 4
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/Cargo.toml": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 3
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a170594c08b9f09c4f2b50b",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 3
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/src/codex_pp.rs": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Range": [
+              6,
+              7
+            ]
+          },
+          {
+            "Range": [
+              33,
+              36
+            ]
+          },
+          {
+            "Range": [
+              628,
+              632
+            ]
+          },
+          {
+            "Single": 871
+          },
+          {
+            "Single": 936
+          },
+          {
+            "Range": [
+              947,
+              948
+            ]
+          },
+          {
+            "Range": [
+              956,
+              964
+            ]
+          },
+          {
+            "Single": 970
+          },
+          {
+            "Single": 975
+          },
+          {
+            "Range": [
+              977,
+              978
+            ]
+          },
+          {
+            "Single": 986
+          },
+          {
+            "Range": [
+              994,
+              995
+            ]
+          },
+          {
+            "Single": 1003
+          },
+          {
+            "Range": [
+              1008,
+              1009
+            ]
+          },
+          {
+            "Single": 1017
+          },
+          {
+            "Range": [
+              1025,
+              1026
+            ]
+          },
+          {
+            "Single": 1034
+          },
+          {
+            "Range": [
+              1039,
+              1040
+            ]
+          },
+          {
+            "Single": 1048
+          },
+          {
+            "Range": [
+              1073,
+              1074
+            ]
+          },
+          {
+            "Single": 1082
+          },
+          {
+            "Range": [
+              1088,
+              1089
+            ]
+          },
+          {
+            "Single": 1097
+          },
+          {
+            "Range": [
+              1151,
+              1155
+            ]
+          },
+          {
+            "Range": [
+              1220,
+              1223
+            ]
+          },
+          {
+            "Range": [
+              1317,
+              1320
+            ]
+          },
+          {
+            "Range": [
+              1324,
+              1417
+            ]
+          },
+          {
+            "Single": 1425
+          },
+          {
+            "Range": [
+              1429,
+              1430
+            ]
+          },
+          {
+            "Range": [
+              1436,
+              1441
+            ]
+          },
+          {
+            "Range": [
+              1513,
+              1516
+            ]
+          },
+          {
+            "Range": [
+              1581,
+              1585
+            ]
+          },
+          {
+            "Range": [
+              1607,
+              1611
+            ]
+          },
+          {
+            "Single": 1726
+          },
+          {
+            "Range": [
+              1759,
+              1764
+            ]
+          },
+          {
+            "Range": [
+              1770,
+              1771
+            ]
+          },
+          {
+            "Range": [
+              1777,
+              1811
+            ]
+          },
+          {
+            "Range": [
+              1833,
+              1836
+            ]
+          },
+          {
+            "Single": 1852
+          },
+          {
+            "Range": [
+              1874,
+              1877
+            ]
+          },
+          {
+            "Range": [
+              1922,
+              1925
+            ]
+          },
+          {
+            "Range": [
+              1945,
+              1946
+            ]
+          },
+          {
+            "Range": [
+              2007,
+              2011
+            ]
+          },
+          {
+            "Range": [
+              2082,
+              2088
+            ]
+          },
+          {
+            "Range": [
+              2329,
+              2335
+            ]
+          },
+          {
+            "Range": [
+              2338,
+              2340
+            ]
+          },
+          {
+            "Range": [
+              2353,
+              2357
+            ]
+          },
+          {
+            "Range": [
+              2393,
+              2395
+            ]
+          },
+          {
+            "Range": [
+              2400,
+              2401
+            ]
+          },
+          {
+            "Single": 2404
+          },
+          {
+            "Range": [
+              2456,
+              2461
+            ]
+          },
+          {
+            "Single": 2618
+          },
+          {
+            "Range": [
+              2664,
+              2699
+            ]
+          },
+          {
+            "Single": 2711
+          },
+          {
+            "Single": 2723
+          },
+          {
+            "Range": [
+              2738,
+              2742
+            ]
+          },
+          {
+            "Range": [
+              2764,
+              2767
+            ]
+          },
+          {
+            "Range": [
+              2771,
+              2774
+            ]
+          },
+          {
+            "Single": 2999
+          },
+          {
+            "Range": [
+              3005,
+              3008
+            ]
+          },
+          {
+            "Range": [
+              3014,
+              3017
+            ]
+          },
+          {
+            "Range": [
+              3042,
+              3049
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a170594c08b9f09c4f2b50b",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  6,
+                  7
+                ]
+              },
+              {
+                "Range": [
+                  33,
+                  36
+                ]
+              },
+              {
+                "Range": [
+                  628,
+                  632
+                ]
+              },
+              {
+                "Single": 871
+              },
+              {
+                "Single": 936
+              },
+              {
+                "Range": [
+                  947,
+                  948
+                ]
+              },
+              {
+                "Range": [
+                  956,
+                  964
+                ]
+              },
+              {
+                "Single": 970
+              },
+              {
+                "Single": 975
+              },
+              {
+                "Range": [
+                  977,
+                  978
+                ]
+              },
+              {
+                "Single": 986
+              },
+              {
+                "Range": [
+                  994,
+                  995
+                ]
+              },
+              {
+                "Single": 1003
+              },
+              {
+                "Range": [
+                  1008,
+                  1009
+                ]
+              },
+              {
+                "Single": 1017
+              },
+              {
+                "Range": [
+                  1025,
+                  1026
+                ]
+              },
+              {
+                "Single": 1034
+              },
+              {
+                "Range": [
+                  1039,
+                  1040
+                ]
+              },
+              {
+                "Single": 1048
+              },
+              {
+                "Range": [
+                  1073,
+                  1074
+                ]
+              },
+              {
+                "Single": 1082
+              },
+              {
+                "Range": [
+                  1088,
+                  1089
+                ]
+              },
+              {
+                "Single": 1097
+              },
+              {
+                "Range": [
+                  1151,
+                  1155
+                ]
+              },
+              {
+                "Range": [
+                  1220,
+                  1223
+                ]
+              },
+              {
+                "Range": [
+                  1317,
+                  1320
+                ]
+              },
+              {
+                "Range": [
+                  1324,
+                  1417
+                ]
+              },
+              {
+                "Single": 1425
+              },
+              {
+                "Range": [
+                  1429,
+                  1430
+                ]
+              },
+              {
+                "Range": [
+                  1436,
+                  1441
+                ]
+              },
+              {
+                "Range": [
+                  1513,
+                  1516
+                ]
+              },
+              {
+                "Range": [
+                  1581,
+                  1585
+                ]
+              },
+              {
+                "Range": [
+                  1607,
+                  1611
+                ]
+              },
+              {
+                "Single": 1726
+              },
+              {
+                "Range": [
+                  1759,
+                  1764
+                ]
+              },
+              {
+                "Range": [
+                  1770,
+                  1771
+                ]
+              },
+              {
+                "Range": [
+                  1777,
+                  1811
+                ]
+              },
+              {
+                "Range": [
+                  1833,
+                  1836
+                ]
+              },
+              {
+                "Single": 1852
+              },
+              {
+                "Range": [
+                  1874,
+                  1877
+                ]
+              },
+              {
+                "Range": [
+                  1922,
+                  1925
+                ]
+              },
+              {
+                "Range": [
+                  1945,
+                  1946
+                ]
+              },
+              {
+                "Range": [
+                  2007,
+                  2011
+                ]
+              },
+              {
+                "Range": [
+                  2082,
+                  2088
+                ]
+              },
+              {
+                "Range": [
+                  2329,
+                  2335
+                ]
+              },
+              {
+                "Range": [
+                  2338,
+                  2340
+                ]
+              },
+              {
+                "Range": [
+                  2353,
+                  2357
+                ]
+              },
+              {
+                "Range": [
+                  2393,
+                  2395
+                ]
+              },
+              {
+                "Range": [
+                  2400,
+                  2401
+                ]
+              },
+              {
+                "Single": 2404
+              },
+              {
+                "Range": [
+                  2456,
+                  2461
+                ]
+              },
+              {
+                "Single": 2618
+              },
+              {
+                "Range": [
+                  2664,
+                  2699
+                ]
+              },
+              {
+                "Single": 2711
+              },
+              {
+                "Single": 2723
+              },
+              {
+                "Range": [
+                  2738,
+                  2742
+                ]
+              },
+              {
+                "Range": [
+                  2764,
+                  2767
+                ]
+              },
+              {
+                "Range": [
+                  2771,
+                  2774
+                ]
+              },
+              {
+                "Single": 2999
+              },
+              {
+                "Range": [
+                  3005,
+                  3008
+                ]
+              },
+              {
+                "Range": [
+                  3014,
+                  3017
+                ]
+              },
+              {
+                "Range": [
+                  3042,
+                  3049
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/src/gateway.rs": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 6
+          },
+          {
+            "Range": [
+              41,
+              42
+            ]
+          },
+          {
+            "Single": 163
+          },
+          {
+            "Range": [
+              309,
+              326
+            ]
+          },
+          {
+            "Range": [
+              347,
+              364
+            ]
+          },
+          {
+            "Range": [
+              543,
+              556
+            ]
+          },
+          {
+            "Range": [
+              938,
+              959
+            ]
+          },
+          {
+            "Range": [
+              1054,
+              1077
+            ]
+          },
+          {
+            "Range": [
+              1207,
+              1218
+            ]
+          },
+          {
+            "Single": 1220
+          },
+          {
+            "Range": [
+              1240,
+              1243
+            ]
+          },
+          {
+            "Range": [
+              1481,
+              1638
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a170594c08b9f09c4f2b50b",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 6
+              },
+              {
+                "Range": [
+                  41,
+                  42
+                ]
+              },
+              {
+                "Single": 163
+              },
+              {
+                "Range": [
+                  309,
+                  326
+                ]
+              },
+              {
+                "Range": [
+                  347,
+                  364
+                ]
+              },
+              {
+                "Range": [
+                  543,
+                  556
+                ]
+              },
+              {
+                "Range": [
+                  938,
+                  959
+                ]
+              },
+              {
+                "Range": [
+                  1054,
+                  1077
+                ]
+              },
+              {
+                "Range": [
+                  1207,
+                  1218
+                ]
+              },
+              {
+                "Single": 1220
+              },
+              {
+                "Range": [
+                  1240,
+                  1243
+                ]
+              },
+              {
+                "Range": [
+                  1481,
+                  1638
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/tauri.conf.json": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 4
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a170594c08b9f09c4f2b50b",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 4
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/App.tsx": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Range": [
+              853,
+              854
+            ]
+          },
+          {
+            "Range": [
+              1701,
+              1725
+            ]
+          },
+          {
+            "Single": 1875
+          },
+          {
+            "Single": 1940
+          },
+          {
+            "Range": [
+              2964,
+              2967
+            ]
+          },
+          {
+            "Range": [
+              2977,
+              2979
+            ]
+          },
+          {
+            "Range": [
+              2986,
+              3007
+            ]
+          },
+          {
+            "Range": [
+              3058,
+              3059
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a170594c08b9f09c4f2b50b",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  853,
+                  854
+                ]
+              },
+              {
+                "Range": [
+                  1701,
+                  1725
+                ]
+              },
+              {
+                "Single": 1875
+              },
+              {
+                "Single": 1940
+              },
+              {
+                "Range": [
+                  2964,
+                  2967
+                ]
+              },
+              {
+                "Range": [
+                  2977,
+                  2979
+                ]
+              },
+              {
+                "Range": [
+                  2986,
+                  3007
+                ]
+              },
+              {
+                "Range": [
+                  3058,
+                  3059
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "remote_transcripts": {
+    "2ac44fed2b7842f2": {
+      "tool": "trae",
+      "conversation_id": "6a169b45c08b9f09c4f2a210",
+      "session_id": "6a169b45c08b9f09c4f2a210",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    }
+  }
+}

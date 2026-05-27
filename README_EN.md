@@ -6,7 +6,7 @@
 
 > Gateway Switch is not just a model router. It is a **runtime compatibility layer** that sits between AI-native desktop applications and third-party model providers, bridging protocol gaps, repairing malformed tool calls, enforcing safety boundaries, and degrading gracefully when upstream providers misbehave.
 
-[![Version](https://img.shields.io/badge/Version-1.7.2-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.8.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -141,6 +141,16 @@ For long-running agent workflows:
 `export_diagnostics` generates a comprehensive JSON bundle containing: runtime feature status, all provider capability profiles, benchmark results, provider configurations, route configurations, Codex route configurations, and recent request logs — everything needed to reproduce and debug an issue remotely.
 
 ---
+
+## Version 1.8.0 Highlights
+
+- **Pulled codex++ into Gateway Switch as a first-class product capability.** `1.8.0` adds a native codex++ install and repair pipeline so Gateway Switch now owns source download, build orchestration, runtime staging, `Codex.app` patching, signing, watcher installation, and CLI shim generation instead of acting as a thin shell wrapper.
+- **Made install flow observable, preflighted, and recoverable.** The Codex++ UI now exposes preflight checks and streaming logs, while the backend turns download, extract, source switching, backup, and rollback into explicit Rust transaction phases with persistent bootstrap state.
+- **Completed the local signing identity path.** `install-local` now provisions a local code-signing identity, re-signs Mach-O binaries inside `app.asar.unpacked`, and re-signs the full `Codex.app` bundle while preserving both ad-hoc and local-identity modes.
+- **Migrated watcher, default tweaks, and CLI shim to the native flow.** Default tweak installation, `codexplusplus` / `codex-plusplus` shims, and the `launchd` watcher are now generated and maintained by Gateway Switch itself; watcher and shell entrypoints now converge on `gateway-switch codexpp ...`.
+- **Finished real-device acceptance on actual `Codex.app`.** The release was validated against `/Applications/Codex.app` with real `install-local`, injected failure rollback, and `repair` recovery paths, plus full Rust tests, ignored acceptance tests, frontend build, and local Tauri bundle verification.
+- App version is now `1.8.0`.
+- Latest verification: `PATH="$HOME/.cargo/bin:$PATH" cargo test` (32 passed, 3 ignored), `PATH="$HOME/.cargo/bin:$PATH" cargo test -- --ignored --nocapture --test-threads=1` (3 passed), `pnpm build`, and `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`.
 
 ## Version 1.7.2 Highlights
 
@@ -446,7 +456,7 @@ Artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.7.2_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.0_aarch64.dmg
 ```
 
 ---

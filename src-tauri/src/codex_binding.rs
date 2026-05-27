@@ -19,12 +19,21 @@ pub fn inspect(home: &Path) -> Result<CodexBindingInfo, String> {
         managed: top_level_value(&content, "model_provider").as_deref() == Some(PROVIDER_ID),
         model_provider: top_level_value(&content, "model_provider"),
         model: top_level_value(&content, "model"),
-        base_url: table_value(&content, &format!("model_providers.{PROVIDER_ID}"), "base_url"),
+        base_url: table_value(
+            &content,
+            &format!("model_providers.{PROVIDER_ID}"),
+            "base_url",
+        ),
         backup_path: latest_backup(&config).map(|p| p.display().to_string()),
     })
 }
 
-pub fn apply(home: &Path, base_url: &str, auth_token: &str, model: &str) -> Result<CodexBindingInfo, String> {
+pub fn apply(
+    home: &Path,
+    base_url: &str,
+    auth_token: &str,
+    model: &str,
+) -> Result<CodexBindingInfo, String> {
     if model.trim().is_empty() {
         return Err("Choose a Codex model before binding".into());
     }
@@ -105,7 +114,12 @@ fn latest_backup(config: &Path) -> Option<PathBuf> {
         .ok()?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
-        .filter(|path| path.file_name().and_then(|name| name.to_str()).map(|name| name.starts_with("config-")).unwrap_or(false))
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| name.starts_with("config-"))
+                .unwrap_or(false)
+        })
         .collect();
     entries.sort();
     entries.pop()
@@ -117,7 +131,12 @@ fn latest_unmanaged_backup(config: &Path) -> Option<PathBuf> {
         .ok()?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
-        .filter(|path| path.file_name().and_then(|name| name.to_str()).map(|name| name.starts_with("config-")).unwrap_or(false))
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| name.starts_with("config-"))
+                .unwrap_or(false)
+        })
         .collect();
     entries.sort();
     entries.into_iter().rev().find(|path| {
@@ -150,7 +169,11 @@ fn remove_managed_codex_config(content: &str) -> String {
             continue;
         }
 
-        if in_root && (is_key(trimmed, "model_provider") || is_key(trimmed, "model") || is_key(trimmed, "preferred_auth_method")) {
+        if in_root
+            && (is_key(trimmed, "model_provider")
+                || is_key(trimmed, "model")
+                || is_key(trimmed, "preferred_auth_method"))
+        {
             continue;
         }
 
@@ -224,7 +247,10 @@ mod tests {
         let applied = apply(tmp.path(), "http://127.0.0.1:3457/v1", "tok", "gpt-5.5").unwrap();
         assert!(applied.managed);
         assert_eq!(applied.model.as_deref(), Some("gpt-5.5"));
-        assert_eq!(applied.base_url.as_deref(), Some("http://127.0.0.1:3457/v1"));
+        assert_eq!(
+            applied.base_url.as_deref(),
+            Some("http://127.0.0.1:3457/v1")
+        );
         let applied_config = fs::read_to_string(&config).unwrap();
         assert!(applied_config.contains("requires_openai_auth = false"));
         assert!(applied_config.contains("experimental_bearer_token = \"tok\""));
@@ -234,7 +260,9 @@ mod tests {
 
         let restored = restore(tmp.path()).unwrap();
         assert!(!restored.managed);
-        assert!(fs::read_to_string(config).unwrap().contains("[projects.foo]"));
+        assert!(fs::read_to_string(config)
+            .unwrap()
+            .contains("[projects.foo]"));
     }
 
     #[test]
@@ -242,7 +270,9 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let config = config_path(tmp.path());
         fs::create_dir_all(config.parent().unwrap()).unwrap();
-        fs::write(&config, r#"model_provider = "gateway-switch"
+        fs::write(
+            &config,
+            r#"model_provider = "gateway-switch"
 model = "gpt-5.5"
 preferred_auth_method = "apikey"
 
@@ -255,7 +285,9 @@ experimental_bearer_token = "tok"
 
 [projects.foo]
 trust_level = "trusted"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let restored = restore(tmp.path()).unwrap();
         let content = fs::read_to_string(config).unwrap();

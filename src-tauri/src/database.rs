@@ -1,15 +1,16 @@
-use std::path::Path;
-use chrono::Utc;
-use rusqlite::{params, Connection};
 use crate::compatibility;
 use crate::models::*;
+use chrono::Utc;
+use rusqlite::{params, Connection};
+use std::path::Path;
 
 pub fn initialize(db: &Path) -> Result<(), String> {
     if let Some(p) = db.parent() {
         std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
     }
     let conn = Connection::open(db).map_err(|e| e.to_string())?;
-    conn.execute_batch(r#"
+    conn.execute_batch(
+        r#"
         CREATE TABLE IF NOT EXISTS providers (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
@@ -77,9 +78,14 @@ pub fn initialize(db: &Path) -> Result<(), String> {
             alias_type TEXT NOT NULL CHECK (alias_type IN ('claude', 'codex')),
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
-    "#).map_err(|e| e.to_string())?;
+    "#,
+    )
+    .map_err(|e| e.to_string())?;
     let _ = conn.execute("ALTER TABLE providers ADD COLUMN openai_base_url TEXT", []);
-    let _ = conn.execute("ALTER TABLE providers ADD COLUMN anthropic_base_url TEXT", []);
+    let _ = conn.execute(
+        "ALTER TABLE providers ADD COLUMN anthropic_base_url TEXT",
+        [],
+    );
     let _ = conn.execute(
         "ALTER TABLE codex_routes ADD COLUMN tool_call_mode TEXT NOT NULL DEFAULT 'force_when_tools_present'",
         [],
@@ -87,7 +93,8 @@ pub fn initialize(db: &Path) -> Result<(), String> {
     conn.execute(
         "UPDATE providers SET openai_base_url = COALESCE(NULLIF(openai_base_url, ''), base_url)",
         [],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
     conn.execute(
         "UPDATE providers SET anthropic_base_url = 'https://token-plan-sgp.xiaomimimo.com/anthropic' WHERE (lower(id) IN ('xiaomi', 'xiaomimo') OR lower(name) LIKE '%xiaomimo%' OR lower(name) LIKE '%mimo%') AND (anthropic_base_url IS NULL OR anthropic_base_url = '')",
         [],
@@ -95,13 +102,27 @@ pub fn initialize(db: &Path) -> Result<(), String> {
     // Seed default claude aliases if table is empty
     {
         let conn = open(db)?;
-        let count: i64 = conn.query_row("SELECT COUNT(*) FROM model_aliases WHERE alias_type='claude'", [], |r| r.get(0)).unwrap_or(0);
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM model_aliases WHERE alias_type='claude'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
         if count == 0 {
             let defaults = [
-                "claude-opus-4-7", "claude-opus-4-20250514", "claude-opus-4-0",
-                "claude-sonnet-4-6", "claude-sonnet-4-20250514", "claude-sonnet-4-5",
-                "claude-sonnet-4-0", "claude-haiku-4-5", "claude-haiku-4-20250414",
-                "claude-sonnet-3-7", "claude-sonnet-3-5-v2", "claude-haiku-3-5",
+                "claude-opus-4-7",
+                "claude-opus-4-20250514",
+                "claude-opus-4-0",
+                "claude-sonnet-4-6",
+                "claude-sonnet-4-20250514",
+                "claude-sonnet-4-5",
+                "claude-sonnet-4-0",
+                "claude-haiku-4-5",
+                "claude-haiku-4-20250414",
+                "claude-sonnet-3-7",
+                "claude-sonnet-3-5-v2",
+                "claude-haiku-3-5",
             ];
             for alias in defaults {
                 let id = uuid::Uuid::new_v4().to_string();
@@ -111,9 +132,24 @@ pub fn initialize(db: &Path) -> Result<(), String> {
                 );
             }
         }
-        let codex_count: i64 = conn.query_row("SELECT COUNT(*) FROM model_aliases WHERE alias_type='codex'", [], |r| r.get(0)).unwrap_or(0);
+        let codex_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM model_aliases WHERE alias_type='codex'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
         if codex_count == 0 {
-            let defaults = ["gpt-4o", "gpt-4o-mini", "o3", "o4-mini", "o3-pro", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"];
+            let defaults = [
+                "gpt-4o",
+                "gpt-4o-mini",
+                "o3",
+                "o4-mini",
+                "o3-pro",
+                "gpt-4.1",
+                "gpt-4.1-mini",
+                "gpt-4.1-nano",
+            ];
             for alias in defaults {
                 let id = uuid::Uuid::new_v4().to_string();
                 let _ = conn.execute(
@@ -131,7 +167,10 @@ fn open(db: &Path) -> Result<Connection, String> {
 }
 
 fn normalize_empty(value: Option<&str>) -> Option<String> {
-    value.map(str::trim).filter(|s| !s.is_empty()).map(String::from)
+    value
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
 }
 
 // ---- Providers ----
@@ -141,23 +180,32 @@ pub fn list_providers(db: &Path) -> Result<Vec<Provider>, String> {
     let mut stmt = conn.prepare(
         "SELECT id, name, base_url, COALESCE(NULLIF(openai_base_url, ''), base_url), NULLIF(anthropic_base_url, ''), auth_header, auth_scheme, api_key, enabled FROM providers ORDER BY created_at DESC"
     ).map_err(|e| e.to_string())?;
-    let rows = stmt.query_map([], |r| Ok(Provider {
-        id: r.get(0)?,
-        name: r.get(1)?,
-        base_url: r.get(2)?,
-        openai_base_url: r.get(3)?,
-        anthropic_base_url: r.get(4)?,
-        auth_header: r.get(5)?,
-        auth_scheme: r.get(6)?,
-        api_key: r.get(7)?,
-        enabled: r.get::<_, i64>(8)? == 1,
-    })).map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(Provider {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                base_url: r.get(2)?,
+                openai_base_url: r.get(3)?,
+                anthropic_base_url: r.get(4)?,
+                auth_header: r.get(5)?,
+                auth_scheme: r.get(6)?,
+                api_key: r.get(7)?,
+                enabled: r.get::<_, i64>(8)? == 1,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 pub fn create_provider(db: &Path, p: &CreateProvider) -> Result<(), String> {
     let conn = open(db)?;
-    let openai_base_url = p.openai_base_url.as_deref().filter(|s| !s.trim().is_empty()).unwrap_or(&p.base_url);
+    let openai_base_url = p
+        .openai_base_url
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or(&p.base_url);
     let anthropic_base_url = normalize_empty(p.anthropic_base_url.as_deref());
     conn.execute(
         "INSERT INTO providers (id, name, base_url, openai_base_url, anthropic_base_url, auth_header, auth_scheme, api_key) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
@@ -168,7 +216,11 @@ pub fn create_provider(db: &Path, p: &CreateProvider) -> Result<(), String> {
 
 pub fn update_provider(db: &Path, p: &UpdateProvider) -> Result<(), String> {
     let conn = open(db)?;
-    let openai_base_url = p.openai_base_url.as_deref().filter(|s| !s.trim().is_empty()).unwrap_or(&p.base_url);
+    let openai_base_url = p
+        .openai_base_url
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or(&p.base_url);
     let anthropic_base_url = normalize_empty(p.anthropic_base_url.as_deref());
     conn.execute(
         "UPDATE providers SET name=?2, base_url=?3, openai_base_url=?4, anthropic_base_url=?5, auth_header=?6, auth_scheme=?7, api_key=?8, enabled=?9 WHERE id=?1",
@@ -179,15 +231,18 @@ pub fn update_provider(db: &Path, p: &UpdateProvider) -> Result<(), String> {
 
 pub fn delete_provider(db: &Path, id: &str) -> Result<(), String> {
     let conn = open(db)?;
-    let refs: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM model_routes WHERE provider_id = ?1",
-        params![id],
-        |r| r.get(0),
-    ).map_err(|e| e.to_string())?;
+    let refs: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM model_routes WHERE provider_id = ?1",
+            params![id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
     if refs > 0 {
         return Err("Provider is still referenced by model routes".into());
     }
-    conn.execute("DELETE FROM providers WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM providers WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -198,24 +253,31 @@ pub fn list_routes(db: &Path) -> Result<Vec<ModelRoute>, String> {
     let mut stmt = conn.prepare(
         "SELECT id, claude_alias, display_name, provider_id, upstream_model, enabled FROM model_routes ORDER BY created_at DESC"
     ).map_err(|e| e.to_string())?;
-    let rows = stmt.query_map([], |r| Ok(ModelRoute {
-        id: r.get(0)?,
-        claude_alias: r.get(1)?,
-        display_name: r.get(2)?,
-        provider_id: r.get(3)?,
-        upstream_model: r.get(4)?,
-        enabled: r.get::<_, i64>(5)? == 1,
-    })).map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(ModelRoute {
+                id: r.get(0)?,
+                claude_alias: r.get(1)?,
+                display_name: r.get(2)?,
+                provider_id: r.get(3)?,
+                upstream_model: r.get(4)?,
+                enabled: r.get::<_, i64>(5)? == 1,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 pub fn create_route(db: &Path, r: &CreateModelRoute) -> Result<(), String> {
     let conn = open(db)?;
-    let exists: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM providers WHERE id = ?1",
-        params![r.provider_id],
-        |row| row.get(0),
-    ).map_err(|e| e.to_string())?;
+    let exists: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM providers WHERE id = ?1",
+            params![r.provider_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
     if exists == 0 {
         return Err(format!("Provider '{}' not found", r.provider_id));
     }
@@ -237,7 +299,8 @@ pub fn update_route(db: &Path, r: &UpdateModelRoute) -> Result<(), String> {
 
 pub fn delete_route(db: &Path, id: &str) -> Result<(), String> {
     let conn = open(db)?;
-    conn.execute("DELETE FROM model_routes WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM model_routes WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -248,12 +311,15 @@ pub fn get_profile(db: &Path) -> Result<GatewayProfile, String> {
     conn.query_row(
         "SELECT listen_host, listen_port, auth_token FROM gateway_profile WHERE id = 'default'",
         [],
-        |r| Ok(GatewayProfile {
-            listen_host: r.get(0)?,
-            listen_port: r.get(1)?,
-            auth_token: r.get(2)?,
-        }),
-    ).map_err(|e| e.to_string())
+        |r| {
+            Ok(GatewayProfile {
+                listen_host: r.get(0)?,
+                listen_port: r.get(1)?,
+                auth_token: r.get(2)?,
+            })
+        },
+    )
+    .map_err(|e| e.to_string())
 }
 
 pub fn save_profile(db: &Path, p: &GatewayProfile) -> Result<(), String> {
@@ -269,7 +335,10 @@ pub fn save_profile(db: &Path, p: &GatewayProfile) -> Result<(), String> {
 
 pub fn insert_log(db: &Path, log: &RequestLog) -> Result<(), String> {
     let conn = open(db)?;
-    let error_summary = log.error_summary.as_deref().map(compatibility::redact_log_summary);
+    let error_summary = log
+        .error_summary
+        .as_deref()
+        .map(compatibility::redact_log_summary);
     conn.execute(
         "INSERT INTO request_logs (id, request_id, claude_alias, provider_id, upstream_model, status_code, duration_ms, is_stream, error_summary, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
         params![
@@ -287,18 +356,23 @@ pub fn list_logs(db: &Path, limit: usize) -> Result<Vec<RequestLog>, String> {
     let mut stmt = conn.prepare(
         "SELECT request_id, claude_alias, provider_id, upstream_model, status_code, duration_ms, is_stream, error_summary, created_at FROM request_logs ORDER BY created_at DESC LIMIT ?1"
     ).map_err(|e| e.to_string())?;
-    let rows = stmt.query_map(params![limit as i64], |r| Ok(RequestLog {
-        request_id: r.get(0)?,
-        claude_alias: r.get(1)?,
-        provider_id: r.get(2)?,
-        upstream_model: r.get(3)?,
-        status_code: r.get::<_, Option<i64>>(4)?.map(|v| v as u16),
-        duration_ms: r.get::<_, Option<i64>>(5)?.map(|v| v as u64),
-        is_stream: r.get::<_, i64>(6)? == 1,
-        error_summary: r.get(7)?,
-        created_at: r.get(8)?,
-    })).map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    let rows = stmt
+        .query_map(params![limit as i64], |r| {
+            Ok(RequestLog {
+                request_id: r.get(0)?,
+                claude_alias: r.get(1)?,
+                provider_id: r.get(2)?,
+                upstream_model: r.get(3)?,
+                status_code: r.get::<_, Option<i64>>(4)?.map(|v| v as u16),
+                duration_ms: r.get::<_, Option<i64>>(5)?.map(|v| v as u64),
+                is_stream: r.get::<_, i64>(6)? == 1,
+                error_summary: r.get(7)?,
+                created_at: r.get(8)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 #[allow(dead_code)]
@@ -315,25 +389,32 @@ pub fn list_codex_routes(db: &Path) -> Result<Vec<CodexRoute>, String> {
     let mut stmt = conn.prepare(
         "SELECT id, codex_model, display_name, provider_id, upstream_model, COALESCE(NULLIF(tool_call_mode, ''), 'force_when_tools_present'), enabled FROM codex_routes ORDER BY created_at DESC"
     ).map_err(|e| e.to_string())?;
-    let rows = stmt.query_map([], |r| Ok(CodexRoute {
-        id: r.get(0)?,
-        codex_model: r.get(1)?,
-        display_name: r.get(2)?,
-        provider_id: r.get(3)?,
-        upstream_model: r.get(4)?,
-        tool_call_mode: r.get(5)?,
-        enabled: r.get::<_, i64>(6)? == 1,
-    })).map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(CodexRoute {
+                id: r.get(0)?,
+                codex_model: r.get(1)?,
+                display_name: r.get(2)?,
+                provider_id: r.get(3)?,
+                upstream_model: r.get(4)?,
+                tool_call_mode: r.get(5)?,
+                enabled: r.get::<_, i64>(6)? == 1,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 pub fn create_codex_route(db: &Path, r: &CreateCodexRoute) -> Result<(), String> {
     let conn = open(db)?;
-    let exists: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM providers WHERE id = ?1",
-        params![r.provider_id],
-        |row| row.get(0),
-    ).map_err(|e| e.to_string())?;
+    let exists: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM providers WHERE id = ?1",
+            params![r.provider_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
     if exists == 0 {
         return Err(format!("Provider '{}' not found", r.provider_id));
     }
@@ -365,7 +446,8 @@ fn normalize_tool_call_mode(mode: Option<&str>) -> &'static str {
 
 pub fn delete_codex_route(db: &Path, id: &str) -> Result<(), String> {
     let conn = open(db)?;
-    conn.execute("DELETE FROM codex_routes WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM codex_routes WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -376,12 +458,15 @@ pub fn get_codex_profile(db: &Path) -> Result<GatewayProfile, String> {
     conn.query_row(
         "SELECT listen_host, listen_port, auth_token FROM codex_profile WHERE id = 'default'",
         [],
-        |r| Ok(GatewayProfile {
-            listen_host: r.get(0)?,
-            listen_port: r.get(1)?,
-            auth_token: r.get(2)?,
-        }),
-    ).map_err(|e| e.to_string())
+        |r| {
+            Ok(GatewayProfile {
+                listen_host: r.get(0)?,
+                listen_port: r.get(1)?,
+                auth_token: r.get(2)?,
+            })
+        },
+    )
+    .map_err(|e| e.to_string())
 }
 
 pub fn save_codex_profile(db: &Path, p: &GatewayProfile) -> Result<(), String> {
@@ -389,7 +474,8 @@ pub fn save_codex_profile(db: &Path, p: &GatewayProfile) -> Result<(), String> {
     conn.execute(
         "UPDATE codex_profile SET listen_host=?1, listen_port=?2, auth_token=?3 WHERE id='default'",
         params![p.listen_host, p.listen_port, p.auth_token],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -400,13 +486,18 @@ pub fn list_model_aliases(db: &Path, alias_type: &str) -> Result<Vec<ModelAlias>
     let mut stmt = conn.prepare(
         "SELECT id, alias, alias_type, created_at FROM model_aliases WHERE alias_type = ?1 ORDER BY created_at ASC"
     ).map_err(|e| e.to_string())?;
-    let rows = stmt.query_map(params![alias_type], |r| Ok(ModelAlias {
-        id: r.get(0)?,
-        alias: r.get(1)?,
-        alias_type: r.get(2)?,
-        created_at: r.get(3)?,
-    })).map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    let rows = stmt
+        .query_map(params![alias_type], |r| {
+            Ok(ModelAlias {
+                id: r.get(0)?,
+                alias: r.get(1)?,
+                alias_type: r.get(2)?,
+                created_at: r.get(3)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 pub fn create_model_alias(db: &Path, a: &CreateModelAlias) -> Result<(), String> {
@@ -415,12 +506,14 @@ pub fn create_model_alias(db: &Path, a: &CreateModelAlias) -> Result<(), String>
     conn.execute(
         "INSERT INTO model_aliases (id, alias, alias_type) VALUES (?1, ?2, ?3)",
         params![id, a.alias, a.alias_type],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 pub fn delete_model_alias(db: &Path, id: &str) -> Result<(), String> {
     let conn = open(db)?;
-    conn.execute("DELETE FROM model_aliases WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM model_aliases WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
     Ok(())
 }

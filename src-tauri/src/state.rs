@@ -18,7 +18,11 @@ pub struct GatewayStatus {
 
 impl Default for GatewayStatus {
     fn default() -> Self {
-        Self { running: false, status: "idle".into(), error: None }
+        Self {
+            running: false,
+            status: "idle".into(),
+            error: None,
+        }
     }
 }
 

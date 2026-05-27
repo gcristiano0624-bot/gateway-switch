@@ -1,5 +1,5 @@
-use std::{fs, path::Path};
 use crate::models::AppSettings;
+use std::{fs, path::Path};
 
 pub fn load(path: &Path) -> Result<AppSettings, String> {
     if path.exists() {

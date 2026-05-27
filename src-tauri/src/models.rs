@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct ModelAlias {
     pub id: String,
     pub alias: String,
-    pub alias_type: String,  // "claude" or "codex"
+    pub alias_type: String, // "claude" or "codex"
     pub created_at: Option<String>,
 }
 

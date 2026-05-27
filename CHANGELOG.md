@@ -2,6 +2,16 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.8.0 - 2026-05-27
+
+- Added the native codex++ install and repair workflow inside Gateway Switch, covering source download, build orchestration, runtime staging, `Codex.app` patching, and recoverable rollback.
+- Added streaming codex++ install logs and preflight checks in the desktop UI.
+- Completed the local signing identity path for `install-local`, including automatic local identity provisioning and bundle re-signing.
+- Migrated default tweak installation, CLI shims, and the `launchd` watcher to native Gateway Switch generation; watcher and shell entrypoints now use `gateway-switch codexpp ...`.
+- Added real-machine acceptance coverage for native `install-local`, rollback, and repair against a real `/Applications/Codex.app`.
+- Updated version to `1.8.0` across `package.json`, `Cargo.toml`, `Cargo.lock`, `tauri.conf.json`, the app sidebar labels, and release documentation.
+- Verification: `PATH="$HOME/.cargo/bin:$PATH" cargo test` (32 passed, 3 ignored), `PATH="$HOME/.cargo/bin:$PATH" cargo test -- --ignored --nocapture --test-threads=1` (3 passed), `pnpm build`, and `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`.
+
 ## 1.7.2 - 2026-05-23
 
 - Added the new MCP Sync module for Claude Desktop, Claude Code, and Codex, with status cards, sync preview, conflict summary, execution results, and secret-key masking.

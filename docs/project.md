@@ -1,6 +1,6 @@
 # Gateway Switch Project Documentation
 
-Version: 1.7.2
+Version: 1.8.0
 
 This document is the single technical source of truth for Gateway Switch. It merges the former project architecture notes and the Codex Gateway notes into one maintained file.
 
@@ -9,7 +9,7 @@ This document is the single technical source of truth for Gateway Switch. It mer
 If another AI receives this repository, start here:
 
 - Product: macOS Tauri app that routes Claude Desktop, Claude Code, and Codex App to third-party model providers.
-- Current version: `1.7.2`.
+- Current version: `1.8.0`.
 - Main frontend: `src/App.tsx` and `src/App.css`.
 - Main backend: `src-tauri/src/*.rs`.
 - Claude gateway: `src-tauri/src/gateway.rs`, local Anthropic Messages surface on `127.0.0.1:3456`.
@@ -20,7 +20,7 @@ If another AI receives this repository, start here:
 - Bindings: Claude Desktop in `desktop_binding.rs`, Claude Code in `claude_code_binding.rs`, Codex in `codex_binding.rs`.
 - Local data: `~/Library/Application Support/Gateway Switch/`.
 - Build: `PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build` when `cargo` is not already on `PATH`.
-- Latest verified tests: `pnpm build`, `PATH="$HOME/.cargo/bin:$PATH" cargo test` (32 passed), and `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build` after the 1.7.2 MCP Sync release.
+- Latest verified tests: `pnpm build`, `PATH="$HOME/.cargo/bin:$PATH" cargo test` (32 passed, 3 ignored), `PATH="$HOME/.cargo/bin:$PATH" cargo test -- --ignored --nocapture --test-threads=1` (3 passed on real Codex.app), and `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build` after the 1.8.0 native codex++ release.
 
 The design intent is to make third-party models less likely to degrade Claude/Codex behavior by normalizing protocol shapes, repairing common tool-call failures, redacting secrets, exposing provider capability profiles, and adding safety/diagnostic gates around agent-like workflows.
 
@@ -36,7 +36,29 @@ The app solves two related but different protocol problems:
 
 The shared design goal is simple: providers share identity, auth header, auth scheme, and API key, but they do not share one universal Base URL. Provider URLs are split by protocol: OpenAI Base URL for Codex and Chat Completions fallback, Anthropic Base URL for Claude and Claude Code direct requests.
 
-## 2. Version 1.7.2 Scope
+## 2. Version 1.8.0 Scope
+
+Version 1.8.0 focuses on turning codex++ support from an external wrapper into a native Gateway Switch product capability with real-machine validation against `Codex.app`.
+
+Main changes:
+
+- Added a native Rust codex++ install / repair flow that handles source download, extract, source switching, runtime staging, app backup, app patch, signing, watcher installation, and rollback.
+- Added streaming codex++ execution logs and install preflight checks in the desktop UI so users can inspect Node/npm readiness and live step progress before and during install.
+- Added native local signing identity creation and reuse for `install-local`, including re-signing Mach-O binaries under `app.asar.unpacked` and the outer `Codex.app` bundle.
+- Added native default tweak installation with GitHub release fallback behavior.
+- Migrated CLI shim generation to `gateway-switch codexpp ...` so shell usage no longer depends on the upstream Node CLI entrypoint.
+- Migrated the `launchd` watcher to the same native `gateway-switch codexpp repair` entrypoint.
+- Added ignored real acceptance tests for install-local success, injected rollback, and repair recovery on a real `/Applications/Codex.app`.
+- Versioned package metadata and release artifacts as `1.8.0`.
+
+Verification for 1.8.0:
+
+- `PATH="$HOME/.cargo/bin:$PATH" cargo test`: passed, 32 passed and 3 ignored.
+- `PATH="$HOME/.cargo/bin:$PATH" cargo test -- --ignored --nocapture --test-threads=1`: passed, 3 real-machine acceptance tests.
+- `pnpm build`: passed.
+- `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`: passed.
+
+## 3. Version 1.7.2 Scope
 
 Version 1.7.2 focuses on integrating the standalone MCP synchronization workflow into Gateway Switch as a native first-class module.
 
@@ -994,13 +1016,13 @@ macOS artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.7.2_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.0_aarch64.dmg
 ```
 
 ## 25. Release Checklist
 
 - Frontend build passes.
-- Rust tests pass. Latest 1.7.2 verification: 32 tests passed.
+- Rust tests pass. Latest 1.8.0 verification: 32 standard tests passed, and 3 ignored real-machine acceptance tests passed separately.
 - Claude Gateway health check passes.
 - Codex Gateway health check passes.
 - Claude route can rewrite model request and response fields.

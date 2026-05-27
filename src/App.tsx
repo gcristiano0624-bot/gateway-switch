@@ -1,9 +1,12 @@
 import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 
 // ── Types ──
 type Page = "dashboard" | "claude" | "claudeCode" | "codex" | "mcpSync" | "coldstart" | "providers" | "logs" | "settings";
+type CodexTab = "routes" | "enhance" | "market" | "sessions" | "diagnostics";
+type ThemeMode = "system" | "light" | "dark";
 
 type CodexRoute = {
   id: string;
@@ -107,6 +110,122 @@ type Settings = {
   listen_port: number;
   auth_token: string;
   language: "zh" | "en";
+};
+
+type CodexPpInstall = {
+  installed: boolean;
+  version: string | null;
+  codex_version: string | null;
+  app_root: string | null;
+  user_root: string;
+  runtime_dir: string;
+  tweaks_dir: string;
+  config_path: string;
+  state_path: string;
+  log_path: string;
+  cli_path: string | null;
+  auto_update: boolean;
+  safe_mode: boolean;
+};
+
+type CodexPpTweak = {
+  id: string;
+  name: string;
+  version: string;
+  description: string | null;
+  scope: string;
+  github_repo: string | null;
+  author: string | null;
+  icon_url: string | null;
+  tags: string[];
+  permissions: string[];
+  dir: string;
+  manifest_path: string;
+  entry_path: string | null;
+  entry_exists: boolean;
+  enabled: boolean;
+  update_available: boolean;
+  latest_version: string | null;
+  release_url: string | null;
+};
+
+type CodexPpManifest = {
+  id: string;
+  name: string;
+  version: string;
+  githubRepo?: string | null;
+  author?: { name?: string; url?: string } | string | null;
+  description?: string | null;
+  scope?: string | null;
+  main?: string | null;
+  iconUrl?: string | null;
+  tags?: string[];
+  permissions?: string[];
+  minRuntime?: string | null;
+};
+
+type CodexPpStoreEntry = {
+  id: string;
+  manifest: CodexPpManifest;
+  repo: string;
+  approvedCommitSha: string;
+  approvedAt?: string | null;
+  approvedBy?: string | null;
+  platforms?: string[] | null;
+  releaseUrl?: string | null;
+  reviewUrl?: string | null;
+  installed: boolean;
+  installed_version: string | null;
+};
+
+type CodexPpStoreIndex = {
+  schemaVersion: number;
+  generatedAt: string | null;
+  entries: CodexPpStoreEntry[];
+};
+
+type CodexPpHealthCheck = {
+  name: string;
+  status: string;
+  detail: string;
+};
+
+type CodexPpHealth = {
+  checked_at: string;
+  status: string;
+  title: string;
+  summary: string;
+  watcher: string;
+  checks: CodexPpHealthCheck[];
+};
+
+type CodexPpCliResult = {
+  action: string;
+  command: string;
+  success: boolean;
+  code: number | null;
+  stdout: string;
+  stderr: string;
+};
+
+type CodexPpPreflightCheck = {
+  name: string;
+  status: string;
+  detail: string;
+};
+
+type CodexPpPreflight = {
+  ready: boolean;
+  install_mode: string;
+  summary: string;
+  app_path: string | null;
+  checks: CodexPpPreflightCheck[];
+};
+
+type CodexPpLogEvent = {
+  session_id: string;
+  stream: string;
+  line: string;
 };
 
 type Health = {
@@ -715,6 +834,139 @@ const MOCK_CODEX_BINDING: CodexBindingInfo = {
   backup_path: null,
 };
 
+const MOCK_CODEX_PP_INSTALL: CodexPpInstall = {
+  installed: true,
+  version: "0.1.7",
+  codex_version: "preview",
+  app_root: "/Applications/Codex.app",
+  user_root: "~/Library/Application Support/codex-plusplus",
+  runtime_dir: "~/Library/Application Support/codex-plusplus/runtime",
+  tweaks_dir: "~/Library/Application Support/codex-plusplus/tweaks",
+  config_path: "~/Library/Application Support/codex-plusplus/config.json",
+  state_path: "~/Library/Application Support/codex-plusplus/state.json",
+  log_path: "~/Library/Application Support/codex-plusplus/log/main.log",
+  cli_path: "/opt/homebrew/bin/codexplusplus",
+  auto_update: true,
+  safe_mode: false,
+};
+
+const MOCK_CODEX_PP_TWEAKS: CodexPpTweak[] = [
+  {
+    id: "co.bennett.ui-improvements",
+    name: "Bennett's UI Improvements",
+    version: "1.0.3",
+    description: "Quality-of-life UI tweaks for Codex: hide upgrade prompts, surface usage and message metrics.",
+    scope: "both",
+    github_repo: "b-nnett/codex-plusplus-bennett-ui",
+    author: "bennett",
+    icon_url: null,
+    tags: ["ui", "usage", "upgrade"],
+    permissions: ["settings"],
+    dir: "~/Library/Application Support/codex-plusplus/tweaks/co.bennett.ui-improvements",
+    manifest_path: "~/Library/Application Support/codex-plusplus/tweaks/co.bennett.ui-improvements/manifest.json",
+    entry_path: "~/Library/Application Support/codex-plusplus/tweaks/co.bennett.ui-improvements/index.js",
+    entry_exists: true,
+    enabled: true,
+    update_available: false,
+    latest_version: null,
+    release_url: null,
+  },
+  {
+    id: "co.bennett.custom-keyboard-shortcuts",
+    name: "Custom Keyboard Shortcuts",
+    version: "0.1.1",
+    description: "Discover, remap, and disable Codex keyboard shortcuts.",
+    scope: "renderer",
+    github_repo: "b-nnett/codex-plusplus-keyboard-shortcuts",
+    author: "bennett",
+    icon_url: null,
+    tags: ["ui", "shortcuts"],
+    permissions: [],
+    dir: "~/Library/Application Support/codex-plusplus/tweaks/co.bennett.custom-keyboard-shortcuts",
+    manifest_path: "~/Library/Application Support/codex-plusplus/tweaks/co.bennett.custom-keyboard-shortcuts/manifest.json",
+    entry_path: "~/Library/Application Support/codex-plusplus/tweaks/co.bennett.custom-keyboard-shortcuts/index.js",
+    entry_exists: true,
+    enabled: true,
+    update_available: true,
+    latest_version: "0.1.2",
+    release_url: "https://github.com/b-nnett/codex-plusplus-keyboard-shortcuts/releases",
+  },
+];
+
+const MOCK_CODEX_PP_STORE: CodexPpStoreIndex = {
+  schemaVersion: 1,
+  generatedAt: "browser preview",
+  entries: [
+    {
+      id: "co.bennett.better-terminal",
+      manifest: {
+        id: "co.bennett.better-terminal",
+        name: "Better Terminal",
+        version: "1.0.0",
+        githubRepo: "b-nnett/codex-plusplus-better-terminal",
+        description: "Upgrades Codex terminals with split panes, native popouts, tab controls, shortcuts, and a memory watchdog.",
+        author: { name: "bennett" },
+        tags: ["terminal", "ui", "productivity"],
+        scope: "both",
+      },
+      repo: "b-nnett/codex-plusplus-better-terminal",
+      approvedCommitSha: "b0398c839a42134d5cb301c432d43a9f13ac22e0",
+      approvedAt: "browser preview",
+      approvedBy: "bennett",
+      installed: false,
+      installed_version: null,
+    },
+    {
+      id: "co.bennett.ui-improvements",
+      manifest: {
+        id: "co.bennett.ui-improvements",
+        name: "Bennett's UI Improvements",
+        version: "1.0.3",
+        githubRepo: "b-nnett/codex-plusplus-bennett-ui",
+        description: "Quality-of-life UI tweaks for Codex.",
+        author: { name: "bennett" },
+        tags: ["ui", "usage"],
+        scope: "both",
+      },
+      repo: "b-nnett/codex-plusplus-bennett-ui",
+      approvedCommitSha: "17156ac0cc3402284b09c13c74754eda70388f50",
+      approvedAt: "browser preview",
+      approvedBy: "bennett",
+      installed: true,
+      installed_version: "1.0.3",
+    },
+  ],
+};
+
+const MOCK_CODEX_PP_HEALTH: CodexPpHealth = {
+  checked_at: "browser preview",
+  status: "warn",
+  title: "Codex++ needs review",
+  summary: "Preview data only. Real checks run inside Tauri.",
+  watcher: "launchd",
+  checks: [
+    { name: "Install state", status: "ok", detail: "Codex++ 0.1.7" },
+    { name: "Runtime", status: "ok", detail: "~/Library/Application Support/codex-plusplus/runtime" },
+    { name: "CLI", status: "ok", detail: "/opt/homebrew/bin/codexplusplus" },
+    { name: "Safe mode", status: "ok", detail: "normal tweak loading" },
+  ],
+};
+
+const MOCK_CODEX_PP_PREFLIGHT: CodexPpPreflight = {
+  ready: true,
+  install_mode: "cli",
+  summary: "Preview: Gateway Switch can install or repair codex++ on this machine.",
+  app_path: "/Applications/Codex.app",
+  checks: [
+    { name: "codexplusplus CLI", status: "ok", detail: "/opt/homebrew/bin/codexplusplus" },
+    { name: "Node.js", status: "ok", detail: "v22.12.0 at /opt/homebrew/bin/node" },
+    { name: "npm", status: "ok", detail: "10.9.0" },
+    { name: "curl", status: "ok", detail: "curl 8.x" },
+    { name: "tar", status: "ok", detail: "bsdtar 3.x" },
+    { name: "Codex.app", status: "ok", detail: "/Applications/Codex.app" },
+  ],
+};
+
 const MOCK_LOGS: RequestLog[] = [
   {
     request_id: "preview-1",
@@ -982,6 +1234,28 @@ const IconUpload = () => (
 // ── Main App ──
 function App() {
   const [page, setPage] = useState<Page>("dashboard");
+  const [codexTab, setCodexTab] = useState<CodexTab>("routes");
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    const saved = localStorage.getItem("gw-theme");
+    if (saved === "system" || saved === "light" || saved === "dark") return saved;
+    return "system";
+  });
+
+  // Apply theme to document
+  useEffect(() => {
+    const apply = () => {
+      const resolved = theme === "system"
+        ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+        : theme;
+      document.documentElement.setAttribute("data-theme", resolved);
+    };
+    apply();
+    localStorage.setItem("gw-theme", theme);
+    if (theme !== "system") return;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [theme]);
   const [status, setStatus] = useState<Status | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [routes, setRoutes] = useState<ModelRoute[]>([]);
@@ -1005,6 +1279,15 @@ function App() {
   const [codexRoutes, setCodexRoutes] = useState<CodexRoute[]>([]);
   const [codexStatus, setCodexStatus] = useState<CodexGatewayStatus | null>(null);
   const [codexBinding, setCodexBinding] = useState<CodexBindingInfo | null>(null);
+  const [codexPpInstall, setCodexPpInstall] = useState<CodexPpInstall | null>(null);
+  const [codexPpTweaks, setCodexPpTweaks] = useState<CodexPpTweak[]>([]);
+  const [codexPpStore, setCodexPpStore] = useState<CodexPpStoreIndex | null>(null);
+  const [codexPpHealth, setCodexPpHealth] = useState<CodexPpHealth | null>(null);
+  const [codexPpPreflight, setCodexPpPreflight] = useState<CodexPpPreflight | null>(null);
+  const [codexPpCli, setCodexPpCli] = useState<CodexPpCliResult | null>(null);
+  const [codexPpLogLines, setCodexPpLogLines] = useState<string[]>([]);
+  const [codexPpLoading, setCodexPpLoading] = useState(false);
+  const [codexPpSearch, setCodexPpSearch] = useState("");
   const [codexBindModel, setCodexBindModel] = useState("");
   const [claudeAliases, setClaudeAliases] = useState<ModelAlias[]>([]);
   const [codexAliases, setCodexAliases] = useState<ModelAlias[]>([]);
@@ -1065,13 +1348,18 @@ function App() {
       setCodexBinding(MOCK_CODEX_BINDING);
       setColdStart(MOCK_COLDSTART);
       setMcpPreview(MOCK_MCP_PREVIEW);
+      setCodexPpInstall(MOCK_CODEX_PP_INSTALL);
+      setCodexPpTweaks(MOCK_CODEX_PP_TWEAKS);
+      setCodexPpStore(MOCK_CODEX_PP_STORE);
+      setCodexPpHealth(MOCK_CODEX_PP_HEALTH);
+      setCodexPpPreflight(MOCK_CODEX_PP_PREFLIGHT);
       setClaudeAliases(DEFAULT_CLAUDE_ALIASES.map((alias, index) => ({ id: `mock-claude-${index}`, alias, alias_type: "claude", created_at: null })));
       setCodexAliases(DEFAULT_CODEX_MODELS.map((alias, index) => ({ id: `mock-codex-${index}`, alias, alias_type: "codex", created_at: null })));
       return;
     }
 
     try {
-      const [s, p, r, d, cc, l, cfg, cs, cr, cb, cold, mcp, ca, cma] = await Promise.all([
+      const [s, p, r, d, cc, l, cfg, cs, cr, cb, cold, mcp, ca, cma, cppInstall, cppTweaks, cppHealth, cppPreflight] = await Promise.all([
         invoke<Status>("get_status"),
         invoke<Provider[]>("list_providers"),
         invoke<ModelRoute[]>("list_routes"),
@@ -1086,6 +1374,10 @@ function App() {
         invoke<McpSyncPreview>("get_mcp_sync_status"),
         invoke<ModelAlias[]>("list_model_aliases", { aliasType: "claude" }),
         invoke<ModelAlias[]>("list_model_aliases", { aliasType: "codex" }),
+        invoke<CodexPpInstall>("detect_codex_pp"),
+        invoke<CodexPpTweak[]>("list_codex_pp_tweaks"),
+        invoke<CodexPpHealth>("get_codex_pp_health"),
+        invoke<CodexPpPreflight>("get_codex_pp_preflight"),
       ]);
       setStatus(s);
       setProviders(p);
@@ -1101,6 +1393,10 @@ function App() {
       setMcpPreview(mcp);
       setClaudeAliases(ca);
       setCodexAliases(cma);
+      setCodexPpInstall(cppInstall);
+      setCodexPpTweaks(cppTweaks);
+      setCodexPpHealth(cppHealth);
+      setCodexPpPreflight(cppPreflight);
     } catch (e) {
       setError(String(e));
     }
@@ -1124,6 +1420,12 @@ function App() {
     const firstClaudeModel = routes.find(r => r.enabled)?.claude_alias ?? claudeAliasOptions[0] ?? "";
     if (!ccModel && firstClaudeModel) setCcModel(firstClaudeModel);
   }, [ccModel, claudeAliasOptions, routes]);
+
+  useEffect(() => {
+    if (page === "codex" && codexTab === "market" && !codexPpStore && !codexPpLoading) {
+      void refreshCodexPp(true);
+    }
+  }, [page, codexTab, codexPpStore, codexPpLoading]);
 
   // ---- Actions ----
   const startGw = async () => {
@@ -1347,6 +1649,129 @@ function App() {
       setColdStartRunning(false);
     }
   };
+
+  const refreshCodexPp = async (includeStore = false) => {
+    setCodexPpLoading(true);
+    try {
+      if (!isTauriRuntime) {
+        setCodexPpInstall(MOCK_CODEX_PP_INSTALL);
+        setCodexPpTweaks(MOCK_CODEX_PP_TWEAKS);
+        setCodexPpHealth(MOCK_CODEX_PP_HEALTH);
+        setCodexPpPreflight(MOCK_CODEX_PP_PREFLIGHT);
+        if (includeStore) setCodexPpStore(MOCK_CODEX_PP_STORE);
+        return;
+      }
+      const [install, tweaks, health, preflight] = await Promise.all([
+        invoke<CodexPpInstall>("detect_codex_pp"),
+        invoke<CodexPpTweak[]>("list_codex_pp_tweaks"),
+        invoke<CodexPpHealth>("get_codex_pp_health"),
+        invoke<CodexPpPreflight>("get_codex_pp_preflight"),
+      ]);
+      setCodexPpInstall(install);
+      setCodexPpTweaks(tweaks);
+      setCodexPpHealth(health);
+      setCodexPpPreflight(preflight);
+      if (includeStore) {
+        setCodexPpStore(await invoke<CodexPpStoreIndex>("fetch_codex_pp_store"));
+      }
+    } catch (e) {
+      flash(String(e), "error");
+    } finally {
+      setCodexPpLoading(false);
+    }
+  };
+
+  const toggleCodexPpTweak = async (id: string, enabled: boolean) => {
+    setCodexPpLoading(true);
+    try {
+      const tweaks = isTauriRuntime
+        ? await invoke<CodexPpTweak[]>("set_codex_pp_tweak_enabled", { id, enabled })
+        : codexPpTweaks.map(tw => tw.id === id ? { ...tw, enabled } : tw);
+      setCodexPpTweaks(tweaks);
+      flash(enabled ? "Tweak enabled" : "Tweak disabled");
+    } catch (e) {
+      flash(String(e), "error");
+    } finally {
+      setCodexPpLoading(false);
+    }
+  };
+
+  const installCodexPpTweak = async (entry: CodexPpStoreEntry) => {
+    setCodexPpLoading(true);
+    try {
+      const tweaks = isTauriRuntime
+        ? await invoke<CodexPpTweak[]>("install_codex_pp_tweak", { repo: entry.repo, approvedCommitSha: entry.approvedCommitSha })
+        : [...codexPpTweaks];
+      setCodexPpTweaks(tweaks);
+      await refreshCodexPp(true);
+      flash("Tweak installed");
+    } catch (e) {
+      flash(String(e), "error");
+    } finally {
+      setCodexPpLoading(false);
+    }
+  };
+
+  const uninstallCodexPpTweak = async (id: string) => {
+    setCodexPpLoading(true);
+    try {
+      const tweaks = isTauriRuntime
+        ? await invoke<CodexPpTweak[]>("uninstall_codex_pp_tweak", { id })
+        : codexPpTweaks.filter(tw => tw.id !== id);
+      setCodexPpTweaks(tweaks);
+      flash("Tweak removed");
+    } catch (e) {
+      flash(String(e), "error");
+    } finally {
+      setCodexPpLoading(false);
+    }
+  };
+
+  const runCodexPpCli = async (action: string) => {
+    setCodexPpLoading(true);
+    setCodexPpLogLines([]);
+    let unlisten: null | (() => void) = null;
+    try {
+      const sessionId = `codexpp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      unlisten = isTauriRuntime
+        ? await listen<CodexPpLogEvent>("codex-pp-cli-log", event => {
+          if (event.payload.session_id !== sessionId) return;
+          const prefix = event.payload.stream === "system" ? ">" : event.payload.stream === "stderr" ? "!" : "";
+          setCodexPpLogLines(current => [...current, prefix ? `${prefix} ${event.payload.line}` : event.payload.line]);
+        })
+        : null;
+      const result = isTauriRuntime
+        ? await invoke<CodexPpCliResult>("run_codex_pp_cli", { action, sessionId })
+        : { action, command: `codexplusplus ${action}`, success: true, code: 0, stdout: "browser preview", stderr: "" };
+      setCodexPpCli(result);
+      if (!isTauriRuntime) {
+        setCodexPpLogLines([`> $ ${result.command}`, result.stdout || "(browser preview)"]);
+      } else if (!result.stdout && !result.stderr && action !== "install" && action !== "install-local") {
+        setCodexPpLogLines(current => current.length > 0 ? current : ["(no output)"]);
+      }
+      const shouldRefreshStore = action === "install" || action === "install-local" || action === "update";
+      await refreshCodexPp(shouldRefreshStore);
+      if (action === "install" || action === "install-local" || !result.success) {
+        setCodexTab("diagnostics");
+      }
+      flash(result.success ? "Codex++ command completed" : "Codex++ command failed", result.success ? "success" : "error");
+    } catch (e) {
+      flash(String(e), "error");
+    } finally {
+      unlisten?.();
+      setCodexPpLoading(false);
+    }
+  };
+
+  const openCodexPpPath = async (kind: string) => {
+    try {
+      const path = isTauriRuntime ? await invoke<string>("open_codex_pp_path", { kind }) : kind;
+      flash(`Opened ${path}`);
+    } catch (e) {
+      flash(String(e), "error");
+    }
+  };
+
   const saveCodexRoute = async () => {
     try {
       if (editingC) {
@@ -1420,7 +1845,7 @@ function App() {
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.7.1</div>
+          <div className="brand-sub">v1.8.0</div>
         </div>
       </div>
 
@@ -1485,7 +1910,7 @@ function App() {
         <span className="status-text">
           Claude <strong>{status?.gateway_running ? t("Running") : t("Stopped")}</strong> · Codex <strong>{codexStatus?.running ? t("Running") : t("Stopped")}</strong>
         </span>
-        <span className="sidebar-version">v1.7.1</span>
+        <span className="sidebar-version">v1.8.0</span>
       </div>
     </aside>
   );
@@ -2184,7 +2609,7 @@ function App() {
   // =====================================================
   //  CODEX PAGE
   // =====================================================
-  const CodexPage = () => (
+  const CodexRoutesPage = () => (
     <div>
       <div className="page-header">
         <h1>{t("Codex Gateway")}</h1>
@@ -2402,6 +2827,328 @@ function App() {
           </div>
         )}
       </div>
+    </div>
+  );
+
+  const codexPpStatusBadge = (status: string | undefined) => {
+    if (status === "ok") return "badge-green";
+    if (status === "warn") return "badge-amber";
+    if (status === "error") return "badge-red";
+    return "badge-gray";
+  };
+
+  const storeEntries = (codexPpStore?.entries ?? []).filter(entry => {
+    const q = codexPpSearch.trim().toLowerCase();
+    if (!q) return true;
+    return [
+      entry.manifest.name,
+      entry.manifest.description ?? "",
+      entry.repo,
+      ...(entry.manifest.tags ?? []),
+    ].join(" ").toLowerCase().includes(q);
+  });
+
+  const codexPpLogText = codexPpLogLines.length > 0
+    ? codexPpLogLines.join("\n")
+    : [codexPpCli?.stdout, codexPpCli?.stderr].filter(Boolean).join("\n") || "(no output)";
+
+  const CodexPpPreflightCard = () => (
+    <div className="card">
+      <div className="card-title">安装前预检</div>
+      <p style={{ color: "var(--muted)", marginBottom: 14 }}>
+        {codexPpPreflight?.summary ?? "Run preflight to verify Node.js, npm, bootstrap tools, and Codex.app before patching."}
+      </p>
+      <div className="route-list" style={{ marginBottom: 0 }}>
+        {(codexPpPreflight?.checks ?? []).map(check => (
+          <div key={check.name} className="route-item">
+            <div className="route-info">
+              <div className="route-name">{check.name}</div>
+              <div className="route-path">{check.detail}</div>
+            </div>
+            <span className={`badge ${codexPpStatusBadge(check.status)}`}>{check.status}</span>
+          </div>
+        ))}
+      </div>
+      <div className="qa-buttons" style={{ marginTop: 16 }}>
+        <button className="btn" onClick={() => void refreshCodexPp(false)} disabled={codexPpLoading}>
+          <IconRefresh /> Run Preflight
+        </button>
+        <span className={`badge ${codexPpPreflight?.ready ? "badge-green" : "badge-red"}`}>
+          {codexPpPreflight?.ready ? "Ready to install" : "Blocked"}
+        </span>
+      </div>
+    </div>
+  );
+
+  const CodexPpOverviewCard = () => (
+    <div className="card">
+      <div className="card-title">Codex++</div>
+      <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+        <span className="info-key">{t("Status")}</span>
+        <span className="info-val">
+          <span className={`badge ${codexPpInstall?.installed ? "badge-green" : "badge-gray"}`}>
+            {codexPpInstall?.installed ? "Installed" : "Not installed"}
+          </span>
+        </span>
+        <span className="info-key">{t("Version")}</span>
+        <span className="info-val">{codexPpInstall?.version ?? "-"}</span>
+        <span className="info-key">Auto Update</span>
+        <span className="info-val">{codexPpInstall?.auto_update ? "Enabled" : "Disabled"}</span>
+        <span className="info-key">Safe Mode</span>
+        <span className="info-val">{codexPpInstall?.safe_mode ? "On" : "Off"}</span>
+        <span className="info-key">CLI</span>
+        <span className="info-val">{codexPpInstall?.cli_path ?? "Bootstrap via Gateway Switch"}</span>
+        <span className="info-key">Install Mode</span>
+        <span className="info-val">{codexPpPreflight?.install_mode ?? "-"}</span>
+        <span className="info-key">User Root</span>
+        <span className="info-val">{codexPpInstall?.user_root ?? "-"}</span>
+      </div>
+      <div className="qa-buttons" style={{ marginTop: 16 }}>
+        {!codexPpInstall?.installed && (
+          <>
+            <button className="btn btn-primary" onClick={() => void runCodexPpCli("install")} disabled={codexPpLoading}>
+              Install Codex++
+            </button>
+            <button className="btn" onClick={() => void runCodexPpCli("install-local")} disabled={codexPpLoading}>
+              Install with Local Signing
+            </button>
+          </>
+        )}
+        {codexPpInstall?.installed && (
+          <>
+            <button className="btn btn-primary" onClick={() => void runCodexPpCli("install")} disabled={codexPpLoading}>
+              Reapply Patch
+            </button>
+            <button className="btn" onClick={() => void runCodexPpCli("install-local")} disabled={codexPpLoading}>
+              Reapply with Local Signing
+            </button>
+          </>
+        )}
+        <button className="btn" onClick={() => void refreshCodexPp(true)} disabled={codexPpLoading}><IconRefresh /> {t("Refresh")}</button>
+        <button className="btn" onClick={() => void openCodexPpPath("root")}>Open Root</button>
+        <button className="btn" onClick={() => void openCodexPpPath("tweaks")}>Open Tweaks</button>
+      </div>
+      <p style={{ marginTop: 12, marginBottom: 0, color: "var(--muted)", fontSize: 12 }}>
+        Gateway Switch will auto-detect an existing <code>codexplusplus</code> CLI. If none is found, it falls back to the official bootstrap installer and patches <code>Codex.app</code> for you.
+      </p>
+    </div>
+  );
+
+  const CodexPpEnhancePage = () => (
+    <div>
+      <div className="page-header page-header-row">
+        <div>
+          <h1>Codex++ 页面增强</h1>
+          <p>可从这里一键安装并 patch Codex.app，安装完成后再读取本地 tweak manifest、入口文件和启用状态。</p>
+        </div>
+        <div className="qa-buttons" style={{ margin: 0 }}>
+          <button className="btn" onClick={() => void refreshCodexPp(false)} disabled={codexPpLoading}><IconRefresh /> {t("Refresh")}</button>
+          <button className="btn" onClick={() => void runCodexPpCli("safe-mode-status")} disabled={codexPpLoading}>Safe Mode</button>
+        </div>
+      </div>
+      <div className="two-col">
+        {CodexPpOverviewCard()}
+        {CodexPpPreflightCard()}
+      </div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-title">Tweak Summary</div>
+        <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+          <span className="info-key">Installed Tweaks</span>
+          <span className="info-val">{codexPpTweaks.length}</span>
+          <span className="info-key">Enabled</span>
+          <span className="info-val">{codexPpTweaks.filter(tw => tw.enabled).length}</span>
+          <span className="info-key">Updates</span>
+          <span className="info-val">{codexPpTweaks.filter(tw => tw.update_available).length}</span>
+          <span className="info-key">Tweaks Dir</span>
+          <span className="info-val">{codexPpInstall?.tweaks_dir ?? "-"}</span>
+        </div>
+      </div>
+      <div className="tweak-grid">
+        {codexPpTweaks.map(tweak => (
+          <div key={tweak.id} className="tweak-card">
+            <div className="tweak-card-head">
+              <div className="tweak-card-icon">{tweak.icon_url ? <img src={tweak.icon_url} alt="" /> : tweak.name.slice(0, 2)}</div>
+              <div className="tweak-card-info">
+                <div className="tweak-card-name">{tweak.name}</div>
+                <div className="tweak-card-version">{tweak.version} · {tweak.scope}</div>
+              </div>
+              <span className={`badge ${tweak.enabled ? "badge-green" : "badge-gray"}`}>{tweak.enabled ? t("Active") : t("Disabled")}</span>
+            </div>
+            <p className="tweak-card-desc">{tweak.description ?? tweak.id}</p>
+            <div className="tweak-card-tags">
+              {tweak.tags.map(tag => <span key={tag} className="tweak-tag">{tag}</span>)}
+              {!tweak.entry_exists && <span className="tweak-tag">missing entry</span>}
+              {tweak.update_available && <span className="tweak-tag">update {tweak.latest_version}</span>}
+            </div>
+            <div className="tweak-card-footer">
+              <span className="tweak-card-author">{tweak.author ?? tweak.github_repo ?? tweak.id}</span>
+              <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
+                <button className="btn" onClick={() => void toggleCodexPpTweak(tweak.id, !tweak.enabled)} disabled={codexPpLoading}>
+                  {tweak.enabled ? "Disable" : "Enable"}
+                </button>
+                <button className="btn btn-danger" onClick={() => void uninstallCodexPpTweak(tweak.id)} disabled={codexPpLoading}><IconTrash /></button>
+              </div>
+            </div>
+          </div>
+        ))}
+        {codexPpTweaks.length === 0 && (
+          <div className="empty-state">
+            <div className="empty-icon">++</div>
+            <h3>No Codex++ tweaks found</h3>
+            <p>Install Codex++ first from the overview card, then open the market tab to add approved tweaks.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const CodexPpMarketPage = () => (
+    <div>
+      <div className="page-header page-header-row">
+        <div>
+          <h1>Codex++ 脚本市场</h1>
+          <p>读取官方 store index，安装时使用 approved commit SHA 并备份同名本地 tweak。</p>
+        </div>
+        <div className="qa-buttons" style={{ margin: 0 }}>
+          <input value={codexPpSearch} onChange={e => setCodexPpSearch(e.target.value)} placeholder="Search tweaks..." style={{ minWidth: 220 }} />
+          <button className="btn" onClick={() => void refreshCodexPp(true)} disabled={codexPpLoading}><IconRefresh /> Refresh Store</button>
+        </div>
+      </div>
+      <div className="tweak-grid">
+        {storeEntries.map(entry => (
+          <div key={entry.id} className="tweak-card">
+            <div className="tweak-card-head">
+              <div className="tweak-card-icon">{entry.manifest.iconUrl ? <img src={entry.manifest.iconUrl} alt="" /> : entry.manifest.name.slice(0, 2)}</div>
+              <div className="tweak-card-info">
+                <div className="tweak-card-name">{entry.manifest.name}</div>
+                <div className="tweak-card-version">{entry.manifest.version} · {entry.manifest.scope ?? "renderer"}</div>
+              </div>
+              <span className={`badge ${entry.installed ? "badge-green" : "badge-gray"}`}>{entry.installed ? "Installed" : "Remote"}</span>
+            </div>
+            <p className="tweak-card-desc">{entry.manifest.description ?? entry.repo}</p>
+            <div className="tweak-card-tags">
+              {(entry.manifest.tags ?? []).map(tag => <span key={tag} className="tweak-tag">{tag}</span>)}
+              <span className="tweak-tag">{entry.approvedCommitSha.slice(0, 7)}</span>
+            </div>
+            <div className="tweak-card-footer">
+              <span className="tweak-card-author">{entry.repo}</span>
+              <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
+                <button className="btn btn-primary" onClick={() => void installCodexPpTweak(entry)} disabled={codexPpLoading}>
+                  {entry.installed ? "Reinstall" : "Install"}
+                </button>
+                {entry.releaseUrl && <button className="btn" onClick={() => window.open(entry.releaseUrl ?? "", "_blank")}>Release</button>}
+              </div>
+            </div>
+          </div>
+        ))}
+        {storeEntries.length === 0 && (
+          <div className="empty-state">
+            <div className="empty-icon">++</div>
+            <h3>No store entries loaded</h3>
+            <p>Click Refresh Store to fetch the approved Codex++ tweak index.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const CodexPpSessionsPage = () => (
+    <div>
+      <div className="page-header">
+        <h1>历史会话修复</h1>
+        <p>安全版先提供 Codex++ 会话修复指引和维护入口，不直接写未知私有会话数据库。</p>
+      </div>
+      <div className="two-col">
+        <div className="card">
+          <div className="card-title">安全修复策略</div>
+          <div className="note-grid">
+            <div><strong>自动修复边界</strong><p>Gateway Switch 只调用 codex++ CLI 或管理公开配置，不猜测 IndexedDB/SQLite 私有结构。</p></div>
+            <div><strong>推荐流程</strong><p>先运行 status/doctor，再根据结果执行 repair 或 update-codex，最后重启 Codex。</p></div>
+          </div>
+          <div className="qa-buttons" style={{ marginTop: 16 }}>
+            <button className="btn" onClick={() => void runCodexPpCli("status")} disabled={codexPpLoading}>Status</button>
+            <button className="btn" onClick={() => void runCodexPpCli("doctor")} disabled={codexPpLoading}>Doctor</button>
+            <button className="btn btn-primary" onClick={() => void runCodexPpCli("repair")} disabled={codexPpLoading}>Repair</button>
+          </div>
+        </div>
+        {CodexPpOverviewCard()}
+      </div>
+    </div>
+  );
+
+  const CodexPpDiagnosticsPage = () => (
+    <div>
+      <div className="page-header page-header-row">
+        <div>
+          <h1>Codex++ 诊断维护</h1>
+          <p>检查 watcher、runtime、CLI、safe mode，并提供受控维护命令。</p>
+        </div>
+        <div className="qa-buttons" style={{ margin: 0 }}>
+          <button className="btn" onClick={() => void refreshCodexPp(false)} disabled={codexPpLoading}><IconRefresh /> {t("Refresh")}</button>
+          <button className="btn" onClick={() => void runCodexPpCli("doctor")} disabled={codexPpLoading}>Doctor</button>
+        </div>
+      </div>
+      <div className="two-col">
+        <div className="card">
+          <div className="card-title">{codexPpHealth?.title ?? "Codex++ Health"}</div>
+          <p style={{ color: "var(--muted)", marginBottom: 14 }}>{codexPpHealth?.summary ?? "No health report yet."}</p>
+          <div className="route-list" style={{ marginBottom: 0 }}>
+            {(codexPpHealth?.checks ?? []).map(check => (
+              <div key={check.name} className="route-item">
+                <div className="route-info">
+                  <div className="route-name">{check.name}</div>
+                  <div className="route-path">{check.detail}</div>
+                </div>
+                <span className={`badge ${codexPpStatusBadge(check.status)}`}>{t(check.status)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        {CodexPpPreflightCard()}
+      </div>
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="card-title">Maintenance Commands</div>
+        <div className="qa-buttons" style={{ marginTop: 0 }}>
+          <button className="btn btn-primary" onClick={() => void runCodexPpCli("install")} disabled={codexPpLoading}>Install / Patch</button>
+          <button className="btn" onClick={() => void runCodexPpCli("install-local")} disabled={codexPpLoading}>Install Local</button>
+          <button className="btn" onClick={() => void runCodexPpCli("status")} disabled={codexPpLoading}>Status</button>
+          <button className="btn btn-primary" onClick={() => void runCodexPpCli("repair")} disabled={codexPpLoading}>Repair</button>
+          <button className="btn" onClick={() => void runCodexPpCli("repair-local")} disabled={codexPpLoading}>Repair Local</button>
+          <button className="btn" onClick={() => void runCodexPpCli("update")} disabled={codexPpLoading}>Update Codex++</button>
+          <button className="btn" onClick={() => void runCodexPpCli("update-codex")} disabled={codexPpLoading}>Update Codex</button>
+          <button className="btn" onClick={() => void runCodexPpCli("safe-mode-on")} disabled={codexPpLoading}>Safe On</button>
+          <button className="btn" onClick={() => void runCodexPpCli("safe-mode-off")} disabled={codexPpLoading}>Safe Off</button>
+        </div>
+        {(codexPpCli || codexPpLogLines.length > 0 || codexPpLoading) && (
+          <div className="cli-output">
+            <strong>{codexPpCli?.command ?? "codex++ live output"}</strong>
+            <pre>{codexPpLogText}</pre>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const CodexPage = () => (
+    <div>
+      <div className="codex-tabs">
+        {[
+          ["routes", "路由"],
+          ["enhance", "页面增强"],
+          ["market", "脚本市场"],
+          ["sessions", "历史会话修复"],
+          ["diagnostics", "诊断维护"],
+        ].map(([id, label]) => (
+          <button key={id} className={`codex-tab ${codexTab === id ? "active" : ""}`} onClick={() => setCodexTab(id as CodexTab)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {codexTab === "routes" && CodexRoutesPage()}
+      {codexTab === "enhance" && CodexPpEnhancePage()}
+      {codexTab === "market" && CodexPpMarketPage()}
+      {codexTab === "sessions" && CodexPpSessionsPage()}
+      {codexTab === "diagnostics" && CodexPpDiagnosticsPage()}
     </div>
   );
 
@@ -2861,6 +3608,17 @@ function App() {
                   <option value="en">{t("English")}</option>
                 </select>
                 <span className="field-hint">{language === "zh" ? "默认中文，必要技术名词保留英文。" : "Default Chinese is available; required technical terms stay in English."}</span>
+              </div>
+              <div className="form-field" style={{ gridColumn: "1 / -1" }}>
+                <label>Theme</label>
+                <div className="theme-options">
+                  {(["system", "light", "dark"] as ThemeMode[]).map(mode => (
+                    <button key={mode} className={`theme-option ${theme === mode ? "active" : ""}`} onClick={() => setTheme(mode)}>
+                      {mode === "system" ? "System" : mode === "light" ? "Light" : "Dark"}
+                    </button>
+                  ))}
+                </div>
+                <span className="field-hint">主题只影响本机界面，不写入 Gateway 配置文件。</span>
               </div>
             </div>
             <div className="form-row">

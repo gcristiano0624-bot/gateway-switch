@@ -42,76 +42,112 @@ pub fn start(st: &AppState) -> Result<String, String> {
     {
         let mut g = st.runtime.codex_gateway_handle.lock().map_err(|_| "lock")?;
         if let Some(h) = g.as_ref() {
-            let is_running = st.runtime.codex_gateway_status.lock().map_err(|_| "lock")?.running;
+            let is_running = st
+                .runtime
+                .codex_gateway_status
+                .lock()
+                .map_err(|_| "lock")?
+                .running;
             if is_running && !h._task.is_finished() {
                 return Ok("already_running".into());
             }
         }
         if let Some(mut stale) = g.take() {
-            if let Some(tx) = stale.shutdown.take() { let _ = tx.send(()); }
+            if let Some(tx) = stale.shutdown.take() {
+                let _ = tx.send(());
+            }
             stale._task.abort();
         }
     }
 
     let profile = database::get_codex_profile(&st.db_path)?;
     let addr: SocketAddr = format!("{}:{}", profile.listen_host, profile.listen_port)
-        .parse().map_err(|e: std::net::AddrParseError| e.to_string())?;
+        .parse()
+        .map_err(|e: std::net::AddrParseError| e.to_string())?;
 
-    let ctx = Ctx { db: st.db_path.clone(), client: Client::new(), profile: profile.clone() };
+    let ctx = Ctx {
+        db: st.db_path.clone(),
+        client: Client::new(),
+        profile: profile.clone(),
+    };
     let router = build_router(ctx);
 
     let (tx, rx) = oneshot::channel::<()>();
     let rt = Arc::clone(&st.runtime);
     {
         let mut s = rt.codex_gateway_status.lock().map_err(|_| "lock")?;
-        *s = GatewayStatus { running: true, status: "starting".into(), error: None };
+        *s = GatewayStatus {
+            running: true,
+            status: "starting".into(),
+            error: None,
+        };
     }
 
     let handle: JoinHandle<()> = tokio::spawn(async move {
         match TcpListener::bind(addr).await {
             Ok(listener) => {
                 if let Ok(mut s) = rt.codex_gateway_status.lock() {
-                    s.running = true; s.status = "running".into(); s.error = None;
+                    s.running = true;
+                    s.status = "running".into();
+                    s.error = None;
                 }
                 let server = axum::serve(listener, router).with_graceful_shutdown(async {
                     let _ = rx.await;
                 });
                 if let Err(e) = server.await {
                     if let Ok(mut s) = rt.codex_gateway_status.lock() {
-                        s.running = false; s.status = "error".into(); s.error = Some(e.to_string());
+                        s.running = false;
+                        s.status = "error".into();
+                        s.error = Some(e.to_string());
                     }
                 } else if let Ok(mut s) = rt.codex_gateway_status.lock() {
-                    s.running = false; s.status = "stopped".into();
+                    s.running = false;
+                    s.status = "stopped".into();
                 }
             }
             Err(e) => {
                 if let Ok(mut s) = rt.codex_gateway_status.lock() {
-                    s.running = false; s.status = "error".into(); s.error = Some(e.to_string());
+                    s.running = false;
+                    s.status = "error".into();
+                    s.error = Some(e.to_string());
                 }
             }
         }
     });
 
     let mut g = st.runtime.codex_gateway_handle.lock().map_err(|_| "lock")?;
-    *g = Some(GatewayHandle { shutdown: Some(tx), _task: handle });
+    *g = Some(GatewayHandle {
+        shutdown: Some(tx),
+        _task: handle,
+    });
     Ok("started".into())
 }
 
 pub fn stop(st: &AppState) -> Result<String, String> {
     let mut g = st.runtime.codex_gateway_handle.lock().map_err(|_| "lock")?;
     if let Some(h) = g.as_mut() {
-        if let Some(tx) = h.shutdown.take() { let _ = tx.send(()); }
+        if let Some(tx) = h.shutdown.take() {
+            let _ = tx.send(());
+        }
     } else {
         return Ok("not_running".into());
     }
     *g = None;
     let mut s = st.runtime.codex_gateway_status.lock().map_err(|_| "lock")?;
-    *s = GatewayStatus { running: false, status: "stopped".into(), error: None };
+    *s = GatewayStatus {
+        running: false,
+        status: "stopped".into(),
+        error: None,
+    };
     Ok("stopped".into())
 }
 
 pub fn status(st: &AppState) -> Result<GatewayStatus, String> {
-    st.runtime.codex_gateway_status.lock().map(|s| s.clone()).map_err(|_| "lock".into())
+    st.runtime
+        .codex_gateway_status
+        .lock()
+        .map(|s| s.clone())
+        .map_err(|_| "lock".into())
 }
 
 const STREAM_TIMEOUT_SECS: u64 = 120;
@@ -134,30 +170,51 @@ async fn health(State(ctx): State<Ctx>) -> impl IntoResponse {
         .map(compatibility::provider_capability_json)
         .collect();
     let routes = database::list_codex_routes(&ctx.db).unwrap_or_default();
-    let models: Vec<String> = routes.into_iter().filter(|r| r.enabled).map(|r| r.codex_model).collect();
-    Json(json!({ "ok": true, "gateway": "codex", "listen": format!("{}:{}", ctx.profile.listen_host, ctx.profile.listen_port), "models": models, "capabilities": capabilities }))
+    let models: Vec<String> = routes
+        .into_iter()
+        .filter(|r| r.enabled)
+        .map(|r| r.codex_model)
+        .collect();
+    Json(
+        json!({ "ok": true, "gateway": "codex", "listen": format!("{}:{}", ctx.profile.listen_host, ctx.profile.listen_port), "models": models, "capabilities": capabilities }),
+    )
 }
 
 async fn list_models(State(ctx): State<Ctx>, headers: HeaderMap) -> Result<Json<Value>, Response> {
     verify_auth(&headers, &ctx)?;
     let routes = database::list_codex_routes(&ctx.db).map_err(internal)?;
     let providers = database::list_providers(&ctx.db).unwrap_or_default();
-    let data: Vec<Value> = routes.into_iter().filter(|r| r.enabled).map(|r| {
-        let provider_name = providers.iter().find(|p| p.id == r.provider_id).map(|p| p.name.as_str()).unwrap_or("unknown");
-        json!({
-            "id": r.codex_model,
-            "object": "model",
-            "created": 1700000000,
-            "owned_by": provider_name,
+    let data: Vec<Value> = routes
+        .into_iter()
+        .filter(|r| r.enabled)
+        .map(|r| {
+            let provider_name = providers
+                .iter()
+                .find(|p| p.id == r.provider_id)
+                .map(|p| p.name.as_str())
+                .unwrap_or("unknown");
+            json!({
+                "id": r.codex_model,
+                "object": "model",
+                "created": 1700000000,
+                "owned_by": provider_name,
+            })
         })
-    }).collect();
+        .collect();
     Ok(Json(json!({ "object": "list", "data": data })))
 }
 
-async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body): Json<Value>) -> Result<Response, Response> {
+async fn responses_handler(
+    State(ctx): State<Ctx>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Result<Response, Response> {
     verify_auth(&headers, &ctx)?;
 
-    let model = body.get("model").and_then(|v| v.as_str()).ok_or(bad_req("missing model"))?;
+    let model = body
+        .get("model")
+        .and_then(|v| v.as_str())
+        .ok_or(bad_req("missing model"))?;
     let route = resolve(&ctx.db, model).map_err(bad_req)?;
     let req_id = Uuid::new_v4().to_string();
     let resp_id = format!("resp_{}", Uuid::new_v4());
@@ -178,17 +235,37 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
         .to_string();
 
     // Forward to upstream provider's Chat Completions endpoint.
-    let resp = ctx.client.post(upstream_url(&route.base_url, "chat/completions"))
+    let resp = ctx
+        .client
+        .post(upstream_url(&route.base_url, "chat/completions"))
         .headers(to_headers(&route.headers)?)
         .json(&chat_req)
-        .send().await.map_err(|e| {
-            let trace = tool_trace_summary(&route.tool_call_mode, &tool_choice, request_tool_count, 0, None, false, Some(&e.to_string()));
-            let _ = database::insert_log(&ctx.db, &RequestLog {
-                request_id: req_id.clone(), claude_alias: route.display.clone(),
-                provider_id: route.provider_id.clone(), upstream_model: route.upstream_model.clone(),
-                status_code: None, duration_ms: Some(started.elapsed().as_millis() as u64),
-                is_stream, error_summary: Some(trace), created_at: String::new(),
-            });
+        .send()
+        .await
+        .map_err(|e| {
+            let trace = tool_trace_summary(
+                &route.tool_call_mode,
+                &tool_choice,
+                request_tool_count,
+                0,
+                None,
+                false,
+                Some(&e.to_string()),
+            );
+            let _ = database::insert_log(
+                &ctx.db,
+                &RequestLog {
+                    request_id: req_id.clone(),
+                    claude_alias: route.display.clone(),
+                    provider_id: route.provider_id.clone(),
+                    upstream_model: route.upstream_model.clone(),
+                    status_code: None,
+                    duration_ms: Some(started.elapsed().as_millis() as u64),
+                    is_stream,
+                    error_summary: Some(trace),
+                    created_at: String::new(),
+                },
+            );
             upstream_err(e)
         })?;
 
@@ -197,48 +274,109 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
     if !is_stream {
         if !status.is_success() {
             let text = resp.text().await.unwrap_or_default();
-            let trace = tool_trace_summary(&route.tool_call_mode, &tool_choice, request_tool_count, 0, None, false, Some(&text));
-            let _ = database::insert_log(&ctx.db, &RequestLog {
-                request_id: req_id, claude_alias: route.display.clone(),
-                provider_id: route.provider_id.clone(), upstream_model: route.upstream_model.clone(),
-                status_code: Some(status.as_u16()), duration_ms: Some(started.elapsed().as_millis() as u64),
-                is_stream: false, error_summary: Some(trace), created_at: String::new(),
-            });
+            let trace = tool_trace_summary(
+                &route.tool_call_mode,
+                &tool_choice,
+                request_tool_count,
+                0,
+                None,
+                false,
+                Some(&text),
+            );
+            let _ = database::insert_log(
+                &ctx.db,
+                &RequestLog {
+                    request_id: req_id,
+                    claude_alias: route.display.clone(),
+                    provider_id: route.provider_id.clone(),
+                    upstream_model: route.upstream_model.clone(),
+                    status_code: Some(status.as_u16()),
+                    duration_ms: Some(started.elapsed().as_millis() as u64),
+                    is_stream: false,
+                    error_summary: Some(trace),
+                    created_at: String::new(),
+                },
+            );
             return Err(upstream_status_err(status, text));
         }
         let chat_response = resp.json::<Value>().await.map_err(upstream_err)?;
         let response_tool_count = response_tool_call_count(&chat_response);
-        let finish_reason = chat_response["choices"][0]["finish_reason"].as_str().map(String::from);
-        let strict_violation = route.tool_call_mode == "strict_execution" && request_tool_count > 0 && response_tool_count == 0;
-        let trace = tool_trace_summary(&route.tool_call_mode, &tool_choice, request_tool_count, response_tool_count, finish_reason.as_deref(), strict_violation, None);
+        let finish_reason = chat_response["choices"][0]["finish_reason"]
+            .as_str()
+            .map(String::from);
+        let strict_violation = route.tool_call_mode == "strict_execution"
+            && request_tool_count > 0
+            && response_tool_count == 0;
+        let trace = tool_trace_summary(
+            &route.tool_call_mode,
+            &tool_choice,
+            request_tool_count,
+            response_tool_count,
+            finish_reason.as_deref(),
+            strict_violation,
+            None,
+        );
         if let Err(err) = enforce_strict_tool_calls(&chat_response, &chat_req, &route) {
-            let _ = database::insert_log(&ctx.db, &RequestLog {
-                request_id: req_id.clone(), claude_alias: route.display.clone(),
-                provider_id: route.provider_id.clone(), upstream_model: route.upstream_model.clone(),
-                status_code: Some(status.as_u16()), duration_ms: Some(started.elapsed().as_millis() as u64),
-                is_stream: false, error_summary: Some(trace), created_at: String::new(),
-            });
+            let _ = database::insert_log(
+                &ctx.db,
+                &RequestLog {
+                    request_id: req_id.clone(),
+                    claude_alias: route.display.clone(),
+                    provider_id: route.provider_id.clone(),
+                    upstream_model: route.upstream_model.clone(),
+                    status_code: Some(status.as_u16()),
+                    duration_ms: Some(started.elapsed().as_millis() as u64),
+                    is_stream: false,
+                    error_summary: Some(trace),
+                    created_at: String::new(),
+                },
+            );
             return Err(err);
         }
-        let responses_response = convert_sync_response(&chat_response, &route.display, &resp_id, &msg_id);
-        let _ = database::insert_log(&ctx.db, &RequestLog {
-            request_id: req_id, claude_alias: route.display.clone(),
-            provider_id: route.provider_id.clone(), upstream_model: route.upstream_model.clone(),
-            status_code: Some(status.as_u16()), duration_ms: Some(started.elapsed().as_millis() as u64),
-            is_stream: false, error_summary: Some(trace), created_at: String::new(),
-        });
+        let responses_response =
+            convert_sync_response(&chat_response, &route.display, &resp_id, &msg_id);
+        let _ = database::insert_log(
+            &ctx.db,
+            &RequestLog {
+                request_id: req_id,
+                claude_alias: route.display.clone(),
+                provider_id: route.provider_id.clone(),
+                upstream_model: route.upstream_model.clone(),
+                status_code: Some(status.as_u16()),
+                duration_ms: Some(started.elapsed().as_millis() as u64),
+                is_stream: false,
+                error_summary: Some(trace),
+                created_at: String::new(),
+            },
+        );
         return Ok((status, Json(responses_response)).into_response());
     }
 
     if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();
-        let trace = tool_trace_summary(&route.tool_call_mode, &tool_choice, request_tool_count, 0, None, false, Some(&text));
-        let _ = database::insert_log(&ctx.db, &RequestLog {
-            request_id: req_id, claude_alias: route.display.clone(),
-            provider_id: route.provider_id.clone(), upstream_model: route.upstream_model.clone(),
-            status_code: Some(status.as_u16()), duration_ms: Some(started.elapsed().as_millis() as u64),
-            is_stream: true, error_summary: Some(trace), created_at: String::new(),
-        });
+        let trace = tool_trace_summary(
+            &route.tool_call_mode,
+            &tool_choice,
+            request_tool_count,
+            0,
+            None,
+            false,
+            Some(&text),
+        );
+        let _ = database::insert_log(
+            &ctx.db,
+            &RequestLog {
+                request_id: req_id,
+                claude_alias: route.display.clone(),
+                provider_id: route.provider_id.clone(),
+                upstream_model: route.upstream_model.clone(),
+                status_code: Some(status.as_u16()),
+                duration_ms: Some(started.elapsed().as_millis() as u64),
+                is_stream: true,
+                error_summary: Some(trace),
+                created_at: String::new(),
+            },
+        );
         return Err(upstream_status_err(status, text));
     }
 
@@ -252,7 +390,11 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
     let db = ctx.db.clone();
     let client = ctx.client.clone();
     let body_stream = resp.bytes_stream();
-    let has_tools_in_req = chat_req.get("tools").and_then(|v| v.as_array()).map(|a| !a.is_empty()).unwrap_or(false);
+    let has_tools_in_req = chat_req
+        .get("tools")
+        .and_then(|v| v.as_array())
+        .map(|a| !a.is_empty())
+        .unwrap_or(false);
     let strict_tool_calls = route.tool_call_mode == "strict_execution" && has_tools_in_req;
     let tool_call_mode = route.tool_call_mode.clone();
 
@@ -608,7 +750,8 @@ async fn responses_handler(State(ctx): State<Ctx>, headers: HeaderMap, Json(body
         });
     };
 
-    let builder = Response::builder().status(StatusCode::OK)
+    let builder = Response::builder()
+        .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "text/event-stream")
         .header("cache-control", "no-cache");
     builder.body(Body::from_stream(sse)).map_err(internal)
@@ -625,22 +768,46 @@ fn tools_array_from_body(body: &Value) -> Vec<Value> {
 
 fn has_action_description(text: &str) -> bool {
     let patterns = [
-        "我来", "我将", "让我", "接下来", "现在我", "我需要", "我应该",
-        "我去", "我要", "先让我", "先我", "我先",
-        "I'll ", "I'll\n", "Let me ", "I will ", "Now I'll ",
-        "I'm going to ", "I need to ", "I should ", "Going to ",
-        "I'll now ", "I'll first ", "Let's ",
+        "我来",
+        "我将",
+        "让我",
+        "接下来",
+        "现在我",
+        "我需要",
+        "我应该",
+        "我去",
+        "我要",
+        "先让我",
+        "先我",
+        "我先",
+        "I'll ",
+        "I'll\n",
+        "Let me ",
+        "I will ",
+        "Now I'll ",
+        "I'm going to ",
+        "I need to ",
+        "I should ",
+        "Going to ",
+        "I'll now ",
+        "I'll first ",
+        "Let's ",
     ];
     let lower = text.to_lowercase();
     patterns.iter().any(|p| lower.contains(&p.to_lowercase()))
 }
 
 fn extract_finish_reason(line: &str) -> Option<String> {
-    if !line.starts_with("data:") { return None; }
+    if !line.starts_with("data:") {
+        return None;
+    }
     let payload = line[5..].trim();
-    if payload.is_empty() || payload == "[DONE]" { return None; }
+    if payload.is_empty() || payload == "[DONE]" {
+        return None;
+    }
     let v: Value = serde_json::from_str(payload).ok()?;
-    v["choices"][0]["finish_reason"].as_str()
+    v["choices"][0]["finish_reason"]
+        .as_str()
         .or_else(|| v["choices"][0]["delta"]["finish_reason"].as_str())
         .map(String::from)
 }
@@ -655,7 +822,11 @@ fn convert_request(body: &Value, upstream_model: &str) -> Value {
         }
     }
 
-    let has_tools = body.get("tools").and_then(|v| v.as_array()).map(|v| !v.is_empty()).unwrap_or(false);
+    let has_tools = body
+        .get("tools")
+        .and_then(|v| v.as_array())
+        .map(|v| !v.is_empty())
+        .unwrap_or(false);
     if has_tools {
         let tool_names: Vec<String> = tools_array_from_body(body)
             .iter()
@@ -690,20 +861,26 @@ fn convert_request(body: &Value, upstream_model: &str) -> Value {
         for item in input {
             match item.get("type").and_then(|v| v.as_str()) {
                 Some("message") => {
-                    let role = normalize_chat_role(item.get("role").and_then(|v| v.as_str()).unwrap_or("user"));
+                    let role = normalize_chat_role(
+                        item.get("role").and_then(|v| v.as_str()).unwrap_or("user"),
+                    );
                     let content = extract_content_from_item(item);
                     messages.push(json!({"role": role, "content": content}));
                 }
                 Some("function_call_output") => {
                     let call_id = item.get("call_id").and_then(|v| v.as_str()).unwrap_or("");
                     let output = item.get("output").and_then(|v| v.as_str()).unwrap_or("");
-                    messages.push(json!({"role": "tool", "tool_call_id": call_id, "content": output}));
+                    messages
+                        .push(json!({"role": "tool", "tool_call_id": call_id, "content": output}));
                 }
                 Some("function_call") => {
                     // Convert function_call to assistant message with tool_calls
                     let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("");
                     let call_id = item.get("call_id").and_then(|v| v.as_str()).unwrap_or("");
-                    let arguments = item.get("arguments").and_then(|v| v.as_str()).unwrap_or("{}");
+                    let arguments = item
+                        .get("arguments")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("{}");
                     messages.push(json!({
                         "role": "assistant",
                         "content": "",
@@ -716,7 +893,9 @@ fn convert_request(body: &Value, upstream_model: &str) -> Value {
                 }
                 _ => {
                     // Try to extract as a simple message
-                    let role = normalize_chat_role(item.get("role").and_then(|v| v.as_str()).unwrap_or("user"));
+                    let role = normalize_chat_role(
+                        item.get("role").and_then(|v| v.as_str()).unwrap_or("user"),
+                    );
                     let content = extract_content_from_item(item);
                     if !content.is_empty() {
                         messages.push(json!({"role": role, "content": content}));
@@ -853,10 +1032,17 @@ fn tool_trace_summary(
     if let Some(error) = error {
         trace["error"] = json!(error.chars().take(500).collect::<String>());
     }
-    format!("tool_trace: {}", serde_json::to_string(&trace).unwrap_or_else(|_| "{}".into()))
+    format!(
+        "tool_trace: {}",
+        serde_json::to_string(&trace).unwrap_or_else(|_| "{}".into())
+    )
 }
 
-fn enforce_strict_tool_calls(chat_response: &Value, chat_req: &Value, route: &Route) -> Result<(), Response> {
+fn enforce_strict_tool_calls(
+    chat_response: &Value,
+    chat_req: &Value,
+    route: &Route,
+) -> Result<(), Response> {
     let has_tools = chat_req
         .get("tools")
         .and_then(|v| v.as_array())
@@ -874,7 +1060,9 @@ fn enforce_strict_tool_calls(chat_response: &Value, chat_req: &Value, route: &Ro
     if has_tool_calls {
         Ok(())
     } else {
-        Err(upstream_err("Upstream model did not emit tool_calls while Codex strict execution mode was enabled."))
+        Err(upstream_err(
+            "Upstream model did not emit tool_calls while Codex strict execution mode was enabled.",
+        ))
     }
 }
 
@@ -922,15 +1110,18 @@ fn extract_content_from_item(item: &Value) -> String {
     }
     // Try "content" field (array of content parts)
     if let Some(arr) = item.get("content").and_then(|v| v.as_array()) {
-        let parts: Vec<String> = arr.iter().filter_map(|part| {
-            if part.get("type").and_then(|v| v.as_str()) == Some("input_text") {
-                part.get("text").and_then(|v| v.as_str()).map(String::from)
-            } else if part.get("type").and_then(|v| v.as_str()) == Some("output_text") {
-                part.get("text").and_then(|v| v.as_str()).map(String::from)
-            } else {
-                part.get("text").and_then(|v| v.as_str()).map(String::from)
-            }
-        }).collect();
+        let parts: Vec<String> = arr
+            .iter()
+            .filter_map(|part| {
+                if part.get("type").and_then(|v| v.as_str()) == Some("input_text") {
+                    part.get("text").and_then(|v| v.as_str()).map(String::from)
+                } else if part.get("type").and_then(|v| v.as_str()) == Some("output_text") {
+                    part.get("text").and_then(|v| v.as_str()).map(String::from)
+                } else {
+                    part.get("text").and_then(|v| v.as_str()).map(String::from)
+                }
+            })
+            .collect();
         return parts.join("");
     }
     String::new()
@@ -941,12 +1132,20 @@ fn convert_sync_response(chat: &Value, model: &str, resp_id: &str, msg_id: &str)
     let content = extract_chat_message_text(message).unwrap_or_default();
     let tool_calls = chat_tool_calls_to_response_items(message);
     let input_tokens = chat["usage"]["prompt_tokens"].as_u64().unwrap_or(0);
-    let output_tokens = chat["usage"]["completion_tokens"].as_u64().unwrap_or_else(|| estimate_tokens(&content));
-    let total_tokens = chat["usage"]["total_tokens"].as_u64().unwrap_or(input_tokens + output_tokens);
-    let usage = response_usage(input_tokens, output_tokens).as_object().cloned().map(|mut usage| {
-        usage.insert("total_tokens".into(), json!(total_tokens));
-        Value::Object(usage)
-    }).unwrap_or_else(|| response_usage(input_tokens, output_tokens));
+    let output_tokens = chat["usage"]["completion_tokens"]
+        .as_u64()
+        .unwrap_or_else(|| estimate_tokens(&content));
+    let total_tokens = chat["usage"]["total_tokens"]
+        .as_u64()
+        .unwrap_or(input_tokens + output_tokens);
+    let usage = response_usage(input_tokens, output_tokens)
+        .as_object()
+        .cloned()
+        .map(|mut usage| {
+            usage.insert("total_tokens".into(), json!(total_tokens));
+            Value::Object(usage)
+        })
+        .unwrap_or_else(|| response_usage(input_tokens, output_tokens));
     let mut output = Vec::new();
     if !content.is_empty() || tool_calls.is_empty() {
         output.push(json!({
@@ -975,26 +1174,36 @@ fn convert_sync_response(chat: &Value, model: &str, resp_id: &str, msg_id: &str)
 }
 
 fn chat_tool_calls_to_response_items(message: &Value) -> Vec<Value> {
-    message.get("tool_calls")
+    message
+        .get("tool_calls")
         .and_then(|v| v.as_array())
         .map(|calls| {
-            calls.iter().filter_map(|call| {
-                let function = call.get("function")?;
-                let name = function.get("name").and_then(|v| v.as_str())?;
-                let arguments = function.get("arguments").and_then(|v| v.as_str()).unwrap_or("{}");
-                let arguments = compatibility::repair_json_object(arguments)
-                    .map(|v| v.to_string())
-                    .unwrap_or_else(|_| arguments.to_string());
-                let call_id = call.get("id").and_then(|v| v.as_str()).unwrap_or_else(|| "call_unknown");
-                Some(json!({
-                    "type": "function_call",
-                    "id": format!("fc_{}", Uuid::new_v4()),
-                    "call_id": call_id,
-                    "name": name,
-                    "arguments": arguments,
-                    "status": "completed"
-                }))
-            }).collect()
+            calls
+                .iter()
+                .filter_map(|call| {
+                    let function = call.get("function")?;
+                    let name = function.get("name").and_then(|v| v.as_str())?;
+                    let arguments = function
+                        .get("arguments")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("{}");
+                    let arguments = compatibility::repair_json_object(arguments)
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|_| arguments.to_string());
+                    let call_id = call
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_else(|| "call_unknown");
+                    Some(json!({
+                        "type": "function_call",
+                        "id": format!("fc_{}", Uuid::new_v4()),
+                        "call_id": call_id,
+                        "name": name,
+                        "arguments": arguments,
+                        "status": "completed"
+                    }))
+                })
+                .collect()
         })
         .unwrap_or_default()
 }
@@ -1019,11 +1228,16 @@ fn estimate_tokens(text: &str) -> u64 {
 }
 
 fn extract_chat_delta(line: &str) -> Option<String> {
-    if !line.starts_with("data:") { return None; }
+    if !line.starts_with("data:") {
+        return None;
+    }
     let payload = line[5..].trim();
-    if payload.is_empty() || payload == "[DONE]" { return None; }
+    if payload.is_empty() || payload == "[DONE]" {
+        return None;
+    }
     let v: Value = serde_json::from_str(payload).ok()?;
-    if let Some(message) = v.get("error")
+    if let Some(message) = v
+        .get("error")
         .and_then(|e| e.get("message"))
         .and_then(|m| m.as_str())
         .filter(|s| !s.is_empty())
@@ -1033,21 +1247,29 @@ fn extract_chat_delta(line: &str) -> Option<String> {
 
     let delta = &v["choices"][0]["delta"];
     extract_text_from_delta(delta).or_else(|| {
-        v["choices"][0]["message"]["content"].as_str().map(String::from)
+        v["choices"][0]["message"]["content"]
+            .as_str()
+            .map(String::from)
     })
 }
 
 fn extract_text_from_delta(delta: &Value) -> Option<String> {
     for key in ["content", "reasoning_content", "reasoning", "text"] {
-        if let Some(text) = delta.get(key).and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+        if let Some(text) = delta
+            .get(key)
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+        {
             return Some(text.to_string());
         }
     }
 
-    delta.get("content")
+    delta
+        .get("content")
         .and_then(|v| v.as_array())
         .map(|parts| {
-            parts.iter()
+            parts
+                .iter()
                 .filter_map(|part| {
                     part.get("text")
                         .or_else(|| part.get("content"))
@@ -1061,15 +1283,21 @@ fn extract_text_from_delta(delta: &Value) -> Option<String> {
 
 fn extract_chat_message_text(message: &Value) -> Option<String> {
     for key in ["content", "reasoning_content", "reasoning", "text"] {
-        if let Some(text) = message.get(key).and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+        if let Some(text) = message
+            .get(key)
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+        {
             return Some(text.to_string());
         }
     }
 
-    message.get("content")
+    message
+        .get("content")
         .and_then(|v| v.as_array())
         .map(|parts| {
-            parts.iter()
+            parts
+                .iter()
                 .filter_map(|part| {
                     part.get("text")
                         .or_else(|| part.get("content"))
@@ -1096,11 +1324,19 @@ fn response_tool_delta_events(
     next_output_index: &mut i64,
     seq: &mut i64,
 ) -> Vec<(&'static str, Value)> {
-    if !line.starts_with("data:") { return Vec::new(); }
+    if !line.starts_with("data:") {
+        return Vec::new();
+    }
     let payload = line[5..].trim();
-    if payload.is_empty() || payload == "[DONE]" { return Vec::new(); }
-    let Ok(v) = serde_json::from_str::<Value>(payload) else { return Vec::new(); };
-    let Some(calls) = v["choices"][0]["delta"]["tool_calls"].as_array() else { return Vec::new(); };
+    if payload.is_empty() || payload == "[DONE]" {
+        return Vec::new();
+    }
+    let Ok(v) = serde_json::from_str::<Value>(payload) else {
+        return Vec::new();
+    };
+    let Some(calls) = v["choices"][0]["delta"]["tool_calls"].as_array() else {
+        return Vec::new();
+    };
     let mut events = Vec::new();
 
     for call in calls {
@@ -1108,7 +1344,10 @@ fn response_tool_delta_events(
         let id_delta = call.get("id").and_then(|v| v.as_str()).unwrap_or("");
         let function = call.get("function").unwrap_or(&Value::Null);
         let name_delta = function.get("name").and_then(|v| v.as_str()).unwrap_or("");
-        let args_delta = function.get("arguments").and_then(|v| v.as_str()).unwrap_or("");
+        let args_delta = function
+            .get("arguments")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
 
         if !tool_items.contains_key(&openai_index) {
             let output_index = *next_output_index;
@@ -1116,8 +1355,16 @@ fn response_tool_delta_events(
             let item = StreamingToolCall {
                 output_index,
                 item_id: format!("fc_{}", Uuid::new_v4()),
-                call_id: if id_delta.is_empty() { format!("call_{}", Uuid::new_v4()) } else { id_delta.to_string() },
-                name: if name_delta.is_empty() { "function".into() } else { name_delta.to_string() },
+                call_id: if id_delta.is_empty() {
+                    format!("call_{}", Uuid::new_v4())
+                } else {
+                    id_delta.to_string()
+                },
+                name: if name_delta.is_empty() {
+                    "function".into()
+                } else {
+                    name_delta.to_string()
+                },
                 arguments: String::new(),
             };
             let body = json!({
@@ -1139,8 +1386,12 @@ fn response_tool_delta_events(
         }
 
         if let Some(item) = tool_items.get_mut(&openai_index) {
-            if !id_delta.is_empty() { item.call_id = id_delta.to_string(); }
-            if !name_delta.is_empty() { item.name = name_delta.to_string(); }
+            if !id_delta.is_empty() {
+                item.call_id = id_delta.to_string();
+            }
+            if !name_delta.is_empty() {
+                item.name = name_delta.to_string();
+            }
             if !args_delta.is_empty() {
                 item.arguments.push_str(args_delta);
                 let body = json!({
@@ -1160,7 +1411,10 @@ fn response_tool_delta_events(
 }
 
 fn sse_event(event_name: &str, body: &Value) -> String {
-    format!("event: {event_name}\ndata: {}\n\n", serde_json::to_string(body).unwrap())
+    format!(
+        "event: {event_name}\ndata: {}\n\n",
+        serde_json::to_string(body).unwrap()
+    )
 }
 
 // ── Shared utilities ──
@@ -1168,10 +1422,12 @@ fn sse_event(event_name: &str, body: &Value) -> String {
 fn resolve(db: &PathBuf, model: &str) -> Result<Route, String> {
     let routes = database::list_codex_routes(db)?;
     let providers = database::list_providers(db)?;
-    let route = routes.into_iter()
+    let route = routes
+        .into_iter()
         .find(|r| r.enabled && r.codex_model == model)
         .ok_or_else(|| format!("Unknown model: {model}"))?;
-    let provider = providers.into_iter()
+    let provider = providers
+        .into_iter()
         .find(|p| p.enabled && p.id == route.provider_id)
         .ok_or_else(|| format!("Provider '{}' not found", route.provider_id))?;
     Ok(Route {
@@ -1217,12 +1473,16 @@ fn upstream_url(base_url: &str, endpoint: &str) -> String {
 
 fn verify_auth(headers: &HeaderMap, ctx: &Ctx) -> Result<(), Response> {
     if let Some(v) = headers.get("x-api-key") {
-        if v.to_str().unwrap_or("") == ctx.profile.auth_token { return Ok(()); }
+        if v.to_str().unwrap_or("") == ctx.profile.auth_token {
+            return Ok(());
+        }
         return Err(auth_err("Invalid token"));
     }
     if let Some(v) = headers.get(header::AUTHORIZATION) {
         let s = v.to_str().unwrap_or("");
-        if s == format!("Bearer {}", ctx.profile.auth_token) { return Ok(()); }
+        if s == format!("Bearer {}", ctx.profile.auth_token) {
+            return Ok(());
+        }
     }
     Err(auth_err("Missing x-api-key or Authorization header"))
 }
@@ -1238,16 +1498,32 @@ fn to_headers(pairs: &[(String, String)]) -> Result<reqwest::header::HeaderMap, 
 }
 
 fn auth_err(msg: &str) -> Response {
-    (StatusCode::UNAUTHORIZED, Json(json!({"error":{"message":msg,"type":"invalid_request_error","code":"unauthorized"}}))).into_response()
+    (
+        StatusCode::UNAUTHORIZED,
+        Json(json!({"error":{"message":msg,"type":"invalid_request_error","code":"unauthorized"}})),
+    )
+        .into_response()
 }
 fn bad_req(msg: impl Into<String>) -> Response {
-    (StatusCode::BAD_REQUEST, Json(json!({"error":{"message":msg.into(),"type":"invalid_request_error"}}))).into_response()
+    (
+        StatusCode::BAD_REQUEST,
+        Json(json!({"error":{"message":msg.into(),"type":"invalid_request_error"}})),
+    )
+        .into_response()
 }
 fn internal<E: std::fmt::Display>(e: E) -> Response {
-    (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error":{"message":e.to_string(),"type":"internal_error"}}))).into_response()
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(json!({"error":{"message":e.to_string(),"type":"internal_error"}})),
+    )
+        .into_response()
 }
 fn upstream_err<E: std::fmt::Display>(e: E) -> Response {
-    (StatusCode::BAD_GATEWAY, Json(json!({"error":{"message":e.to_string(),"type":"upstream_error"}}))).into_response()
+    (
+        StatusCode::BAD_GATEWAY,
+        Json(json!({"error":{"message":e.to_string(),"type":"upstream_error"}})),
+    )
+        .into_response()
 }
 
 fn upstream_status_err(status: reqwest::StatusCode, body: String) -> Response {
@@ -1267,46 +1543,84 @@ fn upstream_status_err(status: reqwest::StatusCode, body: String) -> Response {
                 body
             }
         });
-    (StatusCode::BAD_GATEWAY, Json(json!({"error":{"message":message,"type":"upstream_error","status":status.as_u16()}}))).into_response()
+    (
+        StatusCode::BAD_GATEWAY,
+        Json(json!({"error":{"message":message,"type":"upstream_error","status":status.as_u16()}})),
+    )
+        .into_response()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{database, models::CreateProvider};
     use axum::{body::to_bytes, http};
     use tower::ServiceExt;
-    use crate::{database, models::CreateProvider};
 
     #[tokio::test]
     async fn test_codex_models_auth() {
         let tmp = tempfile::tempdir().unwrap();
         let db = tmp.path().join("t.db");
         database::initialize(&db).unwrap();
-        database::create_provider(&db, &CreateProvider {
-            id: "p1".into(), name: "P".into(), base_url: "http://x".into(),
-            openai_base_url: None, anthropic_base_url: None,
-            auth_header: "Authorization".into(), auth_scheme: Some("Bearer".into()), api_key: Some("k".into()),
-        }).unwrap();
-        database::create_codex_route(&db, &crate::models::CreateCodexRoute {
-            id: "r1".into(), codex_model: "gpt-4o".into(), display_name: "GPT-4o".into(),
-            provider_id: "p1".into(), upstream_model: "deepseek-chat".into(),
-            tool_call_mode: None,
-        }).unwrap();
+        database::create_provider(
+            &db,
+            &CreateProvider {
+                id: "p1".into(),
+                name: "P".into(),
+                base_url: "http://x".into(),
+                openai_base_url: None,
+                anthropic_base_url: None,
+                auth_header: "Authorization".into(),
+                auth_scheme: Some("Bearer".into()),
+                api_key: Some("k".into()),
+            },
+        )
+        .unwrap();
+        database::create_codex_route(
+            &db,
+            &crate::models::CreateCodexRoute {
+                id: "r1".into(),
+                codex_model: "gpt-4o".into(),
+                display_name: "GPT-4o".into(),
+                provider_id: "p1".into(),
+                upstream_model: "deepseek-chat".into(),
+                tool_call_mode: None,
+            },
+        )
+        .unwrap();
 
         let app = build_router(Ctx {
-            db, client: Client::new(),
-            profile: GatewayProfile { listen_host: "127.0.0.1".into(), listen_port: 3457, auth_token: "tok".into() },
+            db,
+            client: Client::new(),
+            profile: GatewayProfile {
+                listen_host: "127.0.0.1".into(),
+                listen_port: 3457,
+                auth_token: "tok".into(),
+            },
         });
 
-        let resp = app.clone().oneshot(
-            http::Request::builder().uri("/v1/models").body(Body::empty()).unwrap()
-        ).await.unwrap();
+        let resp = app
+            .clone()
+            .oneshot(
+                http::Request::builder()
+                    .uri("/v1/models")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 
-        let resp = app.oneshot(
-            http::Request::builder().uri("/v1/models")
-                .header("x-api-key", "tok").body(Body::empty()).unwrap()
-        ).await.unwrap();
+        let resp = app
+            .oneshot(
+                http::Request::builder()
+                    .uri("/v1/models")
+                    .header("x-api-key", "tok")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         let body: Value = serde_json::from_slice(&bytes).unwrap();
@@ -1367,7 +1681,10 @@ mod tests {
         let chat_req = convert_request(&responses_req, "deepseek-chat");
         assert_eq!(chat_req["model"], "deepseek-chat");
         assert_eq!(chat_req["messages"][0]["role"], "system");
-        assert_eq!(chat_req["messages"][0]["content"], "You are a helpful assistant.");
+        assert_eq!(
+            chat_req["messages"][0]["content"],
+            "You are a helpful assistant."
+        );
         assert_eq!(chat_req["messages"][1]["role"], "user");
         assert_eq!(chat_req["messages"][1]["content"], "Hello");
         assert_eq!(chat_req["stream"], false);
@@ -1395,7 +1712,10 @@ mod tests {
         let chat_req = convert_request(&responses_req, "DeepSeek-V4-Pro");
 
         assert_eq!(chat_req["messages"][0]["role"], "system");
-        assert_eq!(chat_req["messages"][0]["content"], "Follow coding-plan constraints.");
+        assert_eq!(
+            chat_req["messages"][0]["content"],
+            "Follow coding-plan constraints."
+        );
         assert_eq!(chat_req["messages"][1]["role"], "user");
         assert_eq!(chat_req["messages"][1]["content"], "Implement the task.");
     }
@@ -1410,7 +1730,10 @@ mod tests {
 
         let chat_req = convert_request(&responses_req, "deepseek-chat");
         assert_eq!(chat_req["messages"][0]["role"], "user");
-        assert_eq!(chat_req["messages"][0]["content"], "Edit this file carefully");
+        assert_eq!(
+            chat_req["messages"][0]["content"],
+            "Edit this file carefully"
+        );
     }
 
     #[tokio::test]
@@ -1483,7 +1806,10 @@ mod tests {
         let chat_req = convert_request(&responses_req, "mimo-v2.5-pro");
         assert_eq!(chat_req["tool_choice"], "auto");
         assert_eq!(chat_req["messages"][0]["role"], "system");
-        assert!(chat_req["messages"][0]["content"].as_str().unwrap().contains("structured tool_calls"));
+        assert!(chat_req["messages"][0]["content"]
+            .as_str()
+            .unwrap()
+            .contains("structured tool_calls"));
         assert_eq!(chat_req["tools"][0]["function"]["name"], "exec_command");
     }
 
@@ -1615,11 +1941,17 @@ mod tests {
             "https://api.example.com/v1/chat/completions"
         );
         assert_eq!(
-            upstream_url("https://ark.cn-beijing.volces.com/api/coding/v3", "chat/completions"),
+            upstream_url(
+                "https://ark.cn-beijing.volces.com/api/coding/v3",
+                "chat/completions"
+            ),
             "https://ark.cn-beijing.volces.com/api/coding/v3/chat/completions"
         );
         assert_eq!(
-            upstream_url("https://ark.cn-beijing.volces.com/api/coding/v3/chat/completions", "chat/completions"),
+            upstream_url(
+                "https://ark.cn-beijing.volces.com/api/coding/v3/chat/completions",
+                "chat/completions"
+            ),
             "https://ark.cn-beijing.volces.com/api/coding/v3/chat/completions"
         );
     }

@@ -183,17 +183,39 @@ pub fn codex_capability_profile(provider: &Provider) -> CodexCapabilityProfile {
 pub fn benchmark_provider(provider: &Provider) -> BenchmarkReport {
     let p = provider_capability_profile(provider);
     let grade = |good: bool, maybe: bool| -> String {
-        if good { "A" } else if maybe { "B" } else { "C" }.into()
+        if good {
+            "A"
+        } else if maybe {
+            "B"
+        } else {
+            "C"
+        }
+        .into()
     };
     BenchmarkReport {
         chat: "A".into(),
-        tool_use: grade(p.supports_tool_use && p.tool_call_accuracy == "high", p.supports_tool_use),
-        mcp: grade(p.supports_tool_use && p.supports_system_prompt, p.supports_tool_use),
-        artifacts: grade(p.supports_tool_use && p.json_stability == "high", p.json_stability == "medium"),
+        tool_use: grade(
+            p.supports_tool_use && p.tool_call_accuracy == "high",
+            p.supports_tool_use,
+        ),
+        mcp: grade(
+            p.supports_tool_use && p.supports_system_prompt,
+            p.supports_tool_use,
+        ),
+        artifacts: grade(
+            p.supports_tool_use && p.json_stability == "high",
+            p.json_stability == "medium",
+        ),
         long_context: grade(p.max_context >= 128_000, p.max_context >= 32_000),
         responses_compatibility: grade(p.supports_responses_api, p.supports_chat_completions),
-        patch_quality: grade(p.supports_tool_use && p.json_stability == "high", p.supports_tool_use),
-        agent_recovery: grade(p.max_context >= 128_000 && p.supports_tool_use, p.max_context >= 32_000),
+        patch_quality: grade(
+            p.supports_tool_use && p.json_stability == "high",
+            p.supports_tool_use,
+        ),
+        agent_recovery: grade(
+            p.max_context >= 128_000 && p.supports_tool_use,
+            p.max_context >= 32_000,
+        ),
     }
 }
 
@@ -269,7 +291,14 @@ pub fn repair_json_object(input: &str) -> Result<Value, String> {
 
 pub fn detect_fake_tool_call(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();
-    let cn = ["已经调用", "我调用了", "已经读取", "我读取了", "已经执行", "我执行了"];
+    let cn = [
+        "已经调用",
+        "我调用了",
+        "已经读取",
+        "我读取了",
+        "已经执行",
+        "我执行了",
+    ];
     let en = [
         "i called the tool",
         "i have called the tool",
@@ -284,9 +313,15 @@ pub fn detect_fake_tool_call(text: &str) -> bool {
 pub fn detect_fake_action(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();
     detect_fake_tool_call(text)
-        || ["i modified", "i updated", "i patched", "tests passed", "npm test passed"]
-            .iter()
-            .any(|p| lower.contains(p))
+        || [
+            "i modified",
+            "i updated",
+            "i patched",
+            "tests passed",
+            "npm test passed",
+        ]
+        .iter()
+        .any(|p| lower.contains(p))
         || ["我已经修改", "我修改了", "测试通过", "已经运行测试"]
             .iter()
             .any(|p| text.contains(p))
@@ -297,7 +332,10 @@ pub fn mcp_path_safety(path: &str, workspace_root: &Path) -> SafetyDecision {
     let denied_names = [".env", ".ssh", "id_rsa", "id_ed25519", "cookies", "token"];
     let lower = path.to_ascii_lowercase();
     if denied_names.iter().any(|name| lower.contains(name)) {
-        return deny("high", "Path matches a protected secret or credential location");
+        return deny(
+            "high",
+            "Path matches a protected secret or credential location",
+        );
     }
     if p.components().any(|c| matches!(c, Component::ParentDir)) {
         return deny("high", "Path traversal is not allowed");
@@ -311,11 +349,24 @@ pub fn mcp_path_safety(path: &str, workspace_root: &Path) -> SafetyDecision {
 pub fn command_safety(command: &str) -> SafetyDecision {
     let lower = command.to_ascii_lowercase();
     let dangerous = [
-        "rm -rf", "sudo ", "chmod -r", "curl | bash", "curl -s", "wget | bash",
-        "npm install -g", "pnpm add -g", "yarn global", "dd if=", "mkfs", ":(){",
+        "rm -rf",
+        "sudo ",
+        "chmod -r",
+        "curl | bash",
+        "curl -s",
+        "wget | bash",
+        "npm install -g",
+        "pnpm add -g",
+        "yarn global",
+        "dd if=",
+        "mkfs",
+        ":(){",
     ];
     if dangerous.iter().any(|p| lower.contains(p)) {
-        return deny("high", "Command matches a blocked destructive or global mutation pattern");
+        return deny(
+            "high",
+            "Command matches a blocked destructive or global mutation pattern",
+        );
     }
     if lower.contains(" > /etc/") || lower.contains(" /etc/") {
         return deny("high", "System configuration paths are protected");
@@ -344,7 +395,8 @@ pub fn validate_patch(patch: &str, workspace_root: &Path) -> PatchValidationResu
                 errors.push(format!("{path}: {}", decision.reason));
             }
         }
-        if let Some(path) = line.strip_prefix("*** Update File: ")
+        if let Some(path) = line
+            .strip_prefix("*** Update File: ")
             .or_else(|| line.strip_prefix("*** Add File: "))
             .or_else(|| line.strip_prefix("*** Delete File: "))
         {
@@ -416,16 +468,25 @@ pub fn recover_agent_state(history: &[Value]) -> AgentTaskState {
             }
         }
     }
-    state.next_action = Some("Continue from the latest verified state and avoid repeating completed fixes".into());
+    state.next_action =
+        Some("Continue from the latest verified state and avoid repeating completed fixes".into());
     state
 }
 
 fn allow(reason: &str) -> SafetyDecision {
-    SafetyDecision { allowed: true, severity: "none".into(), reason: reason.into() }
+    SafetyDecision {
+        allowed: true,
+        severity: "none".into(),
+        reason: reason.into(),
+    }
 }
 
 fn deny(severity: &str, reason: &str) -> SafetyDecision {
-    SafetyDecision { allowed: false, severity: severity.into(), reason: reason.into() }
+    SafetyDecision {
+        allowed: false,
+        severity: severity.into(),
+        reason: reason.into(),
+    }
 }
 
 fn quote_unquoted_keys(input: &str) -> String {
@@ -478,9 +539,17 @@ fn repair_patch_headers(patch: &str) -> String {
         .lines()
         .map(|line| {
             if let Some(path) = line.strip_prefix("+++ ") {
-                if path == "/dev/null" || path.starts_with("b/") { line.to_string() } else { format!("+++ b/{path}") }
+                if path == "/dev/null" || path.starts_with("b/") {
+                    line.to_string()
+                } else {
+                    format!("+++ b/{path}")
+                }
             } else if let Some(path) = line.strip_prefix("--- ") {
-                if path == "/dev/null" || path.starts_with("a/") { line.to_string() } else { format!("--- a/{path}") }
+                if path == "/dev/null" || path.starts_with("a/") {
+                    line.to_string()
+                } else {
+                    format!("--- a/{path}")
+                }
             } else {
                 line.to_string()
             }
@@ -590,7 +659,10 @@ mod tests {
 
     #[test]
     fn validates_and_repairs_patch_headers() {
-        let result = validate_patch("--- src/a.rs\n+++ src/a.rs\n@@\n-old\n+new", Path::new("/tmp/project"));
+        let result = validate_patch(
+            "--- src/a.rs\n+++ src/a.rs\n@@\n-old\n+new",
+            Path::new("/tmp/project"),
+        );
         assert!(result.valid);
         assert!(result.repaired_patch.unwrap().contains("+++ b/src/a.rs"));
     }
@@ -604,8 +676,14 @@ mod tests {
             json!({"role":"assistant","content":"latest"}),
         ];
         let compressed = compress_context(&messages, 2);
-        assert_eq!(compressed["strategy"], "sliding_window_with_tool_state_pinning");
+        assert_eq!(
+            compressed["strategy"],
+            "sliding_window_with_tool_state_pinning"
+        );
         let state = recover_agent_state(&messages);
-        assert!(state.files_touched.iter().any(|p| p.contains("src/main.rs")));
+        assert!(state
+            .files_touched
+            .iter()
+            .any(|p| p.contains("src/main.rs")));
     }
 }

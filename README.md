@@ -6,7 +6,7 @@
 
 > Gateway Switch 不仅仅是一个模型路由器。它是一个**运行时兼容性层**，驻留在 AI 原生桌面应用与第三方模型服务之间，弥合协议鸿沟、修复畸形工具调用、强制安全边界，并在上游 Provider 异常时优雅降级。
 
-[![Version](https://img.shields.io/badge/Version-1.7.2-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.8.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -142,13 +142,23 @@ Claude 和 Codex 的 `/health` 端点会暴露这些画像，外部工具无需�
 
 ---
 
+## 1.8.0 更新重点
+
+- **把 codex++ 真正收进 Gateway Switch 主产品。** `1.8.0` 新增原生 codex++ 安装 / 修复主链路，Gateway Switch 现在可以直接负责源码下载、构建、运行时资产 staging、`Codex.app` patch、签名、watcher 安装与 CLI shim 写入，不再只是外部脚本控制台。
+- **安装过程终于可看、可预检、可回退。** Codex++ 页面补上了安装前预检与流式日志输出；后端把下载、解包、source 切换、备份、失败回退写成 Rust 原子步骤，并把关键阶段写入本地 bootstrap 状态，方便排查。
+- **本地签名链路补齐。** `install-local` 会自动准备本地 code signing identity，重签 `app.asar.unpacked` 内 Mach-O 和整个 `Codex.app`，同时保留 ad-hoc 与 local identity 两条模式。
+- **watcher / default tweaks / CLI shim 全部改为 native 收口。** 默认 tweaks 安装、`codexplusplus`/`codex-plusplus` shim、`launchd` watcher 都改由 Gateway Switch 自己生成和维护；watcher 与命令行入口现在统一回到 `gateway-switch codexpp ...`。
+- **真实机验收已跑通。** 在真实 `/Applications/Codex.app` 上完成了 `install-local`、失败注入回退、`repair` 三条端到端验收；同时通过 `cargo test`、真实 ignored acceptance tests、`pnpm build` 与本地 Tauri 打包验证。
+- 本版本已正式升级为 `1.8.0`。
+- 最新验证：`PATH="$HOME/.cargo/bin:$PATH" cargo test`（32 passed, 3 ignored）、`PATH="$HOME/.cargo/bin:$PATH" cargo test -- --ignored --nocapture --test-threads=1`（3 passed）、`pnpm build`、`CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`。
+
 ## 1.7.2 更新重点
 
-- **新增 MCP 同步模块。** 新增独立 `MCP Sync / MCP 同步` 页面，可在 Claude Desktop、Claude Code 与 Codex 之间检查、预览并同步 MCP Servers 配置。
-- **三端状态卡与同步预览。** 页面展示配置路径、格式、解析状态、Server 数量、可写状态、冲突数量、合并后 Server 列表和执行结果日志。
-- **原生 Rust 同步核心。** 后端直接读取 JSON/TOML 配置，合并 `mcpServers` / `mcp_servers`，写回前自动备份，并保留非 MCP 字段。
-- **密钥安全展示。** UI 只展示 `env` / `headers` 的 Key 名，不展示 Token、API Key 等敏感值。
-- 版本更新并发布为 `1.7.2`。
+- **把三端 MCP 管理真正做成一个可用的产品能力。** `1.7.2` 新增独立的 `MCP Sync / MCP 同步` 页面，让你不再需要分别进入 Claude Desktop、Claude Code 和 Codex 手动维护三份 MCP 配置，而是可以在 Gateway Switch 里统一查看、预览并执行同步。
+- **同步前先看清楚，再决定是否写入。** 页面会直观展示三端配置路径、文件格式、解析状态、Server 数量、可写状态、冲突数量，以及合并后的 MCP Server 结果，让同步过程从“黑盒改配置”变成“可预览、可确认、可回看”的明确操作。
+- **同步逻辑原生内建，避免额外脚本依赖。** 后端使用 Rust 直接读取并处理 JSON/TOML 配置，统一合并 `mcpServers` / `mcp_servers`，在写回前自动创建备份，同时保留各端原有的非 MCP 配置字段，尽量降低用户的迁移和出错成本。
+- **把安全感也做进了流程里。** 界面只展示 `env` / `headers` 的 Key 名，不直接暴露 Token、API Key 等敏感值；同步结果页会记录每一端的执行结果，方便排查问题和确认是否写入成功。
+- 本版本已正式发布为 `1.7.2`。
 - 最新验证：`pnpm build`、`PATH="$HOME/.cargo/bin:$PATH" cargo test`（32 passed）、`CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`。
 
 ## 1.7.1 更新重点
@@ -446,7 +456,7 @@ pnpm tauri build
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.7.2_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.0_aarch64.dmg
 ```
 
 ---

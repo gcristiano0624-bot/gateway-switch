@@ -21,8 +21,21 @@ pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let sep = PredefinedMenuItem::separator(app)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
-    let menu = Menu::with_items(app, &[&show_item, &start_item, &stop_item, &bind_item, &restore_item, &sep, &quit_item])?;
-    let icon = app.default_window_icon().cloned()
+    let menu = Menu::with_items(
+        app,
+        &[
+            &show_item,
+            &start_item,
+            &stop_item,
+            &bind_item,
+            &restore_item,
+            &sep,
+            &quit_item,
+        ],
+    )?;
+    let icon = app
+        .default_window_icon()
+        .cloned()
         .ok_or_else(|| std::io::Error::other("no icon"))?;
 
     let _ = TrayIconBuilder::with_id("gateway-switch-tray")
@@ -47,8 +60,13 @@ pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
                         let models = crate::desktop_binding::model_configs_from_routes(&routes);
                         let _ = crate::desktop_binding::apply(
                             &dirs::home_dir().unwrap_or_default(),
-                            &crate::desktop_binding::gateway_base_url(&p.listen_host, p.listen_port),
-                            "x-api-key", &p.auth_token, &models,
+                            &crate::desktop_binding::gateway_base_url(
+                                &p.listen_host,
+                                p.listen_port,
+                            ),
+                            "x-api-key",
+                            &p.auth_token,
+                            &models,
                         );
                     }
                 }
@@ -60,7 +78,12 @@ pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
                 show(tray.app_handle());
             }
         })

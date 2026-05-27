@@ -24,9 +24,18 @@ pub fn inspect(home: &Path) -> Result<ClaudeCodeInfo, String> {
         .and_then(|v| v.as_str())
         == Some(MANAGED_BY);
     let auth_env = env.and_then(|e| {
-        if e.get(ENV_AUTH_TOKEN).and_then(|v| v.as_str()).filter(|s| !s.is_empty()).is_some() {
+        if e.get(ENV_AUTH_TOKEN)
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .is_some()
+        {
             Some(ENV_AUTH_TOKEN.to_string())
-        } else if e.get(ENV_API_KEY).and_then(|v| v.as_str()).filter(|s| !s.is_empty()).is_some() {
+        } else if e
+            .get(ENV_API_KEY)
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .is_some()
+        {
             Some(ENV_API_KEY.to_string())
         } else {
             None
@@ -37,14 +46,25 @@ pub fn inspect(home: &Path) -> Result<ClaudeCodeInfo, String> {
         config_path: path.display().to_string(),
         config_exists: path.exists(),
         managed,
-        base_url: env.and_then(|e| e.get(ENV_BASE_URL)).and_then(|v| v.as_str()).map(Into::into),
-        model: env.and_then(|e| e.get(ENV_MODEL)).and_then(|v| v.as_str()).map(Into::into),
+        base_url: env
+            .and_then(|e| e.get(ENV_BASE_URL))
+            .and_then(|v| v.as_str())
+            .map(Into::into),
+        model: env
+            .and_then(|e| e.get(ENV_MODEL))
+            .and_then(|v| v.as_str())
+            .map(Into::into),
         auth_env,
         backup_path: latest_backup(&path).map(|p| p.display().to_string()),
     })
 }
 
-pub fn apply_gateway(home: &Path, base_url: &str, auth_token: &str, model: &str) -> Result<ClaudeCodeInfo, String> {
+pub fn apply_gateway(
+    home: &Path,
+    base_url: &str,
+    auth_token: &str,
+    model: &str,
+) -> Result<ClaudeCodeInfo, String> {
     if model.trim().is_empty() {
         return Err("Choose a Claude Code model before binding".into());
     }
@@ -88,7 +108,10 @@ pub fn apply_provider(
     }
 
     let mut env = Map::new();
-    env.insert(ENV_BASE_URL.into(), json!(anthropic_base_url.trim_end_matches('/')));
+    env.insert(
+        ENV_BASE_URL.into(),
+        json!(anthropic_base_url.trim_end_matches('/')),
+    );
     env.insert(ENV_MODEL.into(), json!(model.trim()));
 
     let header = auth_header.trim().to_ascii_lowercase();
@@ -112,7 +135,11 @@ pub fn restore(home: &Path) -> Result<ClaudeCodeInfo, String> {
     inspect(home)
 }
 
-fn apply_env(home: &Path, env_values: Map<String, Value>, mode: &str) -> Result<ClaudeCodeInfo, String> {
+fn apply_env(
+    home: &Path,
+    env_values: Map<String, Value>,
+    mode: &str,
+) -> Result<ClaudeCodeInfo, String> {
     let path = settings_path(home);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -169,7 +196,12 @@ fn latest_backup(path: &Path) -> Option<PathBuf> {
         .ok()?
         .filter_map(Result::ok)
         .map(|e| e.path())
-        .filter(|p| p.file_name().and_then(|n| n.to_str()).map(|n| n.starts_with("settings-")).unwrap_or(false))
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.starts_with("settings-"))
+                .unwrap_or(false)
+        })
         .collect();
     entries.sort();
     entries.pop()
@@ -177,7 +209,8 @@ fn latest_backup(path: &Path) -> Option<PathBuf> {
 
 fn read_json(path: &Path) -> Value {
     if path.exists() {
-        fs::read_to_string(path).ok()
+        fs::read_to_string(path)
+            .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
             .filter(|v: &Value| v.is_object())
             .unwrap_or_else(|| json!({}))
@@ -190,8 +223,11 @@ fn write_json(path: &Path, value: &Value) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    fs::write(path, serde_json::to_string_pretty(value).map_err(|e| e.to_string())?)
-        .map_err(|e| e.to_string())
+    fs::write(
+        path,
+        serde_json::to_string_pretty(value).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -205,7 +241,8 @@ mod tests {
         let path = settings_path(home);
         write_json(&path, &json!({"theme":"dark","env":{"FOO":"bar"}})).unwrap();
 
-        let info = apply_gateway(home, "http://127.0.0.1:3456/", "tok", "claude-sonnet-4-6").unwrap();
+        let info =
+            apply_gateway(home, "http://127.0.0.1:3456/", "tok", "claude-sonnet-4-6").unwrap();
         assert!(info.managed);
         assert_eq!(info.base_url.as_deref(), Some("http://127.0.0.1:3456"));
         assert_eq!(info.model.as_deref(), Some("claude-sonnet-4-6"));
@@ -233,9 +270,13 @@ mod tests {
             Some("Bearer"),
             "test-key",
             "mimo-v2.5",
-        ).unwrap();
+        )
+        .unwrap();
 
-        assert_eq!(info.base_url.as_deref(), Some("https://token-plan-sgp.xiaomimimo.com/anthropic"));
+        assert_eq!(
+            info.base_url.as_deref(),
+            Some("https://token-plan-sgp.xiaomimimo.com/anthropic")
+        );
         let config = read_json(&settings_path(home));
         assert_eq!(config["env"][ENV_AUTH_TOKEN], "test-key");
         assert_eq!(config["env"][ENV_MODEL], "mimo-v2.5");

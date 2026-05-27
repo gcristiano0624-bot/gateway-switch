@@ -1,9 +1,12 @@
-use std::{fs, time::Instant};
-use tauri::State;
 use crate::{
-    claude_code_binding, codex_binding, codex_gateway, compatibility, database, desktop_binding, gateway, mcp_sync, models::*, settings,
+    claude_code_binding, codex_binding, codex_gateway, codex_pp, compatibility, database,
+    desktop_binding, gateway, mcp_sync,
+    models::*,
+    settings,
     state::{AppState, GatewayStatus},
 };
+use std::{fs, time::Instant};
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub async fn get_status(st: State<'_, AppState>) -> Result<AppStatus, String> {
@@ -14,7 +17,11 @@ pub async fn get_status(st: State<'_, AppState>) -> Result<AppStatus, String> {
     let profile = database::get_profile(&st.db_path)?;
     let health = probe_gateway_health(&profile).await;
     let gateway_running = health.ok;
-    let gateway_error = if gateway_running { None } else { gw.error.or(Some(health.message)) };
+    let gateway_error = if gateway_running {
+        None
+    } else {
+        gw.error.or(Some(health.message))
+    };
     Ok(AppStatus {
         gateway_running,
         gateway_port: profile.listen_port,
@@ -33,11 +40,14 @@ pub fn get_settings(st: State<'_, AppState>) -> Result<AppSettings, String> {
 #[tauri::command]
 pub fn save_settings(st: State<'_, AppState>, payload: AppSettings) -> Result<AppSettings, String> {
     settings::save(&st.settings_path, &payload)?;
-    database::save_profile(&st.db_path, &GatewayProfile {
-        listen_host: payload.listen_host.clone(),
-        listen_port: payload.listen_port,
-        auth_token: payload.auth_token.clone(),
-    })?;
+    database::save_profile(
+        &st.db_path,
+        &GatewayProfile {
+            listen_host: payload.listen_host.clone(),
+            listen_port: payload.listen_port,
+            auth_token: payload.auth_token.clone(),
+        },
+    )?;
     settings::load(&st.settings_path)
 }
 
@@ -52,7 +62,9 @@ pub fn list_providers(st: State<'_, AppState>) -> Result<Vec<Provider>, String> 
 }
 
 #[tauri::command]
-pub fn list_provider_capabilities(st: State<'_, AppState>) -> Result<Vec<serde_json::Value>, String> {
+pub fn list_provider_capabilities(
+    st: State<'_, AppState>,
+) -> Result<Vec<serde_json::Value>, String> {
     Ok(database::list_providers(&st.db_path)?
         .iter()
         .map(compatibility::provider_capability_json)
@@ -65,19 +77,25 @@ pub fn get_runtime_feature_report() -> compatibility::RuntimeFeatureReport {
 }
 
 #[tauri::command]
-pub fn run_compatibility_benchmark(st: State<'_, AppState>) -> Result<Vec<serde_json::Value>, String> {
+pub fn run_compatibility_benchmark(
+    st: State<'_, AppState>,
+) -> Result<Vec<serde_json::Value>, String> {
     Ok(database::list_providers(&st.db_path)?
         .iter()
-        .map(|p| serde_json::json!({
-            "provider": p.id,
-            "anthropic": compatibility::benchmark_provider(p),
-            "codex": compatibility::codex_capability_profile(p)
-        }))
+        .map(|p| {
+            serde_json::json!({
+                "provider": p.id,
+                "anthropic": compatibility::benchmark_provider(p),
+                "codex": compatibility::codex_capability_profile(p)
+            })
+        })
         .collect())
 }
 
 #[tauri::command]
-pub fn validate_patch_payload(patch: String) -> Result<compatibility::PatchValidationResult, String> {
+pub fn validate_patch_payload(
+    patch: String,
+) -> Result<compatibility::PatchValidationResult, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     Ok(compatibility::validate_patch(&patch, &cwd))
 }
@@ -102,12 +120,17 @@ pub fn detect_fake_action_text(text: String) -> serde_json::Value {
 }
 
 #[tauri::command]
-pub fn compress_context_payload(messages: Vec<serde_json::Value>, max_items: usize) -> serde_json::Value {
+pub fn compress_context_payload(
+    messages: Vec<serde_json::Value>,
+    max_items: usize,
+) -> serde_json::Value {
     compatibility::compress_context(&messages, max_items)
 }
 
 #[tauri::command]
-pub fn recover_agent_state_payload(history: Vec<serde_json::Value>) -> compatibility::AgentTaskState {
+pub fn recover_agent_state_payload(
+    history: Vec<serde_json::Value>,
+) -> compatibility::AgentTaskState {
     compatibility::recover_agent_state(&history)
 }
 
@@ -127,8 +150,15 @@ pub fn export_diagnostics(st: State<'_, AppState>) -> Result<String, String> {
         "codex_routes": codex_routes,
         "logs": logs
     });
-    let path = st.backups_dir.join(format!("diagnostics-{}.json", chrono::Utc::now().timestamp_millis()));
-    fs::write(&path, serde_json::to_string_pretty(&bundle).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    let path = st.backups_dir.join(format!(
+        "diagnostics-{}.json",
+        chrono::Utc::now().timestamp_millis()
+    ));
+    fs::write(
+        &path,
+        serde_json::to_string_pretty(&bundle).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
     Ok(path.display().to_string())
 }
 
@@ -161,13 +191,19 @@ pub async fn run_coldstart_repair(st: State<'_, AppState>) -> Result<ColdStartRe
 }
 
 #[tauri::command]
-pub fn create_provider(st: State<'_, AppState>, payload: CreateProvider) -> Result<Vec<Provider>, String> {
+pub fn create_provider(
+    st: State<'_, AppState>,
+    payload: CreateProvider,
+) -> Result<Vec<Provider>, String> {
     database::create_provider(&st.db_path, &payload)?;
     database::list_providers(&st.db_path)
 }
 
 #[tauri::command]
-pub fn update_provider(st: State<'_, AppState>, payload: UpdateProvider) -> Result<Vec<Provider>, String> {
+pub fn update_provider(
+    st: State<'_, AppState>,
+    payload: UpdateProvider,
+) -> Result<Vec<Provider>, String> {
     database::update_provider(&st.db_path, &payload)?;
     database::list_providers(&st.db_path)
 }
@@ -184,13 +220,19 @@ pub fn list_routes(st: State<'_, AppState>) -> Result<Vec<ModelRoute>, String> {
 }
 
 #[tauri::command]
-pub fn create_route(st: State<'_, AppState>, payload: CreateModelRoute) -> Result<Vec<ModelRoute>, String> {
+pub fn create_route(
+    st: State<'_, AppState>,
+    payload: CreateModelRoute,
+) -> Result<Vec<ModelRoute>, String> {
     database::create_route(&st.db_path, &payload)?;
     database::list_routes(&st.db_path)
 }
 
 #[tauri::command]
-pub fn update_route(st: State<'_, AppState>, payload: UpdateModelRoute) -> Result<Vec<ModelRoute>, String> {
+pub fn update_route(
+    st: State<'_, AppState>,
+    payload: UpdateModelRoute,
+) -> Result<Vec<ModelRoute>, String> {
     database::update_route(&st.db_path, &payload)?;
     database::list_routes(&st.db_path)
 }
@@ -230,7 +272,9 @@ pub fn apply_binding(st: State<'_, AppState>) -> Result<desktop_binding::Desktop
     desktop_binding::apply(
         &dirs::home_dir().ok_or("no home")?,
         &desktop_binding::gateway_base_url(&profile.listen_host, profile.listen_port),
-        "x-api-key", &profile.auth_token, &models,
+        "x-api-key",
+        &profile.auth_token,
+        &models,
     )
 }
 
@@ -247,7 +291,10 @@ pub fn get_claude_code_info(st: State<'_, AppState>) -> Result<ClaudeCodeInfo, S
 }
 
 #[tauri::command]
-pub async fn apply_claude_code_binding(st: State<'_, AppState>, payload: ClaudeCodeBindPayload) -> Result<ClaudeCodeInfo, String> {
+pub async fn apply_claude_code_binding(
+    st: State<'_, AppState>,
+    payload: ClaudeCodeBindPayload,
+) -> Result<ClaudeCodeInfo, String> {
     match payload.mode.as_str() {
         "gateway" => {
             let profile = database::get_profile(&st.db_path)?;
@@ -291,7 +338,10 @@ pub async fn check_gateway_health(st: State<'_, AppState>) -> Result<HealthStatu
 }
 
 async fn probe_gateway_health(profile: &GatewayProfile) -> HealthStatus {
-    let url = format!("http://{}:{}/health", profile.listen_host, profile.listen_port);
+    let url = format!(
+        "http://{}:{}/health",
+        profile.listen_host, profile.listen_port
+    );
     let start = Instant::now();
     match reqwest::get(&url).await {
         Ok(r) => HealthStatus {
@@ -310,9 +360,15 @@ async fn probe_gateway_health(profile: &GatewayProfile) -> HealthStatus {
 }
 
 #[tauri::command]
-pub async fn check_provider_health(st: State<'_, AppState>, id: String) -> Result<HealthStatus, String> {
+pub async fn check_provider_health(
+    st: State<'_, AppState>,
+    id: String,
+) -> Result<HealthStatus, String> {
     let providers = database::list_providers(&st.db_path)?;
-    let p = providers.into_iter().find(|p| p.id == id).ok_or("Provider not found")?;
+    let p = providers
+        .into_iter()
+        .find(|p| p.id == id)
+        .ok_or("Provider not found")?;
     let client = reqwest::Client::new();
     let mut req = client.get(upstream_url(&p.openai_base_url, "models"));
     req = req.header("content-type", "application/json");
@@ -347,8 +403,15 @@ pub fn export_config(st: State<'_, AppState>) -> Result<String, String> {
     let providers = database::list_providers(&st.db_path)?;
     let routes = database::list_routes(&st.db_path)?;
     let bundle = serde_json::json!({ "settings": settings, "profile": profile, "providers": providers, "routes": routes });
-    let path = st.backups_dir.join(format!("export-{}.json", chrono::Utc::now().timestamp_millis()));
-    fs::write(&path, serde_json::to_string_pretty(&bundle).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    let path = st.backups_dir.join(format!(
+        "export-{}.json",
+        chrono::Utc::now().timestamp_millis()
+    ));
+    fs::write(
+        &path,
+        serde_json::to_string_pretty(&bundle).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
     Ok(path.display().to_string())
 }
 
@@ -366,24 +429,60 @@ pub fn import_config(st: State<'_, AppState>, file_path: String) -> Result<Strin
             ) {
                 let existing = database::list_providers(&st.db_path).unwrap_or_default();
                 if existing.iter().any(|e| e.id == id) {
-                    let _ = database::update_provider(&st.db_path, &UpdateProvider {
-                        id: id.into(), name: name.into(), base_url: url.into(),
-                        openai_base_url: p.get("openai_base_url").and_then(|v| v.as_str()).map(Into::into),
-                        anthropic_base_url: p.get("anthropic_base_url").and_then(|v| v.as_str()).map(Into::into),
-                        auth_header: p.get("auth_header").and_then(|v| v.as_str()).unwrap_or("x-api-key").into(),
-                        auth_scheme: p.get("auth_scheme").and_then(|v| v.as_str()).map(Into::into),
-                        api_key: p.get("api_key").and_then(|v| v.as_str()).map(Into::into),
-                        enabled: p.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true),
-                    });
+                    let _ = database::update_provider(
+                        &st.db_path,
+                        &UpdateProvider {
+                            id: id.into(),
+                            name: name.into(),
+                            base_url: url.into(),
+                            openai_base_url: p
+                                .get("openai_base_url")
+                                .and_then(|v| v.as_str())
+                                .map(Into::into),
+                            anthropic_base_url: p
+                                .get("anthropic_base_url")
+                                .and_then(|v| v.as_str())
+                                .map(Into::into),
+                            auth_header: p
+                                .get("auth_header")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("x-api-key")
+                                .into(),
+                            auth_scheme: p
+                                .get("auth_scheme")
+                                .and_then(|v| v.as_str())
+                                .map(Into::into),
+                            api_key: p.get("api_key").and_then(|v| v.as_str()).map(Into::into),
+                            enabled: p.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true),
+                        },
+                    );
                 } else {
-                    let _ = database::create_provider(&st.db_path, &CreateProvider {
-                        id: id.into(), name: name.into(), base_url: url.into(),
-                        openai_base_url: p.get("openai_base_url").and_then(|v| v.as_str()).map(Into::into),
-                        anthropic_base_url: p.get("anthropic_base_url").and_then(|v| v.as_str()).map(Into::into),
-                        auth_header: p.get("auth_header").and_then(|v| v.as_str()).unwrap_or("x-api-key").into(),
-                        auth_scheme: p.get("auth_scheme").and_then(|v| v.as_str()).map(Into::into),
-                        api_key: p.get("api_key").and_then(|v| v.as_str()).map(Into::into),
-                    });
+                    let _ = database::create_provider(
+                        &st.db_path,
+                        &CreateProvider {
+                            id: id.into(),
+                            name: name.into(),
+                            base_url: url.into(),
+                            openai_base_url: p
+                                .get("openai_base_url")
+                                .and_then(|v| v.as_str())
+                                .map(Into::into),
+                            anthropic_base_url: p
+                                .get("anthropic_base_url")
+                                .and_then(|v| v.as_str())
+                                .map(Into::into),
+                            auth_header: p
+                                .get("auth_header")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("x-api-key")
+                                .into(),
+                            auth_scheme: p
+                                .get("auth_scheme")
+                                .and_then(|v| v.as_str())
+                                .map(Into::into),
+                            api_key: p.get("api_key").and_then(|v| v.as_str()).map(Into::into),
+                        },
+                    );
                 }
             }
         }
@@ -400,16 +499,28 @@ pub fn import_config(st: State<'_, AppState>, file_path: String) -> Result<Strin
             ) {
                 let existing = database::list_routes(&st.db_path).unwrap_or_default();
                 if existing.iter().any(|e| e.id == id) {
-                    let _ = database::update_route(&st.db_path, &UpdateModelRoute {
-                        id: id.into(), claude_alias: alias.into(), display_name: display.into(),
-                        provider_id: pid.into(), upstream_model: upstream.into(),
-                        enabled: r.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true),
-                    });
+                    let _ = database::update_route(
+                        &st.db_path,
+                        &UpdateModelRoute {
+                            id: id.into(),
+                            claude_alias: alias.into(),
+                            display_name: display.into(),
+                            provider_id: pid.into(),
+                            upstream_model: upstream.into(),
+                            enabled: r.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true),
+                        },
+                    );
                 } else {
-                    let _ = database::create_route(&st.db_path, &CreateModelRoute {
-                        id: id.into(), claude_alias: alias.into(), display_name: display.into(),
-                        provider_id: pid.into(), upstream_model: upstream.into(),
-                    });
+                    let _ = database::create_route(
+                        &st.db_path,
+                        &CreateModelRoute {
+                            id: id.into(),
+                            claude_alias: alias.into(),
+                            display_name: display.into(),
+                            provider_id: pid.into(),
+                            upstream_model: upstream.into(),
+                        },
+                    );
                 }
             }
         }
@@ -443,7 +554,10 @@ pub fn get_codex_profile(st: State<'_, AppState>) -> Result<GatewayProfile, Stri
 }
 
 #[tauri::command]
-pub fn save_codex_profile(st: State<'_, AppState>, payload: GatewayProfile) -> Result<GatewayProfile, String> {
+pub fn save_codex_profile(
+    st: State<'_, AppState>,
+    payload: GatewayProfile,
+) -> Result<GatewayProfile, String> {
     database::save_codex_profile(&st.db_path, &payload)?;
     database::get_codex_profile(&st.db_path)
 }
@@ -454,13 +568,19 @@ pub fn list_codex_routes(st: State<'_, AppState>) -> Result<Vec<CodexRoute>, Str
 }
 
 #[tauri::command]
-pub fn create_codex_route(st: State<'_, AppState>, payload: CreateCodexRoute) -> Result<Vec<CodexRoute>, String> {
+pub fn create_codex_route(
+    st: State<'_, AppState>,
+    payload: CreateCodexRoute,
+) -> Result<Vec<CodexRoute>, String> {
     database::create_codex_route(&st.db_path, &payload)?;
     database::list_codex_routes(&st.db_path)
 }
 
 #[tauri::command]
-pub fn update_codex_route(st: State<'_, AppState>, payload: UpdateCodexRoute) -> Result<Vec<CodexRoute>, String> {
+pub fn update_codex_route(
+    st: State<'_, AppState>,
+    payload: UpdateCodexRoute,
+) -> Result<Vec<CodexRoute>, String> {
     database::update_codex_route(&st.db_path, &payload)?;
     database::list_codex_routes(&st.db_path)
 }
@@ -474,7 +594,10 @@ pub fn delete_codex_route(st: State<'_, AppState>, id: String) -> Result<Vec<Cod
 #[tauri::command]
 pub async fn check_codex_health(st: State<'_, AppState>) -> Result<HealthStatus, String> {
     let profile = database::get_codex_profile(&st.db_path)?;
-    let url = format!("http://{}:{}/health", profile.listen_host, profile.listen_port);
+    let url = format!(
+        "http://{}:{}/health",
+        profile.listen_host, profile.listen_port
+    );
     let start = Instant::now();
     match reqwest::get(&url).await {
         Ok(r) => Ok(HealthStatus {
@@ -499,7 +622,10 @@ pub fn get_codex_binding_info(st: State<'_, AppState>) -> Result<CodexBindingInf
 }
 
 #[tauri::command]
-pub fn apply_codex_binding(st: State<'_, AppState>, model: String) -> Result<CodexBindingInfo, String> {
+pub fn apply_codex_binding(
+    st: State<'_, AppState>,
+    model: String,
+) -> Result<CodexBindingInfo, String> {
     let profile = database::get_codex_profile(&st.db_path)?;
     codex_binding::apply(
         &dirs::home_dir().ok_or("no home")?,
@@ -515,23 +641,93 @@ pub fn restore_codex_binding(st: State<'_, AppState>) -> Result<CodexBindingInfo
     codex_binding::restore(&dirs::home_dir().ok_or("no home")?)
 }
 
+#[tauri::command]
+pub fn detect_codex_pp() -> Result<codex_pp::CodexPpInstall, String> {
+    Ok(codex_pp::detect())
+}
+
+#[tauri::command]
+pub fn list_codex_pp_tweaks() -> Result<Vec<codex_pp::CodexPpTweak>, String> {
+    codex_pp::list_tweaks()
+}
+
+#[tauri::command]
+pub fn set_codex_pp_tweak_enabled(
+    id: String,
+    enabled: bool,
+) -> Result<Vec<codex_pp::CodexPpTweak>, String> {
+    codex_pp::set_tweak_enabled(id, enabled)
+}
+
+#[tauri::command]
+pub async fn fetch_codex_pp_store() -> Result<codex_pp::CodexPpStoreIndex, String> {
+    codex_pp::fetch_store().await
+}
+
+#[tauri::command]
+pub async fn install_codex_pp_tweak(
+    repo: String,
+    approved_commit_sha: String,
+) -> Result<Vec<codex_pp::CodexPpTweak>, String> {
+    codex_pp::install_from_store(repo, approved_commit_sha).await
+}
+
+#[tauri::command]
+pub fn uninstall_codex_pp_tweak(id: String) -> Result<Vec<codex_pp::CodexPpTweak>, String> {
+    codex_pp::uninstall_tweak(id)
+}
+
+#[tauri::command]
+pub fn get_codex_pp_health() -> Result<codex_pp::CodexPpHealth, String> {
+    Ok(codex_pp::health())
+}
+
+#[tauri::command]
+pub fn get_codex_pp_preflight() -> Result<codex_pp::CodexPpPreflight, String> {
+    Ok(codex_pp::preflight())
+}
+
+#[tauri::command]
+pub fn run_codex_pp_cli(
+    app: AppHandle,
+    action: String,
+    session_id: Option<String>,
+) -> Result<codex_pp::CodexPpCliResult, String> {
+    codex_pp::run_cli(app, action, session_id)
+}
+
+#[tauri::command]
+pub fn open_codex_pp_path(kind: String) -> Result<String, String> {
+    codex_pp::open_path(kind)
+}
+
 // =====================================================
 //  MODEL ALIASES COMMANDS
 // =====================================================
 
 #[tauri::command]
-pub fn list_model_aliases(st: State<'_, AppState>, alias_type: String) -> Result<Vec<ModelAlias>, String> {
+pub fn list_model_aliases(
+    st: State<'_, AppState>,
+    alias_type: String,
+) -> Result<Vec<ModelAlias>, String> {
     database::list_model_aliases(&st.db_path, &alias_type)
 }
 
 #[tauri::command]
-pub fn create_model_alias(st: State<'_, AppState>, payload: CreateModelAlias) -> Result<Vec<ModelAlias>, String> {
+pub fn create_model_alias(
+    st: State<'_, AppState>,
+    payload: CreateModelAlias,
+) -> Result<Vec<ModelAlias>, String> {
     database::create_model_alias(&st.db_path, &payload)?;
     database::list_model_aliases(&st.db_path, &payload.alias_type)
 }
 
 #[tauri::command]
-pub fn delete_model_alias(st: State<'_, AppState>, id: String, alias_type: String) -> Result<Vec<ModelAlias>, String> {
+pub fn delete_model_alias(
+    st: State<'_, AppState>,
+    id: String,
+    alias_type: String,
+) -> Result<Vec<ModelAlias>, String> {
     database::delete_model_alias(&st.db_path, &id)?;
     database::list_model_aliases(&st.db_path, &alias_type)
 }
@@ -543,7 +739,14 @@ async fn run_coldstart_checks(st: &AppState, apply_fixes: bool) -> Result<ColdSt
     let mut auto_fixes_applied: Vec<String> = Vec::new();
     let mut manual_fixes_required: Vec<String> = Vec::new();
 
-    cold_log(&mut steps, "environment", "Environment discovery", "system", "ok", "Loaded local app state, settings path, database path, and binding targets");
+    cold_log(
+        &mut steps,
+        "environment",
+        "Environment discovery",
+        "system",
+        "ok",
+        "Loaded local app state, settings path, database path, and binding targets",
+    );
 
     let settings = settings::load(&st.settings_path)?;
     let profile = database::get_profile(&st.db_path)?;
@@ -552,14 +755,20 @@ async fn run_coldstart_checks(st: &AppState, apply_fixes: bool) -> Result<ColdSt
     let routes = database::list_routes(&st.db_path)?;
     let codex_routes = database::list_codex_routes(&st.db_path)?;
     let enabled_routes: Vec<ModelRoute> = routes.iter().filter(|r| r.enabled).cloned().collect();
-    let enabled_codex_routes: Vec<CodexRoute> = codex_routes.iter().filter(|r| r.enabled).cloned().collect();
+    let enabled_codex_routes: Vec<CodexRoute> =
+        codex_routes.iter().filter(|r| r.enabled).cloned().collect();
     cold_log(
         &mut steps,
         "inventory",
         "Provider and route inventory",
         "gateway",
         "ok",
-        &format!("{} providers, {} Claude routes, {} Codex routes", providers.len(), enabled_routes.len(), enabled_codex_routes.len()),
+        &format!(
+            "{} providers, {} Claude routes, {} Codex routes",
+            providers.len(),
+            enabled_routes.len(),
+            enabled_codex_routes.len()
+        ),
     );
 
     let home = dirs::home_dir().ok_or("no home")?;
@@ -567,21 +776,72 @@ async fn run_coldstart_checks(st: &AppState, apply_fixes: bool) -> Result<ColdSt
     let claude_code = claude_code_binding::inspect(&home)?;
     let mut codex_info = codex_binding::inspect(&home)?;
 
-    capability(&mut capabilities, "Claude Desktop config", "Claude", desktop_status(desktop.managed), &binding_detail(&desktop.config_path, desktop.managed, desktop.base_url.as_deref()));
-    capability(&mut capabilities, "Claude Code config", "Claude Code", managed_status(claude_code.managed), &binding_detail(&claude_code.config_path, claude_code.managed, claude_code.base_url.as_deref()));
-    capability(&mut capabilities, "Codex config", "Codex", managed_status(codex_info.managed), &binding_detail(&codex_info.config_path, codex_info.managed, codex_info.base_url.as_deref()));
+    capability(
+        &mut capabilities,
+        "Claude Desktop config",
+        "Claude",
+        desktop_status(desktop.managed),
+        &binding_detail(
+            &desktop.config_path,
+            desktop.managed,
+            desktop.base_url.as_deref(),
+        ),
+    );
+    capability(
+        &mut capabilities,
+        "Claude Code config",
+        "Claude Code",
+        managed_status(claude_code.managed),
+        &binding_detail(
+            &claude_code.config_path,
+            claude_code.managed,
+            claude_code.base_url.as_deref(),
+        ),
+    );
+    capability(
+        &mut capabilities,
+        "Codex config",
+        "Codex",
+        managed_status(codex_info.managed),
+        &binding_detail(
+            &codex_info.config_path,
+            codex_info.managed,
+            codex_info.base_url.as_deref(),
+        ),
+    );
 
     let mut claude_gateway_status = gateway::status(st)?;
     if !claude_gateway_status.running && apply_fixes && !enabled_routes.is_empty() {
-        cold_log(&mut steps, "claude_gateway_start", "Start Claude Gateway", "Claude", "running", "Gateway was stopped; attempting safe start before Desktop validation");
+        cold_log(
+            &mut steps,
+            "claude_gateway_start",
+            "Start Claude Gateway",
+            "Claude",
+            "running",
+            "Gateway was stopped; attempting safe start before Desktop validation",
+        );
         match gateway::start(st) {
             Ok(msg) => {
                 auto_fixes_applied.push(format!("Claude Gateway start: {msg}"));
-                cold_log(&mut steps, "claude_gateway_start_done", "Claude Gateway start result", "Claude", "fixed", &msg);
+                cold_log(
+                    &mut steps,
+                    "claude_gateway_start_done",
+                    "Claude Gateway start result",
+                    "Claude",
+                    "fixed",
+                    &msg,
+                );
             }
             Err(e) => {
                 manual_fixes_required.push(format!("Claude Gateway failed to start: {e}"));
-                cold_log(&mut steps, "claude_gateway_start_failed", "Claude Gateway start failed", "Claude", "error", &e);
+                cold_log(
+                    &mut steps,
+                    "claude_gateway_start_failed",
+                    "Claude Gateway start failed",
+                    "Claude",
+                    "error",
+                    &e,
+                );
             }
         }
         claude_gateway_status = gateway::status(st)?;
@@ -590,8 +850,16 @@ async fn run_coldstart_checks(st: &AppState, apply_fixes: bool) -> Result<ColdSt
         &mut capabilities,
         "Claude Gateway process",
         "Claude",
-        if claude_gateway_status.running { "ok" } else { "warn" },
-        &format!("status={}, error={}", claude_gateway_status.status, claude_gateway_status.error.as_deref().unwrap_or("none")),
+        if claude_gateway_status.running {
+            "ok"
+        } else {
+            "warn"
+        },
+        &format!(
+            "status={}, error={}",
+            claude_gateway_status.status,
+            claude_gateway_status.error.as_deref().unwrap_or("none")
+        ),
     );
 
     if apply_fixes && !desktop.managed && !enabled_routes.is_empty() {
@@ -606,12 +874,27 @@ async fn run_coldstart_checks(st: &AppState, apply_fixes: bool) -> Result<ColdSt
         ) {
             Ok(info) => {
                 desktop = info;
-                auto_fixes_applied.push("Applied Claude Desktop Gateway Switch binding with backup".into());
-                cold_log(&mut steps, "desktop_apply_done", "Claude Desktop binding applied", "Claude", "fixed", "Desktop config now points to local Claude Gateway");
+                auto_fixes_applied
+                    .push("Applied Claude Desktop Gateway Switch binding with backup".into());
+                cold_log(
+                    &mut steps,
+                    "desktop_apply_done",
+                    "Claude Desktop binding applied",
+                    "Claude",
+                    "fixed",
+                    "Desktop config now points to local Claude Gateway",
+                );
             }
             Err(e) => {
                 manual_fixes_required.push(format!("Claude Desktop binding failed: {e}"));
-                cold_log(&mut steps, "desktop_apply_failed", "Claude Desktop binding failed", "Claude", "error", &e);
+                cold_log(
+                    &mut steps,
+                    "desktop_apply_failed",
+                    "Claude Desktop binding failed",
+                    "Claude",
+                    "error",
+                    &e,
+                );
             }
         }
     } else if !desktop.managed {
@@ -619,20 +902,57 @@ async fn run_coldstart_checks(st: &AppState, apply_fixes: bool) -> Result<ColdSt
     }
 
     let claude_health = local_health(&profile.listen_host, profile.listen_port).await;
-    capability(&mut capabilities, "Claude health endpoint", "Claude", health_status(&claude_health), &claude_health);
-    cold_log(&mut steps, "claude_health", "Claude Gateway health check", "Claude", health_status(&claude_health), &claude_health);
+    capability(
+        &mut capabilities,
+        "Claude health endpoint",
+        "Claude",
+        health_status(&claude_health),
+        &claude_health,
+    );
+    cold_log(
+        &mut steps,
+        "claude_health",
+        "Claude Gateway health check",
+        "Claude",
+        health_status(&claude_health),
+        &claude_health,
+    );
 
     let mut codex_gateway_status = codex_gateway::status(st)?;
-    if !codex_gateway_status.running && apply_fixes && (codex_info.managed || !enabled_codex_routes.is_empty()) {
-        cold_log(&mut steps, "codex_gateway_start", "Start Codex Gateway", "Codex", "running", "Codex Gateway was stopped; attempting safe start before config validation");
+    if !codex_gateway_status.running
+        && apply_fixes
+        && (codex_info.managed || !enabled_codex_routes.is_empty())
+    {
+        cold_log(
+            &mut steps,
+            "codex_gateway_start",
+            "Start Codex Gateway",
+            "Codex",
+            "running",
+            "Codex Gateway was stopped; attempting safe start before config validation",
+        );
         match codex_gateway::start(st) {
             Ok(msg) => {
                 auto_fixes_applied.push(format!("Codex Gateway start: {msg}"));
-                cold_log(&mut steps, "codex_gateway_start_done", "Codex Gateway start result", "Codex", "fixed", &msg);
+                cold_log(
+                    &mut steps,
+                    "codex_gateway_start_done",
+                    "Codex Gateway start result",
+                    "Codex",
+                    "fixed",
+                    &msg,
+                );
             }
             Err(e) => {
                 manual_fixes_required.push(format!("Codex Gateway failed to start: {e}"));
-                cold_log(&mut steps, "codex_gateway_start_failed", "Codex Gateway start failed", "Codex", "error", &e);
+                cold_log(
+                    &mut steps,
+                    "codex_gateway_start_failed",
+                    "Codex Gateway start failed",
+                    "Codex",
+                    "error",
+                    &e,
+                );
             }
         }
         codex_gateway_status = codex_gateway::status(st)?;
@@ -641,8 +961,16 @@ async fn run_coldstart_checks(st: &AppState, apply_fixes: bool) -> Result<ColdSt
         &mut capabilities,
         "Codex Gateway process",
         "Codex",
-        if codex_gateway_status.running { "ok" } else { "warn" },
-        &format!("status={}, error={}", codex_gateway_status.status, codex_gateway_status.error.as_deref().unwrap_or("none")),
+        if codex_gateway_status.running {
+            "ok"
+        } else {
+            "warn"
+        },
+        &format!(
+            "status={}, error={}",
+            codex_gateway_status.status,
+            codex_gateway_status.error.as_deref().unwrap_or("none")
+        ),
     );
 
     if apply_fixes && !codex_info.managed {
@@ -650,43 +978,127 @@ async fn run_coldstart_checks(st: &AppState, apply_fixes: bool) -> Result<ColdSt
             cold_log(&mut steps, "codex_apply", "Apply Codex binding", "Codex", "running", "Codex is not managed by Gateway Switch; creating backup and applying current default route");
             match codex_binding::apply(
                 &home,
-                &format!("http://{}:{}/v1", codex_profile.listen_host, codex_profile.listen_port),
+                &format!(
+                    "http://{}:{}/v1",
+                    codex_profile.listen_host, codex_profile.listen_port
+                ),
                 &codex_profile.auth_token,
                 &route.codex_model,
             ) {
                 Ok(info) => {
                     codex_info = info;
-                    auto_fixes_applied.push(format!("Applied Codex Gateway Switch binding for model {}", route.codex_model));
-                    cold_log(&mut steps, "codex_apply_done", "Codex binding applied", "Codex", "fixed", "Codex config now points to local Responses Gateway");
+                    auto_fixes_applied.push(format!(
+                        "Applied Codex Gateway Switch binding for model {}",
+                        route.codex_model
+                    ));
+                    cold_log(
+                        &mut steps,
+                        "codex_apply_done",
+                        "Codex binding applied",
+                        "Codex",
+                        "fixed",
+                        "Codex config now points to local Responses Gateway",
+                    );
                 }
                 Err(e) => {
                     manual_fixes_required.push(format!("Codex binding failed: {e}"));
-                    cold_log(&mut steps, "codex_apply_failed", "Codex binding failed", "Codex", "error", &e);
+                    cold_log(
+                        &mut steps,
+                        "codex_apply_failed",
+                        "Codex binding failed",
+                        "Codex",
+                        "error",
+                        &e,
+                    );
                 }
             }
         } else {
-            manual_fixes_required.push("Create at least one enabled Codex route before automatic Codex binding".into());
-            cold_log(&mut steps, "codex_no_route", "Codex binding skipped", "Codex", "warn", "No enabled Codex route is available");
+            manual_fixes_required.push(
+                "Create at least one enabled Codex route before automatic Codex binding".into(),
+            );
+            cold_log(
+                &mut steps,
+                "codex_no_route",
+                "Codex binding skipped",
+                "Codex",
+                "warn",
+                "No enabled Codex route is available",
+            );
         }
     } else if !codex_info.managed {
-        cold_log(&mut steps, "codex_unmanaged", "Codex binding check", "Codex", "warn", "Codex is not managed by Gateway Switch; run repair to apply a backup-backed binding");
+        cold_log(
+            &mut steps,
+            "codex_unmanaged",
+            "Codex binding check",
+            "Codex",
+            "warn",
+            "Codex is not managed by Gateway Switch; run repair to apply a backup-backed binding",
+        );
     }
 
     let codex_health = local_health(&codex_profile.listen_host, codex_profile.listen_port).await;
-    capability(&mut capabilities, "Codex health endpoint", "Codex", health_status(&codex_health), &codex_health);
-    cold_log(&mut steps, "codex_health", "Codex Gateway health check", "Codex", health_status(&codex_health), &codex_health);
+    capability(
+        &mut capabilities,
+        "Codex health endpoint",
+        "Codex",
+        health_status(&codex_health),
+        &codex_health,
+    );
+    cold_log(
+        &mut steps,
+        "codex_health",
+        "Codex Gateway health check",
+        "Codex",
+        health_status(&codex_health),
+        &codex_health,
+    );
 
     let enabled_providers = providers.iter().filter(|p| p.enabled).count();
-    capability(&mut capabilities, "Provider inventory", "Provider", if enabled_providers > 0 { "ok" } else { "error" }, &format!("{enabled_providers} enabled providers"));
-    capability(&mut capabilities, "Claude route inventory", "Claude", if enabled_routes.is_empty() { "warn" } else { "ok" }, &format!("{} enabled Claude routes", enabled_routes.len()));
-    capability(&mut capabilities, "Codex route inventory", "Codex", if enabled_codex_routes.is_empty() { "warn" } else { "ok" }, &format!("{} enabled Codex routes", enabled_codex_routes.len()));
+    capability(
+        &mut capabilities,
+        "Provider inventory",
+        "Provider",
+        if enabled_providers > 0 { "ok" } else { "error" },
+        &format!("{enabled_providers} enabled providers"),
+    );
+    capability(
+        &mut capabilities,
+        "Claude route inventory",
+        "Claude",
+        if enabled_routes.is_empty() {
+            "warn"
+        } else {
+            "ok"
+        },
+        &format!("{} enabled Claude routes", enabled_routes.len()),
+    );
+    capability(
+        &mut capabilities,
+        "Codex route inventory",
+        "Codex",
+        if enabled_codex_routes.is_empty() {
+            "warn"
+        } else {
+            "ok"
+        },
+        &format!("{} enabled Codex routes", enabled_codex_routes.len()),
+    );
 
     let security_detail = "Third-party routing may expose prompts, file contents, tool results, and code to upstream providers; keep official providers as fallback for critical/private tasks";
-    capability(&mut capabilities, "Third-party routing security", "Security", "warn", security_detail);
+    capability(
+        &mut capabilities,
+        "Third-party routing security",
+        "Security",
+        "warn",
+        security_detail,
+    );
     manual_fixes_required.push("Review provider privacy policy and avoid sending sensitive repositories to untrusted third-party models".into());
 
     if !settings.auto_start_gateway {
-        manual_fixes_required.push("Enable Auto Start Gateway if Claude Desktop should work immediately after app launch".into());
+        manual_fixes_required.push(
+            "Enable Auto Start Gateway if Claude Desktop should work immediately after app launch"
+                .into(),
+        );
     }
     if !settings.auto_takeover_desktop && desktop.managed {
         manual_fixes_required.push("Enable Auto Takeover Desktop if Gateway Switch should re-assert Claude Desktop binding on every launch".into());
@@ -694,7 +1106,14 @@ async fn run_coldstart_checks(st: &AppState, apply_fixes: bool) -> Result<ColdSt
     manual_fixes_required.sort();
     manual_fixes_required.dedup();
 
-    cold_log(&mut steps, "report", "Generate coldstart report", "system", "ok", "Compiled UI report, safe-fix results, manual remediation list, and security notes");
+    cold_log(
+        &mut steps,
+        "report",
+        "Generate coldstart report",
+        "system",
+        "ok",
+        "Compiled UI report, safe-fix results, manual remediation list, and security notes",
+    );
 
     let claude_score = score_for(&capabilities, "Claude");
     let codex_score = score_for(&capabilities, "Codex");
@@ -705,7 +1124,8 @@ async fn run_coldstart_checks(st: &AppState, apply_fixes: bool) -> Result<ColdSt
         "usable but needs targeted fixes"
     } else {
         "not ready for unattended daily use"
-    }.to_string();
+    }
+    .to_string();
     let biggest_risk = security_detail.to_string();
     let most_important_fix = if !codex_info.managed {
         "Bind Codex to Gateway Switch and verify the local /v1/responses health endpoint"
@@ -713,7 +1133,8 @@ async fn run_coldstart_checks(st: &AppState, apply_fixes: bool) -> Result<ColdSt
         "Bind Claude Desktop to Gateway Switch and verify the local /v1/messages health endpoint"
     } else {
         "Prove MCP/GitHub readiness inside Claude Desktop and Codex with real tool calls"
-    }.to_string();
+    }
+    .to_string();
 
     let mut report = ColdStartReport {
         generated_at: chrono::Utc::now().to_rfc3339(),
@@ -739,7 +1160,14 @@ async fn run_coldstart_checks(st: &AppState, apply_fixes: bool) -> Result<ColdSt
     Ok(report)
 }
 
-fn cold_log(steps: &mut Vec<ColdStartStep>, id: &str, label: &str, target: &str, status: &str, detail: &str) {
+fn cold_log(
+    steps: &mut Vec<ColdStartStep>,
+    id: &str,
+    label: &str,
+    target: &str,
+    status: &str,
+    detail: &str,
+) {
     println!("[coldstart][{target}][{status}] {label}: {detail}");
     steps.push(ColdStartStep {
         id: id.into(),
@@ -751,7 +1179,13 @@ fn cold_log(steps: &mut Vec<ColdStartStep>, id: &str, label: &str, target: &str,
     });
 }
 
-fn capability(items: &mut Vec<ColdStartCapability>, name: &str, target: &str, status: &str, detail: &str) {
+fn capability(
+    items: &mut Vec<ColdStartCapability>,
+    name: &str,
+    target: &str,
+    status: &str,
+    detail: &str,
+) {
     println!("[coldstart][capability][{target}][{status}] {name}: {detail}");
     items.push(ColdStartCapability {
         name: name.into(),
@@ -762,11 +1196,19 @@ fn capability(items: &mut Vec<ColdStartCapability>, name: &str, target: &str, st
 }
 
 fn managed_status(managed: bool) -> &'static str {
-    if managed { "ok" } else { "warn" }
+    if managed {
+        "ok"
+    } else {
+        "warn"
+    }
 }
 
 fn desktop_status(managed: bool) -> &'static str {
-    if managed { "ok" } else { "warn" }
+    if managed {
+        "ok"
+    } else {
+        "warn"
+    }
 }
 
 fn binding_detail(path: &str, managed: bool, base_url: Option<&str>) -> String {
@@ -782,7 +1224,11 @@ async fn local_health(host: &str, port: u16) -> String {
     let url = format!("http://{host}:{port}/health");
     let start = Instant::now();
     match reqwest::get(&url).await {
-        Ok(resp) => format!("{} in {}ms ({url})", resp.status(), start.elapsed().as_millis()),
+        Ok(resp) => format!(
+            "{} in {}ms ({url})",
+            resp.status(),
+            start.elapsed().as_millis()
+        ),
         Err(e) => format!("unreachable: {e} ({url})"),
     }
 }
@@ -796,7 +1242,8 @@ fn health_status(message: &str) -> &'static str {
 }
 
 fn score_for(capabilities: &[ColdStartCapability], target: &str) -> u8 {
-    let filtered: Vec<&ColdStartCapability> = capabilities.iter().filter(|c| c.target == target).collect();
+    let filtered: Vec<&ColdStartCapability> =
+        capabilities.iter().filter(|c| c.target == target).collect();
     score_items(&filtered)
 }
 
@@ -809,19 +1256,25 @@ fn score_items(items: &[&ColdStartCapability]) -> u8 {
     if items.is_empty() {
         return 0;
     }
-    let points: usize = items.iter().map(|c| match c.status.as_str() {
-        "ok" | "fixed" => 100,
-        "warn" | "running" => 55,
-        "error" => 0,
-        _ => 40,
-    }).sum();
+    let points: usize = items
+        .iter()
+        .map(|c| match c.status.as_str() {
+            "ok" | "fixed" => 100,
+            "warn" | "running" => 55,
+            "error" => 0,
+            _ => 40,
+        })
+        .sum();
     (points / items.len()).min(100) as u8
 }
 
 fn write_coldstart_report(st: &AppState, report: &ColdStartReport) -> Result<String, String> {
     let dir = st.backups_dir.join("coldstart");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let path = dir.join(format!("coldstart-report-{}.md", chrono::Utc::now().timestamp_millis()));
+    let path = dir.join(format!(
+        "coldstart-report-{}.md",
+        chrono::Utc::now().timestamp_millis()
+    ));
     fs::write(&path, render_coldstart_markdown(report)).map_err(|e| e.to_string())?;
     Ok(path.display().to_string())
 }
@@ -836,7 +1289,10 @@ fn render_coldstart_markdown(report: &ColdStartReport) -> String {
     out.push_str(&format!("- Claude score: {}%\n", report.claude_score));
     out.push_str(&format!("- Codex score: {}%\n", report.codex_score));
     out.push_str(&format!("- Biggest risk: {}\n", report.biggest_risk));
-    out.push_str(&format!("- Most important fix: {}\n\n", report.most_important_fix));
+    out.push_str(&format!(
+        "- Most important fix: {}\n\n",
+        report.most_important_fix
+    ));
 
     out.push_str("## Auto Fixes Applied\n\n");
     if report.auto_fixes_applied.is_empty() {
@@ -860,14 +1316,27 @@ fn render_coldstart_markdown(report: &ColdStartReport) -> String {
     out.push_str("| target | capability | status | detail |\n");
     out.push_str("| --- | --- | --- | --- |\n");
     for c in &report.capabilities {
-        out.push_str(&format!("| {} | {} | {} | {} |\n", c.target, c.name, c.status, c.detail.replace('|', "\\|")));
+        out.push_str(&format!(
+            "| {} | {} | {} | {} |\n",
+            c.target,
+            c.name,
+            c.status,
+            c.detail.replace('|', "\\|")
+        ));
     }
 
     out.push_str("\n## Execution Log\n\n");
     out.push_str("| time | target | status | step | detail |\n");
     out.push_str("| --- | --- | --- | --- | --- |\n");
     for step in &report.steps {
-        out.push_str(&format!("| {} | {} | {} | {} | {} |\n", step.timestamp, step.target, step.status, step.label, step.detail.replace('|', "\\|")));
+        out.push_str(&format!(
+            "| {} | {} | {} | {} | {} |\n",
+            step.timestamp,
+            step.target,
+            step.status,
+            step.label,
+            step.detail.replace('|', "\\|")
+        ));
     }
 
     out.push_str("\n## Security Notes\n\n");

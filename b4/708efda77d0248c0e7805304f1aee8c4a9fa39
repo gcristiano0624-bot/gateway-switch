@@ -1,0 +1,695 @@
+src-tauri/src/codex_pp.rs
+  2ac44fed2b7842f2 16,202-209,230-231,236-247,456-460,471,535-739,3562-3563,3794-3885 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a181bd7cc0c4b078d4251ca","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":16},{"Range":[202,209]},{"Range":[230,231]},{"Range":[236,247]},{"Range":[456,460]},{"Single":471},{"Range":[535,739]},{"Range":[3562,3563]},{"Range":[3794,3885]}]}]}
+src-tauri/Cargo.toml
+  2ac44fed2b7842f2 3 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a181bd7cc0c4b078d4251ca","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":3}]}]}
+CHANGELOG.md
+  2ac44fed2b7842f2 5-13 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a181bd7cc0c4b078d4251ca","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[5,13]}]}]}
+src-tauri/src/coldstart.rs
+  082ff4523b3cdacc 1-1004
+src/App.tsx
+  2ac44fed2b7842f2 177,180-187,193-196,931-959,977,980,998,1001,2001,2070,3245-3277,3293-3305,3313-3314,3316 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a181bd7cc0c4b078d4251ca","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":177},{"Range":[180,187]},{"Range":[193,196]},{"Range":[931,959]},{"Single":977},{"Single":980},{"Single":998},{"Single":1001},{"Single":2001},{"Single":2070},{"Range":[3245,3277]},{"Range":[3293,3305]},{"Range":[3313,3314]},{"Single":3316}]}]}
+docs/project.md
+  2ac44fed2b7842f2 3,12,39-51,63,75,86,98,117,139,158,178,205,226,244,265,287,307,351,366,388,426,514,592,619,667,777,907,941,954,971,977,994,1000,1065,1097,1100,1119,1148 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a181bd7cc0c4b078d4251ca","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":3},{"Single":12},{"Range":[39,51]},{"Single":63},{"Single":75},{"Single":86},{"Single":98},{"Single":117},{"Single":139},{"Single":158},{"Single":178},{"Single":205},{"Single":226},{"Single":244},{"Single":265},{"Single":287},{"Single":307},{"Single":351},{"Single":366},{"Single":388},{"Single":426},{"Single":514},{"Single":592},{"Single":619},{"Single":667},{"Single":777},{"Single":907},{"Single":941},{"Single":954},{"Single":971},{"Single":977},{"Single":994},{"Single":1000},{"Single":1065},{"Single":1097},{"Single":1100},{"Single":1119},{"Single":1148}]}]}
+package.json
+  2ac44fed2b7842f2 4 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a181bd7cc0c4b078d4251ca","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":4}]}]}
+src-tauri/src/commands.rs
+  082ff4523b3cdacc 2-4,186,191
+src-tauri/tauri.conf.json
+  2ac44fed2b7842f2 4 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a181bd7cc0c4b078d4251ca","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":4}]}]}
+src-tauri/src/lib.rs
+  082ff4523b3cdacc 5
+docs/release-1.8.6-upstream-tweak-store.md
+  2ac44fed2b7842f2 1-27 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a181bd7cc0c4b078d4251ca","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,27]}]}]}
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "b4708efda77d0248c0e7805304f1aee8c4a9fa39",
+  "prompts": {
+    "082ff4523b3cdacc": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a180b10cc0c4b078d424c8c",
+        "model": "gpt-5.5__dev"
+      },
+      "human_author": "hugo0624 <gcristiano0624@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 1010,
+      "overriden_lines": 0
+    },
+    "2ac44fed2b7842f2": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a169b45c08b9f09c4f2a210",
+        "model": "gpt-5.5__dev"
+      },
+      "human_author": "hugo0624 <gcristiano0624@gmail.com>",
+      "messages": [],
+      "total_additions": 633,
+      "total_deletions": 76,
+      "accepted_lines": 4891,
+      "overriden_lines": 0
+    }
+  },
+  "attestation_metadata": {
+    "CHANGELOG.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Range": [
+              5,
+              13
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a181bd7cc0c4b078d4251ca",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  5,
+                  13
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "docs/project.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 3
+          },
+          {
+            "Single": 12
+          },
+          {
+            "Range": [
+              39,
+              51
+            ]
+          },
+          {
+            "Single": 63
+          },
+          {
+            "Single": 75
+          },
+          {
+            "Single": 86
+          },
+          {
+            "Single": 98
+          },
+          {
+            "Single": 117
+          },
+          {
+            "Single": 139
+          },
+          {
+            "Single": 158
+          },
+          {
+            "Single": 178
+          },
+          {
+            "Single": 205
+          },
+          {
+            "Single": 226
+          },
+          {
+            "Single": 244
+          },
+          {
+            "Single": 265
+          },
+          {
+            "Single": 287
+          },
+          {
+            "Single": 307
+          },
+          {
+            "Single": 351
+          },
+          {
+            "Single": 366
+          },
+          {
+            "Single": 388
+          },
+          {
+            "Single": 426
+          },
+          {
+            "Single": 514
+          },
+          {
+            "Single": 592
+          },
+          {
+            "Single": 619
+          },
+          {
+            "Single": 667
+          },
+          {
+            "Single": 777
+          },
+          {
+            "Single": 907
+          },
+          {
+            "Single": 941
+          },
+          {
+            "Single": 954
+          },
+          {
+            "Single": 971
+          },
+          {
+            "Single": 977
+          },
+          {
+            "Single": 994
+          },
+          {
+            "Single": 1000
+          },
+          {
+            "Single": 1065
+          },
+          {
+            "Single": 1097
+          },
+          {
+            "Single": 1100
+          },
+          {
+            "Single": 1119
+          },
+          {
+            "Single": 1148
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a181bd7cc0c4b078d4251ca",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 3
+              },
+              {
+                "Single": 12
+              },
+              {
+                "Range": [
+                  39,
+                  51
+                ]
+              },
+              {
+                "Single": 63
+              },
+              {
+                "Single": 75
+              },
+              {
+                "Single": 86
+              },
+              {
+                "Single": 98
+              },
+              {
+                "Single": 117
+              },
+              {
+                "Single": 139
+              },
+              {
+                "Single": 158
+              },
+              {
+                "Single": 178
+              },
+              {
+                "Single": 205
+              },
+              {
+                "Single": 226
+              },
+              {
+                "Single": 244
+              },
+              {
+                "Single": 265
+              },
+              {
+                "Single": 287
+              },
+              {
+                "Single": 307
+              },
+              {
+                "Single": 351
+              },
+              {
+                "Single": 366
+              },
+              {
+                "Single": 388
+              },
+              {
+                "Single": 426
+              },
+              {
+                "Single": 514
+              },
+              {
+                "Single": 592
+              },
+              {
+                "Single": 619
+              },
+              {
+                "Single": 667
+              },
+              {
+                "Single": 777
+              },
+              {
+                "Single": 907
+              },
+              {
+                "Single": 941
+              },
+              {
+                "Single": 954
+              },
+              {
+                "Single": 971
+              },
+              {
+                "Single": 977
+              },
+              {
+                "Single": 994
+              },
+              {
+                "Single": 1000
+              },
+              {
+                "Single": 1065
+              },
+              {
+                "Single": 1097
+              },
+              {
+                "Single": 1100
+              },
+              {
+                "Single": 1119
+              },
+              {
+                "Single": 1148
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "docs/release-1.8.6-upstream-tweak-store.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              27
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a181bd7cc0c4b078d4251ca",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  27
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "package.json": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 4
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a181bd7cc0c4b078d4251ca",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 4
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/Cargo.toml": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 3
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a181bd7cc0c4b078d4251ca",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 3
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/src/codex_pp.rs": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 16
+          },
+          {
+            "Range": [
+              202,
+              209
+            ]
+          },
+          {
+            "Range": [
+              230,
+              231
+            ]
+          },
+          {
+            "Range": [
+              236,
+              247
+            ]
+          },
+          {
+            "Range": [
+              456,
+              460
+            ]
+          },
+          {
+            "Single": 471
+          },
+          {
+            "Range": [
+              535,
+              739
+            ]
+          },
+          {
+            "Range": [
+              3562,
+              3563
+            ]
+          },
+          {
+            "Range": [
+              3794,
+              3885
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a181bd7cc0c4b078d4251ca",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 16
+              },
+              {
+                "Range": [
+                  202,
+                  209
+                ]
+              },
+              {
+                "Range": [
+                  230,
+                  231
+                ]
+              },
+              {
+                "Range": [
+                  236,
+                  247
+                ]
+              },
+              {
+                "Range": [
+                  456,
+                  460
+                ]
+              },
+              {
+                "Single": 471
+              },
+              {
+                "Range": [
+                  535,
+                  739
+                ]
+              },
+              {
+                "Range": [
+                  3562,
+                  3563
+                ]
+              },
+              {
+                "Range": [
+                  3794,
+                  3885
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/tauri.conf.json": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 4
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a181bd7cc0c4b078d4251ca",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 4
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/App.tsx": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 177
+          },
+          {
+            "Range": [
+              180,
+              187
+            ]
+          },
+          {
+            "Range": [
+              193,
+              196
+            ]
+          },
+          {
+            "Range": [
+              931,
+              959
+            ]
+          },
+          {
+            "Single": 977
+          },
+          {
+            "Single": 980
+          },
+          {
+            "Single": 998
+          },
+          {
+            "Single": 1001
+          },
+          {
+            "Single": 2001
+          },
+          {
+            "Single": 2070
+          },
+          {
+            "Range": [
+              3245,
+              3277
+            ]
+          },
+          {
+            "Range": [
+              3293,
+              3305
+            ]
+          },
+          {
+            "Range": [
+              3313,
+              3314
+            ]
+          },
+          {
+            "Single": 3316
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a181bd7cc0c4b078d4251ca",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 177
+              },
+              {
+                "Range": [
+                  180,
+                  187
+                ]
+              },
+              {
+                "Range": [
+                  193,
+                  196
+                ]
+              },
+              {
+                "Range": [
+                  931,
+                  959
+                ]
+              },
+              {
+                "Single": 977
+              },
+              {
+                "Single": 980
+              },
+              {
+                "Single": 998
+              },
+              {
+                "Single": 1001
+              },
+              {
+                "Single": 2001
+              },
+              {
+                "Single": 2070
+              },
+              {
+                "Range": [
+                  3245,
+                  3277
+                ]
+              },
+              {
+                "Range": [
+                  3293,
+                  3305
+                ]
+              },
+              {
+                "Range": [
+                  3313,
+                  3314
+                ]
+              },
+              {
+                "Single": 3316
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "remote_transcripts": {
+    "2ac44fed2b7842f2": {
+      "tool": "trae",
+      "conversation_id": "6a169b45c08b9f09c4f2a210",
+      "session_id": "6a169b45c08b9f09c4f2a210",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    }
+  }
+}

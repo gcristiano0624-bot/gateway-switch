@@ -174,13 +174,26 @@ type CodexPpStoreEntry = {
   platforms?: string[] | null;
   releaseUrl?: string | null;
   reviewUrl?: string | null;
+  archiveUrl?: string | null;
   installed: boolean;
   installed_version: string | null;
+  installedPath?: string | null;
+};
+
+type CodexPpLegacyRecommendation = {
+  name: string;
+  exactMatch: boolean;
+  replacementEntryId?: string | null;
+  note: string;
 };
 
 type CodexPpStoreIndex = {
   schemaVersion: number;
   generatedAt: string | null;
+  sourceUrl?: string | null;
+  fetchedAt?: string | null;
+  summary?: string | null;
+  legacyRecommendations?: CodexPpLegacyRecommendation[];
   entries: CodexPpStoreEntry[];
 };
 
@@ -915,6 +928,35 @@ const MOCK_CODEX_PP_TWEAKS: CodexPpTweak[] = [
 const MOCK_CODEX_PP_STORE: CodexPpStoreIndex = {
   schemaVersion: 1,
   generatedAt: "browser preview",
+  sourceUrl: "https://b-nnett.github.io/codex-plusplus/store/index.json",
+  fetchedAt: "browser preview",
+  summary: "Preview: 2 upstream tweaks loaded. 0 of 4 legacy requested scripts matched exact upstream entries.",
+  legacyRecommendations: [
+    {
+      name: "Codex Context Used Meter",
+      exactMatch: false,
+      replacementEntryId: "co.bennett.ui-improvements",
+      note: "No exact upstream entry found. Bennett's UI Improvements is the closest approved tweak for hiding prompts and surfacing usage/message metrics.",
+    },
+    {
+      name: "Hide Usage Alert",
+      exactMatch: false,
+      replacementEntryId: "co.bennett.ui-improvements",
+      note: "No exact upstream entry found. Bennett's UI Improvements is the closest approved tweak for hiding prompts and surfacing usage/message metrics.",
+    },
+    {
+      name: "Codex Token Usage",
+      exactMatch: false,
+      replacementEntryId: "co.bennett.ui-improvements",
+      note: "No exact upstream entry found. Bennett's UI Improvements is the closest approved tweak for hiding prompts and surfacing usage/message metrics.",
+    },
+    {
+      name: "Codex List Pagebuster",
+      exactMatch: false,
+      replacementEntryId: null,
+      note: "No exact upstream registry entry found for this legacy script name.",
+    },
+  ],
   entries: [
     {
       id: "co.bennett.better-terminal",
@@ -932,8 +974,10 @@ const MOCK_CODEX_PP_STORE: CodexPpStoreIndex = {
       approvedCommitSha: "b0398c839a42134d5cb301c432d43a9f13ac22e0",
       approvedAt: "browser preview",
       approvedBy: "bennett",
+      archiveUrl: "https://codeload.github.com/b-nnett/codex-plusplus-better-terminal/tar.gz/b0398c839a42134d5cb301c432d43a9f13ac22e0",
       installed: false,
       installed_version: null,
+      installedPath: null,
     },
     {
       id: "co.bennett.ui-improvements",
@@ -951,8 +995,10 @@ const MOCK_CODEX_PP_STORE: CodexPpStoreIndex = {
       approvedCommitSha: "17156ac0cc3402284b09c13c74754eda70388f50",
       approvedAt: "browser preview",
       approvedBy: "bennett",
+      archiveUrl: "https://codeload.github.com/b-nnett/codex-plusplus-bennett-ui/tar.gz/17156ac0cc3402284b09c13c74754eda70388f50",
       installed: true,
       installed_version: "1.0.3",
+      installedPath: "~/Library/Application Support/codex-plusplus/tweaks/co.bennett.ui-improvements",
     },
   ],
 };
@@ -1952,7 +1998,7 @@ function App() {
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.8.5</div>
+          <div className="brand-sub">v1.8.6</div>
         </div>
       </div>
 
@@ -2021,7 +2067,7 @@ function App() {
         <span className="status-text">
           Claude <strong>{status?.gateway_running ? t("Running") : t("Stopped")}</strong> · Codex <strong>{codexStatus?.running ? t("Running") : t("Stopped")}</strong>
         </span>
-        <span className="sidebar-version">v1.8.5</span>
+        <span className="sidebar-version">v1.8.6</span>
       </div>
     </aside>
   );
@@ -3196,6 +3242,39 @@ function App() {
           </p>
         )}
       </div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-title">Upstream Tweak Store</div>
+        <p style={{ color: "var(--muted)", marginBottom: 14 }}>
+          {codexPpStore?.summary ?? "Fetches the live approved Codex++ Tweak Store registry and derives safe archive URLs from approved commits."}
+        </p>
+        <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+          <span className="info-key">Source URL</span>
+          <span className="info-val">{codexPpStore?.sourceUrl ?? "https://b-nnett.github.io/codex-plusplus/store/index.json"}</span>
+          <span className="info-key">Generated At</span>
+          <span className="info-val">{codexPpStore?.generatedAt ?? "-"}</span>
+          <span className="info-key">Fetched At</span>
+          <span className="info-val">{codexPpStore?.fetchedAt ?? "-"}</span>
+          <span className="info-key">Entries</span>
+          <span className="info-val">{codexPpStore?.entries.length ?? 0}</span>
+        </div>
+        {(codexPpStore?.legacyRecommendations?.length ?? 0) > 0 && (
+          <div className="route-list" style={{ marginTop: 14, marginBottom: 0 }}>
+            {codexPpStore?.legacyRecommendations?.map(item => (
+              <div key={item.name} className="route-item">
+                <div className="route-info">
+                  <div className="route-name">{item.name}</div>
+                  <div className="route-path">
+                    {item.note}{item.replacementEntryId ? ` · Replacement: ${item.replacementEntryId}` : ""}
+                  </div>
+                </div>
+                <span className={`badge ${item.exactMatch ? "badge-green" : "badge-amber"}`}>
+                  {item.exactMatch ? "matched" : "legacy"}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="tweak-grid">
         {storeEntries.map(entry => (
           <div key={entry.id} className="tweak-card">
@@ -3211,6 +3290,19 @@ function App() {
             <div className="tweak-card-tags">
               {(entry.manifest.tags ?? []).map(tag => <span key={tag} className="tweak-tag">{tag}</span>)}
               <span className="tweak-tag">{entry.approvedCommitSha.slice(0, 7)}</span>
+              {entry.installed_version && <span className="tweak-tag">installed {entry.installed_version}</span>}
+            </div>
+            <div className="info-grid" style={{ marginTop: 10, paddingTop: 10 }}>
+              <span className="info-key">Repo</span>
+              <span className="info-val">{entry.repo}</span>
+              <span className="info-key">Archive</span>
+              <span className="info-val">{entry.archiveUrl ?? "Derived after registry validation"}</span>
+              {entry.installedPath && (
+                <>
+                  <span className="info-key">Installed Path</span>
+                  <span className="info-val">{entry.installedPath}</span>
+                </>
+              )}
             </div>
             <div className="tweak-card-footer">
               <span className="tweak-card-author">{entry.repo}</span>
@@ -3218,7 +3310,10 @@ function App() {
                 <button className="btn btn-primary" onClick={() => void installCodexPpTweak(entry)} disabled={codexPpLoading}>
                   {entry.installed ? "Reinstall" : "Install"}
                 </button>
+                <button className="btn" onClick={() => window.open(`https://github.com/${entry.repo}`, "_blank")}>GitHub</button>
+                {entry.archiveUrl && <button className="btn" onClick={() => void copyPath(entry.archiveUrl ?? "")}>Copy URL</button>}
                 {entry.releaseUrl && <button className="btn" onClick={() => window.open(entry.releaseUrl ?? "", "_blank")}>Release</button>}
+                {entry.reviewUrl && <button className="btn" onClick={() => window.open(entry.reviewUrl ?? "", "_blank")}>Review</button>}
               </div>
             </div>
           </div>

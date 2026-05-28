@@ -2,6 +2,7 @@ mod claude_code_binding;
 mod codex_binding;
 mod codex_gateway;
 mod codex_pp;
+mod coldstart;
 mod commands;
 mod compatibility;
 mod database;

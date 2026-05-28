@@ -2,6 +2,15 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.8.6 - 2026-05-28
+
+- Added a full Codex++ Upstream Tweak Store view sourced from the approved upstream registry at `https://b-nnett.github.io/codex-plusplus/store/index.json`.
+- Added derived archive URLs, source repository links, approved commit display, install status, and installed path reporting for upstream tweak entries.
+- Added legacy recommendation mapping for the four requested script names, making clear which names are not exact upstream registry entries and pointing usage-related items to `Bennett's UI Improvements`.
+- Hardened Codex++ store validation by requiring schema version 1, safe `owner/repo` values, matching manifest repos, and full 40-character approved commit SHAs.
+- Refactored Cold Start diagnostics out of `commands.rs` into `coldstart.rs` while preserving the existing check and repair command surface.
+- Added regression tests for archive URL derivation, invalid store entries, installed tweak detection, and legacy recommendation mapping.
+
 ## 1.8.5 - 2026-05-28
 
 - Added a Codex++ Recommended Scripts panel for `Codex Context Used Meter`, `Hide Usage Alert`, `Codex Token Usage`, and `Codex List Pagebuster`.

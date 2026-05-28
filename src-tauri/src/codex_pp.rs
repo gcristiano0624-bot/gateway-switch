@@ -13,7 +13,7 @@ use std::{
     process::{Command, Stdio},
     sync::{Arc, Mutex},
     thread,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Emitter};
 
@@ -199,6 +199,14 @@ pub struct CodexPpStoreIndex {
     pub schema_version: u8,
     #[serde(rename = "generatedAt", default)]
     pub generated_at: Option<String>,
+    #[serde(rename = "sourceUrl", default)]
+    pub source_url: Option<String>,
+    #[serde(rename = "fetchedAt", default)]
+    pub fetched_at: Option<String>,
+    #[serde(default)]
+    pub summary: Option<String>,
+    #[serde(rename = "legacyRecommendations", default)]
+    pub legacy_recommendations: Vec<CodexPpLegacyRecommendation>,
     pub entries: Vec<CodexPpStoreEntry>,
 }
 
@@ -219,10 +227,24 @@ pub struct CodexPpStoreEntry {
     pub release_url: Option<String>,
     #[serde(rename = "reviewUrl", default)]
     pub review_url: Option<String>,
+    #[serde(rename = "archiveUrl", default)]
+    pub archive_url: Option<String>,
     #[serde(default)]
     pub installed: bool,
     #[serde(default)]
     pub installed_version: Option<String>,
+    #[serde(rename = "installedPath", default)]
+    pub installed_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodexPpLegacyRecommendation {
+    pub name: String,
+    #[serde(rename = "exactMatch")]
+    pub exact_match: bool,
+    #[serde(rename = "replacementEntryId", default)]
+    pub replacement_entry_id: Option<String>,
+    pub note: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -431,7 +453,11 @@ fn set_tweak_enabled_in_config(config: &mut Value, id: &str, enabled: bool) -> R
 }
 
 pub async fn fetch_store() -> Result<CodexPpStoreIndex, String> {
-    let mut index = reqwest::Client::new()
+    let fetched_at = chrono::Utc::now().to_rfc3339();
+    let mut index = reqwest::Client::builder()
+        .timeout(Duration::from_secs(12))
+        .build()
+        .map_err(|e| e.to_string())?
         .get(STORE_INDEX_URL)
         .header("User-Agent", "Gateway-Switch")
         .send()
@@ -442,22 +468,7 @@ pub async fn fetch_store() -> Result<CodexPpStoreIndex, String> {
         .json::<CodexPpStoreIndex>()
         .await
         .map_err(|e| e.to_string())?;
-    let installed: HashMap<String, String> = list_tweaks()?
-        .into_iter()
-        .map(|t| (t.id, t.version))
-        .collect();
-    for entry in &mut index.entries {
-        if let Some(version) = installed.get(&entry.id) {
-            entry.installed = true;
-            entry.installed_version = Some(version.clone());
-        }
-    }
-    index.entries.sort_by(|a, b| {
-        a.manifest
-            .name
-            .to_lowercase()
-            .cmp(&b.manifest.name.to_lowercase())
-    });
+    enrich_store_index(&mut index, &user_root(), fetched_at)?;
     Ok(index)
 }
 
@@ -519,6 +530,211 @@ pub async fn install_from_store(
     copy_dir(&source, &target)?;
     let _ = fs::remove_dir_all(&tmp_root);
     list_tweaks()
+}
+
+fn enrich_store_index(
+    index: &mut CodexPpStoreIndex,
+    root: &Path,
+    fetched_at: String,
+) -> Result<(), String> {
+    if index.schema_version != 1 {
+        return Err(format!(
+            "Unsupported Codex++ store schema version: {}",
+            index.schema_version
+        ));
+    }
+
+    let installed = installed_tweaks_for_root(root)?;
+    for entry in &mut index.entries {
+        validate_store_entry(entry)?;
+        entry.archive_url = Some(store_archive_url(&entry.repo, &entry.approved_commit_sha)?);
+        if let Some(tweak) = installed.get(&entry.id) {
+            entry.installed = true;
+            entry.installed_version = Some(tweak.version.clone());
+            entry.installed_path = Some(tweak.dir.clone());
+        } else {
+            entry.installed = false;
+            entry.installed_version = None;
+            entry.installed_path = None;
+        }
+    }
+
+    index.entries.sort_by(|a, b| {
+        a.manifest
+            .name
+            .to_lowercase()
+            .cmp(&b.manifest.name.to_lowercase())
+    });
+    index.source_url = Some(STORE_INDEX_URL.into());
+    index.fetched_at = Some(fetched_at);
+    index.legacy_recommendations = legacy_recommendations(&index.entries);
+    let exact_legacy_matches = index
+        .legacy_recommendations
+        .iter()
+        .filter(|item| item.exact_match)
+        .count();
+    index.summary = Some(format!(
+        "{} upstream tweaks loaded. {} of {} legacy requested scripts matched exact upstream entries.",
+        index.entries.len(),
+        exact_legacy_matches,
+        RECOMMENDED_SCRIPTS.len()
+    ));
+    Ok(())
+}
+
+fn installed_tweaks_for_root(root: &Path) -> Result<HashMap<String, CodexPpTweak>, String> {
+    let tweaks_dir = root.join("tweaks");
+    let mut installed = HashMap::new();
+    if !tweaks_dir.exists() {
+        return Ok(installed);
+    }
+    let config = read_json(&root.join("config.json")).unwrap_or(Value::Null);
+    for entry in fs::read_dir(&tweaks_dir).map_err(|e| e.to_string())? {
+        let path = entry.map_err(|e| e.to_string())?.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let manifest_path = path.join("manifest.json");
+        if !manifest_path.exists() {
+            continue;
+        }
+        let manifest: CodexPpManifest = read_json_typed(&manifest_path)?;
+        if manifest.id.is_empty() {
+            continue;
+        }
+        let enabled = is_tweak_enabled(&config, &manifest.id);
+        let entry_path = resolve_entry(&path, &manifest);
+        installed.insert(
+            manifest.id.clone(),
+            CodexPpTweak {
+                id: manifest.id.clone(),
+                name: manifest.name,
+                version: manifest.version,
+                description: manifest.description,
+                scope: manifest.scope.unwrap_or_else(|| "renderer".into()),
+                github_repo: manifest.github_repo,
+                author: author_to_string(manifest.author.as_ref()),
+                icon_url: manifest.icon_url,
+                tags: manifest.tags,
+                permissions: manifest.permissions,
+                dir: path.display().to_string(),
+                manifest_path: manifest_path.display().to_string(),
+                entry_path: entry_path.as_ref().map(|p| p.display().to_string()),
+                entry_exists: entry_path.as_ref().map(|p| p.exists()).unwrap_or(false),
+                enabled,
+                update_available: false,
+                latest_version: None,
+                release_url: None,
+            },
+        );
+    }
+    Ok(installed)
+}
+
+fn validate_store_entry(entry: &CodexPpStoreEntry) -> Result<(), String> {
+    if entry.id.trim().is_empty() {
+        return Err("Codex++ store entry is missing id".into());
+    }
+    if entry.manifest.id.trim().is_empty()
+        || entry.manifest.name.trim().is_empty()
+        || entry.manifest.version.trim().is_empty()
+    {
+        return Err(format!(
+            "Codex++ store entry {} is missing required manifest fields",
+            entry.id
+        ));
+    }
+    if entry.manifest.id != entry.id {
+        return Err(format!(
+            "Codex++ store entry {} id does not match manifest id {}",
+            entry.id, entry.manifest.id
+        ));
+    }
+    if !valid_repo(&entry.repo) {
+        return Err(format!("Invalid Codex++ store repo: {}", entry.repo));
+    }
+    if let Some(repo) = &entry.manifest.github_repo {
+        if repo != &entry.repo {
+            return Err(format!(
+                "Codex++ store entry {} repo does not match manifest githubRepo",
+                entry.id
+            ));
+        }
+    }
+    if !valid_sha(&entry.approved_commit_sha) {
+        return Err(format!(
+            "Codex++ store entry {} must pin a full approved commit SHA",
+            entry.id
+        ));
+    }
+    Ok(())
+}
+
+fn store_archive_url(repo: &str, approved_commit_sha: &str) -> Result<String, String> {
+    if !valid_repo(repo) || !valid_sha(approved_commit_sha) {
+        return Err("Invalid store entry repo or approved commit SHA".into());
+    }
+    Ok(format!(
+        "https://codeload.github.com/{repo}/tar.gz/{approved_commit_sha}"
+    ))
+}
+
+fn legacy_recommendations(entries: &[CodexPpStoreEntry]) -> Vec<CodexPpLegacyRecommendation> {
+    RECOMMENDED_SCRIPTS
+        .iter()
+        .map(|(_, name, _, _)| legacy_recommendation_for(name, entries))
+        .collect()
+}
+
+fn legacy_recommendation_for(
+    name: &str,
+    entries: &[CodexPpStoreEntry],
+) -> CodexPpLegacyRecommendation {
+    let normalized = normalize_label(name);
+    let exact = entries
+        .iter()
+        .find(|entry| normalize_label(&entry.manifest.name) == normalized);
+    if let Some(entry) = exact {
+        return CodexPpLegacyRecommendation {
+            name: name.into(),
+            exact_match: true,
+            replacement_entry_id: Some(entry.id.clone()),
+            note: format!("Exact upstream registry match: {}", entry.manifest.name),
+        };
+    }
+
+    let replacement_entry_id = if matches!(
+        name,
+        "Codex Context Used Meter" | "Hide Usage Alert" | "Codex Token Usage"
+    ) {
+        entries
+            .iter()
+            .find(|entry| entry.id == UI_IMPROVEMENTS_TWEAK_ID)
+            .map(|entry| entry.id.clone())
+    } else {
+        None
+    };
+    let note = match replacement_entry_id.as_deref() {
+        Some(UI_IMPROVEMENTS_TWEAK_ID) => {
+            "No exact upstream entry found. Bennett's UI Improvements is the closest approved tweak for hiding prompts and surfacing usage/message metrics."
+        }
+        _ => "No exact upstream registry entry found for this legacy script name.",
+    };
+
+    CodexPpLegacyRecommendation {
+        name: name.into(),
+        exact_match: false,
+        replacement_entry_id,
+        note: note.into(),
+    }
+}
+
+fn normalize_label(value: &str) -> String {
+    value
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .flat_map(|c| c.to_lowercase())
+        .collect()
 }
 
 pub fn uninstall_tweak(id: String) -> Result<Vec<CodexPpTweak>, String> {
@@ -3343,6 +3559,8 @@ fn valid_repo(repo: &str) -> bool {
     parts.len() == 2
         && parts.iter().all(|p| {
             !p.is_empty()
+                && *p != "."
+                && *p != ".."
                 && p.chars()
                     .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
         })
@@ -3571,6 +3789,98 @@ mod native_install_acceptance_tests {
         assert!(report.scripts[1..]
             .iter()
             .all(|script| script.status == "missing"));
+    }
+
+    fn sample_store_entry(id: &str, name: &str, repo: &str, sha: &str) -> CodexPpStoreEntry {
+        CodexPpStoreEntry {
+            id: id.into(),
+            manifest: CodexPpManifest {
+                id: id.into(),
+                name: name.into(),
+                version: "1.0.0".into(),
+                github_repo: Some(repo.into()),
+                description: Some("sample".into()),
+                ..Default::default()
+            },
+            repo: repo.into(),
+            approved_commit_sha: sha.into(),
+            approved_at: None,
+            approved_by: None,
+            platforms: None,
+            release_url: None,
+            review_url: None,
+            archive_url: None,
+            installed: false,
+            installed_version: None,
+            installed_path: None,
+        }
+    }
+
+    #[test]
+    fn store_archive_url_requires_full_approved_sha() {
+        assert_eq!(
+            store_archive_url(
+                "b-nnett/codex-plusplus-bennett-ui",
+                "17156ac0cc3402284b09c13c74754eda70388f50",
+            )
+            .unwrap(),
+            "https://codeload.github.com/b-nnett/codex-plusplus-bennett-ui/tar.gz/17156ac0cc3402284b09c13c74754eda70388f50"
+        );
+        assert!(store_archive_url("b-nnett/codex-plusplus-bennett-ui", "17156ac").is_err());
+        assert!(store_archive_url("../bad", "17156ac0cc3402284b09c13c74754eda70388f50").is_err());
+    }
+
+    #[test]
+    fn enrich_store_index_sets_archive_status_and_legacy_mapping() {
+        let root =
+            std::env::temp_dir().join(format!("gateway-switch-store-index-{}", now_millis()));
+        let tweak_dir = root.join("tweaks").join(UI_IMPROVEMENTS_TWEAK_ID);
+        fs::create_dir_all(&tweak_dir).expect("create installed tweak");
+        fs::write(
+            tweak_dir.join("manifest.json"),
+            r#"{
+              "id": "co.bennett.ui-improvements",
+              "name": "Bennett's UI Improvements",
+              "version": "1.0.3",
+              "githubRepo": "b-nnett/codex-plusplus-bennett-ui",
+              "scope": "both"
+            }"#,
+        )
+        .expect("write manifest");
+
+        let mut index = CodexPpStoreIndex {
+            schema_version: 1,
+            generated_at: Some("test".into()),
+            source_url: None,
+            fetched_at: None,
+            summary: None,
+            legacy_recommendations: vec![],
+            entries: vec![sample_store_entry(
+                UI_IMPROVEMENTS_TWEAK_ID,
+                "Bennett's UI Improvements",
+                "b-nnett/codex-plusplus-bennett-ui",
+                "17156ac0cc3402284b09c13c74754eda70388f50",
+            )],
+        };
+        enrich_store_index(&mut index, &root, "now".into()).expect("enrich store");
+        let _ = fs::remove_dir_all(&root);
+
+        assert_eq!(index.source_url.as_deref(), Some(STORE_INDEX_URL));
+        assert_eq!(index.fetched_at.as_deref(), Some("now"));
+        assert_eq!(index.entries[0].archive_url.as_deref(), Some("https://codeload.github.com/b-nnett/codex-plusplus-bennett-ui/tar.gz/17156ac0cc3402284b09c13c74754eda70388f50"));
+        assert!(index.entries[0].installed);
+        assert_eq!(index.entries[0].installed_version.as_deref(), Some("1.0.3"));
+        assert!(index
+            .legacy_recommendations
+            .iter()
+            .any(|item| item.name == "Codex Token Usage"
+                && item.replacement_entry_id.as_deref() == Some(UI_IMPROVEMENTS_TWEAK_ID)));
+    }
+
+    #[test]
+    fn validate_store_entry_rejects_unpinned_registry_entries() {
+        let entry = sample_store_entry("co.example.bad", "Bad", "example/bad", "short-sha");
+        assert!(validate_store_entry(&entry).is_err());
     }
 
     #[test]

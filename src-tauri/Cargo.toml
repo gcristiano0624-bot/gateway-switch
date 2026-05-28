@@ -1,6 +1,6 @@
 [package]
 name = "gateway-switch"
-version = "1.8.4"
+version = "1.8.5"
 description = "Gateway Switch - Claude and Codex Model Router"
 authors = ["Hugo Guan"]
 edition = "2021"

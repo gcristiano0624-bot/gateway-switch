@@ -1241,7 +1241,7 @@ dependencies = [
 
 [[package]]
 name = "gateway-switch"
-version = "1.8.4"
+version = "1.8.5"
 dependencies = [
  "async-stream",
  "axum",

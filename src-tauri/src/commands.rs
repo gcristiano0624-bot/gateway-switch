@@ -688,6 +688,18 @@ pub fn get_codex_pp_preflight() -> Result<codex_pp::CodexPpPreflight, String> {
 }
 
 #[tauri::command]
+pub fn get_codex_pp_recommended_scripts(
+) -> Result<codex_pp::CodexPpRecommendedScriptsReport, String> {
+    Ok(codex_pp::recommended_scripts_report())
+}
+
+#[tauri::command]
+pub fn install_codex_pp_recommended_scripts(
+) -> Result<codex_pp::CodexPpRecommendedScriptsReport, String> {
+    codex_pp::install_recommended_scripts()
+}
+
+#[tauri::command]
 pub fn run_codex_pp_cli(
     app: AppHandle,
     action: String,

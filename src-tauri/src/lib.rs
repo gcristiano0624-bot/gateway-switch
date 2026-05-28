@@ -130,6 +130,8 @@ pub fn run() {
             commands::uninstall_codex_pp_tweak,
             commands::get_codex_pp_health,
             commands::get_codex_pp_preflight,
+            commands::get_codex_pp_recommended_scripts,
+            commands::install_codex_pp_recommended_scripts,
             commands::run_codex_pp_cli,
             commands::open_codex_pp_path,
             commands::list_model_aliases,

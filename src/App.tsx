@@ -222,6 +222,22 @@ type CodexPpPreflight = {
   checks: CodexPpPreflightCheck[];
 };
 
+type CodexPpRecommendedScript = {
+  id: string;
+  name: string;
+  description: string;
+  file_name: string;
+  status: string;
+  path: string | null;
+};
+
+type CodexPpRecommendedScriptsReport = {
+  storage_mode: string;
+  storage_path: string | null;
+  summary: string;
+  scripts: CodexPpRecommendedScript[];
+};
+
 type CodexPpLogEvent = {
   session_id: string;
   stream: string;
@@ -970,6 +986,46 @@ const MOCK_CODEX_PP_PREFLIGHT: CodexPpPreflight = {
   ],
 };
 
+const MOCK_CODEX_PP_RECOMMENDED_SCRIPTS: CodexPpRecommendedScriptsReport = {
+  storage_mode: "unknown",
+  storage_path: null,
+  summary: "Browser preview: native Codex++ user-script storage is not detected.",
+  scripts: [
+    {
+      id: "codex-context-used-meter",
+      name: "Codex Context Used Meter",
+      description: "Shows Codex context usage directly in the app UI.",
+      file_name: "market-codex-context-used-meter.js",
+      status: "unknown",
+      path: null,
+    },
+    {
+      id: "hide-usage-alert",
+      name: "Hide Usage Alert",
+      description: "Hides repeated usage/quota warning banners.",
+      file_name: "market-hide-usage-alert.js",
+      status: "unknown",
+      path: null,
+    },
+    {
+      id: "codex-token-usage",
+      name: "Codex Token Usage",
+      description: "Displays token input/output/cache metrics.",
+      file_name: "market-codex-token-usage.js",
+      status: "unknown",
+      path: null,
+    },
+    {
+      id: "codex-list-pagebuster",
+      name: "Codex List Pagebuster",
+      description: "Improves the Codex session list and sidebar navigation ergonomics.",
+      file_name: "market-codex-list-pagebuster.js",
+      status: "unknown",
+      path: null,
+    },
+  ],
+};
+
 const MOCK_LOGS: RequestLog[] = [
   {
     request_id: "preview-1",
@@ -1287,6 +1343,7 @@ function App() {
   const [codexPpStore, setCodexPpStore] = useState<CodexPpStoreIndex | null>(null);
   const [codexPpHealth, setCodexPpHealth] = useState<CodexPpHealth | null>(null);
   const [codexPpPreflight, setCodexPpPreflight] = useState<CodexPpPreflight | null>(null);
+  const [codexPpRecommendedScripts, setCodexPpRecommendedScripts] = useState<CodexPpRecommendedScriptsReport | null>(null);
   const [codexPpCli, setCodexPpCli] = useState<CodexPpCliResult | null>(null);
   const [codexPpLogLines, setCodexPpLogLines] = useState<string[]>([]);
   const [codexPpLoading, setCodexPpLoading] = useState(false);
@@ -1356,13 +1413,14 @@ function App() {
       setCodexPpStore(MOCK_CODEX_PP_STORE);
       setCodexPpHealth(MOCK_CODEX_PP_HEALTH);
       setCodexPpPreflight(MOCK_CODEX_PP_PREFLIGHT);
+      setCodexPpRecommendedScripts(MOCK_CODEX_PP_RECOMMENDED_SCRIPTS);
       setClaudeAliases(DEFAULT_CLAUDE_ALIASES.map((alias, index) => ({ id: `mock-claude-${index}`, alias, alias_type: "claude", created_at: null })));
       setCodexAliases(DEFAULT_CODEX_MODELS.map((alias, index) => ({ id: `mock-codex-${index}`, alias, alias_type: "codex", created_at: null })));
       return;
     }
 
     try {
-      const [s, p, r, d, cc, l, cfg, cs, cr, cb, cold, mcp, ca, cma, cppInstall, cppTweaks, cppHealth, cppPreflight] = await Promise.all([
+      const [s, p, r, d, cc, l, cfg, cs, cr, cb, cold, mcp, ca, cma, cppInstall, cppTweaks, cppHealth, cppPreflight, cppScripts] = await Promise.all([
         invoke<Status>("get_status"),
         invoke<Provider[]>("list_providers"),
         invoke<ModelRoute[]>("list_routes"),
@@ -1381,6 +1439,7 @@ function App() {
         invoke<CodexPpTweak[]>("list_codex_pp_tweaks"),
         invoke<CodexPpHealth>("get_codex_pp_health"),
         invoke<CodexPpPreflight>("get_codex_pp_preflight"),
+        invoke<CodexPpRecommendedScriptsReport>("get_codex_pp_recommended_scripts"),
       ]);
       setStatus(s);
       setProviders(p);
@@ -1400,6 +1459,7 @@ function App() {
       setCodexPpTweaks(cppTweaks);
       setCodexPpHealth(cppHealth);
       setCodexPpPreflight(cppPreflight);
+      setCodexPpRecommendedScripts(cppScripts);
     } catch (e) {
       setError(String(e));
     }
@@ -1661,19 +1721,22 @@ function App() {
         setCodexPpTweaks(MOCK_CODEX_PP_TWEAKS);
         setCodexPpHealth(MOCK_CODEX_PP_HEALTH);
         setCodexPpPreflight(MOCK_CODEX_PP_PREFLIGHT);
+        setCodexPpRecommendedScripts(MOCK_CODEX_PP_RECOMMENDED_SCRIPTS);
         if (includeStore) setCodexPpStore(MOCK_CODEX_PP_STORE);
         return;
       }
-      const [install, tweaks, health, preflight] = await Promise.all([
+      const [install, tweaks, health, preflight, scripts] = await Promise.all([
         invoke<CodexPpInstall>("detect_codex_pp"),
         invoke<CodexPpTweak[]>("list_codex_pp_tweaks"),
         invoke<CodexPpHealth>("get_codex_pp_health"),
         invoke<CodexPpPreflight>("get_codex_pp_preflight"),
+        invoke<CodexPpRecommendedScriptsReport>("get_codex_pp_recommended_scripts"),
       ]);
       setCodexPpInstall(install);
       setCodexPpTweaks(tweaks);
       setCodexPpHealth(health);
       setCodexPpPreflight(preflight);
+      setCodexPpRecommendedScripts(scripts);
       if (includeStore) {
         setCodexPpStore(await invoke<CodexPpStoreIndex>("fetch_codex_pp_store"));
       }
@@ -1734,6 +1797,22 @@ function App() {
       await refreshCodexPp(true);
       flash("Tweak installed");
     } catch (e) {
+      flash(String(e), "error");
+    } finally {
+      setCodexPpLoading(false);
+    }
+  };
+
+  const installCodexPpRecommendedScripts = async () => {
+    setCodexPpLoading(true);
+    try {
+      const report = isTauriRuntime
+        ? await invoke<CodexPpRecommendedScriptsReport>("install_codex_pp_recommended_scripts")
+        : { ...MOCK_CODEX_PP_RECOMMENDED_SCRIPTS };
+      setCodexPpRecommendedScripts(report);
+      flash("Recommended scripts installed. Restart Codex if they do not hot-load.");
+    } catch (e) {
+      await refreshCodexPp(false);
       flash(String(e), "error");
     } finally {
       setCodexPpLoading(false);
@@ -1873,7 +1952,7 @@ function App() {
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.8.4</div>
+          <div className="brand-sub">v1.8.5</div>
         </div>
       </div>
 
@@ -1942,7 +2021,7 @@ function App() {
         <span className="status-text">
           Claude <strong>{status?.gateway_running ? t("Running") : t("Stopped")}</strong> · Codex <strong>{codexStatus?.running ? t("Running") : t("Stopped")}</strong>
         </span>
-        <span className="sidebar-version">v1.8.4</span>
+        <span className="sidebar-version">v1.8.5</span>
       </div>
     </aside>
   );
@@ -2866,6 +2945,9 @@ function App() {
     if (status === "ok") return "badge-green";
     if (status === "warn") return "badge-amber";
     if (status === "error") return "badge-red";
+    if (status === "installed") return "badge-green";
+    if (status === "missing" || status === "needs_reload") return "badge-amber";
+    if (status === "unknown") return "badge-gray";
     return "badge-gray";
   };
 
@@ -3068,12 +3150,51 @@ function App() {
       <div className="page-header page-header-row">
         <div>
           <h1>Codex++ 脚本市场</h1>
-          <p>读取官方 store index，安装时使用 approved commit SHA 并备份同名本地 tweak。</p>
+          <p>优先恢复 Codex++ 原生推荐脚本；下方仍保留官方 Tweak Store。</p>
         </div>
         <div className="qa-buttons" style={{ margin: 0 }}>
           <input value={codexPpSearch} onChange={e => setCodexPpSearch(e.target.value)} placeholder="Search tweaks..." style={{ minWidth: 220 }} />
           <button className="btn" onClick={() => void refreshCodexPp(true)} disabled={codexPpLoading}><IconRefresh /> Refresh Store</button>
         </div>
+      </div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-title">Recommended Scripts</div>
+        <p style={{ color: "var(--muted)", marginBottom: 14 }}>
+          {codexPpRecommendedScripts?.summary ?? "Detecting Codex++ native user-script storage..."}
+        </p>
+        <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+          <span className="info-key">Storage Mode</span>
+          <span className="info-val">{codexPpRecommendedScripts?.storage_mode ?? "-"}</span>
+          <span className="info-key">Storage Path</span>
+          <span className="info-val">{codexPpRecommendedScripts?.storage_path ?? "Not detected"}</span>
+        </div>
+        <div className="route-list" style={{ marginBottom: 0 }}>
+          {(codexPpRecommendedScripts?.scripts ?? []).map(script => (
+            <div key={script.id} className="route-item">
+              <div className="route-info">
+                <div className="route-name">{script.name}</div>
+                <div className="route-path">{script.file_name} · {script.description}</div>
+              </div>
+              <span className={`badge ${codexPpStatusBadge(script.status)}`}>{script.status}</span>
+            </div>
+          ))}
+        </div>
+        <div className="qa-buttons" style={{ marginTop: 16 }}>
+          <button className="btn btn-primary" onClick={() => void installCodexPpRecommendedScripts()} disabled={codexPpLoading || codexPpRecommendedScripts?.storage_mode !== "codex_user_scripts"}>
+            Install Recommended Scripts
+          </button>
+          <button className="btn" onClick={() => void refreshCodexPp(false)} disabled={codexPpLoading}>
+            <IconRefresh /> Refresh Script Status
+          </button>
+          <button className="btn" onClick={() => void openCodexPpPath("log")}>
+            Open Logs
+          </button>
+        </div>
+        {codexPpRecommendedScripts?.storage_mode !== "codex_user_scripts" && (
+          <p style={{ marginTop: 12, marginBottom: 0, color: "var(--muted)", fontSize: 12 }}>
+            当前 Codex++ runtime 未暴露原生用户脚本目录。Gateway Switch 会保持安全门禁，不会把脚本写入未知路径。
+          </p>
+        )}
       </div>
       <div className="tweak-grid">
         {storeEntries.map(entry => (

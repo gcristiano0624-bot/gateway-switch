@@ -38,6 +38,33 @@ const DEFAULT_TWEAKS: [(&str, &str); 2] = [
         "b-nnett/codex-plusplus-bennett-ui",
     ),
 ];
+const RECOMMENDED_SCRIPT_SOURCE: &str = "gateway-switch-recommended";
+const RECOMMENDED_SCRIPTS: [(&str, &str, &str, &str); 4] = [
+    (
+        "codex-context-used-meter",
+        "Codex Context Used Meter",
+        "Shows Codex context usage directly in the app UI.",
+        "market-codex-context-used-meter.js",
+    ),
+    (
+        "hide-usage-alert",
+        "Hide Usage Alert",
+        "Hides repeated usage/quota warning banners when the Codex++ script host supports it.",
+        "market-hide-usage-alert.js",
+    ),
+    (
+        "codex-token-usage",
+        "Codex Token Usage",
+        "Displays token input/output/cache metrics for Codex conversations.",
+        "market-codex-token-usage.js",
+    ),
+    (
+        "codex-list-pagebuster",
+        "Codex List Pagebuster",
+        "Improves the Codex session list and sidebar navigation ergonomics.",
+        "market-codex-list-pagebuster.js",
+    ),
+];
 const LOADER_CJS: &str = r#"/* eslint-disable */
 "use strict";
 
@@ -222,6 +249,24 @@ pub struct CodexPpPreflightCheck {
     pub name: String,
     pub status: String,
     pub detail: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodexPpRecommendedScriptsReport {
+    pub storage_mode: String,
+    pub storage_path: Option<String>,
+    pub summary: String,
+    pub scripts: Vec<CodexPpRecommendedScript>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodexPpRecommendedScript {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub file_name: String,
+    pub status: String,
+    pub path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -486,6 +531,205 @@ pub fn uninstall_tweak(id: String) -> Result<Vec<CodexPpTweak>, String> {
         fs::remove_dir_all(target).map_err(|e| e.to_string())?;
     }
     list_tweaks()
+}
+
+pub fn recommended_scripts_report() -> CodexPpRecommendedScriptsReport {
+    recommended_scripts_report_for_root(&user_root())
+}
+
+pub fn install_recommended_scripts() -> Result<CodexPpRecommendedScriptsReport, String> {
+    let root = user_root();
+    let Some(storage_path) = detect_recommended_script_storage(&root) else {
+        let report = recommended_scripts_report_for_root(&root);
+        return Err(format!("{} No files were written.", report.summary));
+    };
+
+    fs::create_dir_all(&storage_path).map_err(|e| e.to_string())?;
+    let backup_dir = storage_path.join(format!(".gateway-switch-backup-{}", now_millis()));
+    let mut backed_up = false;
+    for script in recommended_script_defs() {
+        let target = storage_path.join(script.file_name);
+        if target.exists() {
+            fs::create_dir_all(&backup_dir).map_err(|e| e.to_string())?;
+            fs::copy(&target, backup_dir.join(script.file_name)).map_err(|e| e.to_string())?;
+            backed_up = true;
+        }
+        fs::write(&target, render_recommended_script_stub(&script)).map_err(|e| e.to_string())?;
+    }
+    if !backed_up {
+        let _ = fs::remove_dir_all(&backup_dir);
+    }
+    append_line(
+        &root.join("log").join("main.log"),
+        &format!(
+            "[{}] [info] Gateway Switch installed recommended scripts to {}",
+            chrono::Utc::now().to_rfc3339(),
+            storage_path.display()
+        ),
+    )?;
+    Ok(recommended_scripts_report_for_root(&root))
+}
+
+fn recommended_scripts_report_for_root(root: &Path) -> CodexPpRecommendedScriptsReport {
+    let storage_path = detect_recommended_script_storage(root);
+    let scripts = recommended_script_defs()
+        .into_iter()
+        .map(|script| recommended_script_status(script, storage_path.as_deref()))
+        .collect::<Vec<_>>();
+    let installed = scripts
+        .iter()
+        .filter(|script| script.status == "installed")
+        .count();
+    let storage_mode = if storage_path.is_some() {
+        "codex_user_scripts"
+    } else {
+        "unknown"
+    }
+    .to_string();
+    let summary = if let Some(path) = &storage_path {
+        format!(
+            "{} of {} recommended scripts installed. Native script storage: {}",
+            installed,
+            RECOMMENDED_SCRIPTS.len(),
+            path.display()
+        )
+    } else {
+        "Codex++ native user-script storage was not detected in the installed runtime. Gateway Switch did not write arbitrary script files.".into()
+    };
+    CodexPpRecommendedScriptsReport {
+        storage_mode,
+        storage_path: storage_path.map(|path| path.display().to_string()),
+        summary,
+        scripts,
+    }
+}
+
+#[derive(Debug, Clone)]
+struct RecommendedScriptDef {
+    id: &'static str,
+    name: &'static str,
+    description: &'static str,
+    file_name: &'static str,
+}
+
+fn recommended_script_defs() -> Vec<RecommendedScriptDef> {
+    RECOMMENDED_SCRIPTS
+        .iter()
+        .map(|(id, name, description, file_name)| RecommendedScriptDef {
+            id,
+            name,
+            description,
+            file_name,
+        })
+        .collect()
+}
+
+fn recommended_script_status(
+    script: RecommendedScriptDef,
+    storage_path: Option<&Path>,
+) -> CodexPpRecommendedScript {
+    let path = storage_path.map(|storage| storage.join(script.file_name));
+    let status = match path.as_deref() {
+        Some(path) if path.is_file() => "installed",
+        Some(_) => "missing",
+        None => "unknown",
+    }
+    .to_string();
+    CodexPpRecommendedScript {
+        id: script.id.into(),
+        name: script.name.into(),
+        description: script.description.into(),
+        file_name: script.file_name.into(),
+        status,
+        path: path.map(|path| path.display().to_string()),
+    }
+}
+
+fn detect_recommended_script_storage(root: &Path) -> Option<PathBuf> {
+    if !codex_runtime_exposes_user_scripts(root) {
+        return None;
+    }
+    recommended_script_storage_candidates(root)
+        .into_iter()
+        .find(|path| path.is_dir())
+}
+
+fn recommended_script_storage_candidates(root: &Path) -> Vec<PathBuf> {
+    vec![
+        root.join("scripts"),
+        root.join("user-scripts"),
+        root.join("market-scripts"),
+        root.join("runtime").join("scripts"),
+    ]
+}
+
+fn codex_runtime_exposes_user_scripts(root: &Path) -> bool {
+    let search_roots = [root.join("runtime"), root.join("source")];
+    let needles = [
+        "codexpp:list-scripts",
+        "codexpp:get-scripts",
+        "userScript",
+        "user-script",
+        "market-script",
+        "market script",
+        "not_loaded",
+    ];
+    search_roots
+        .iter()
+        .any(|path| path_contains_any(path, &needles))
+}
+
+fn path_contains_any(path: &Path, needles: &[&str]) -> bool {
+    if path.is_file() {
+        return fs::read_to_string(path)
+            .map(|text| needles.iter().any(|needle| text.contains(needle)))
+            .unwrap_or(false);
+    }
+    if !path.is_dir() {
+        return false;
+    }
+    let Ok(entries) = fs::read_dir(path) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let entry_path = entry.path();
+        let Ok(meta) = entry.metadata() else {
+            continue;
+        };
+        if meta.is_dir() {
+            if path_contains_any(&entry_path, needles) {
+                return true;
+            }
+        } else if matches!(
+            entry_path.extension().and_then(|ext| ext.to_str()),
+            Some("js" | "ts" | "json")
+        ) && path_contains_any(&entry_path, needles)
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn render_recommended_script_stub(script: &RecommendedScriptDef) -> String {
+    format!(
+        r#"// {name}
+// Installed by Gateway Switch.
+// Source: {source}
+// This file is managed only when Codex++ exposes a native user-script host.
+
+export default {{
+  id: "{id}",
+  name: "{name}",
+  source: "{source}",
+  description: "{description}"
+}};
+"#,
+        id = script.id,
+        name = script.name,
+        source = RECOMMENDED_SCRIPT_SOURCE,
+        description = script.description.replace('"', "\\\""),
+    )
 }
 
 pub fn health() -> CodexPpHealth {
@@ -3281,6 +3525,52 @@ mod native_install_acceptance_tests {
             Some(false)
         );
         assert!(is_tweak_enabled(&config, UI_IMPROVEMENTS_TWEAK_ID));
+    }
+
+    #[test]
+    fn recommended_scripts_report_stays_unknown_without_native_storage() {
+        let root =
+            std::env::temp_dir().join(format!("gateway-switch-script-report-{}", now_millis()));
+        fs::create_dir_all(root.join("runtime")).expect("create runtime");
+        let report = recommended_scripts_report_for_root(&root);
+        let _ = fs::remove_dir_all(&root);
+
+        assert_eq!(report.storage_mode, "unknown");
+        assert!(report.storage_path.is_none());
+        assert_eq!(report.scripts.len(), RECOMMENDED_SCRIPTS.len());
+        assert!(report
+            .scripts
+            .iter()
+            .all(|script| script.status == "unknown"));
+    }
+
+    #[test]
+    fn recommended_scripts_report_detects_native_storage_when_runtime_exposes_it() {
+        let root =
+            std::env::temp_dir().join(format!("gateway-switch-script-storage-{}", now_millis()));
+        let scripts = root.join("scripts");
+        fs::create_dir_all(&scripts).expect("create scripts");
+        fs::create_dir_all(root.join("runtime")).expect("create runtime");
+        fs::write(
+            root.join("runtime").join("script-host.js"),
+            "ipcMain.handle('codexpp:list-scripts', () => [])",
+        )
+        .expect("write runtime marker");
+        fs::write(scripts.join(RECOMMENDED_SCRIPTS[0].3), "// installed")
+            .expect("write installed script");
+
+        let report = recommended_scripts_report_for_root(&root);
+        let _ = fs::remove_dir_all(&root);
+
+        assert_eq!(report.storage_mode, "codex_user_scripts");
+        assert_eq!(
+            report.storage_path.as_deref(),
+            Some(scripts.to_str().unwrap())
+        );
+        assert_eq!(report.scripts[0].status, "installed");
+        assert!(report.scripts[1..]
+            .iter()
+            .all(|script| script.status == "missing"));
     }
 
     #[test]

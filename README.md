@@ -6,7 +6,7 @@
 
 > Gateway Switch 不仅仅是一个模型路由器。它是一个**运行时兼容性层**，驻留在 AI 原生桌面应用与第三方模型服务之间，弥合协议鸿沟、修复畸形工具调用、强制安全边界，并在上游 Provider 异常时优雅降级。
 
-[![Version](https://img.shields.io/badge/Version-1.8.4-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.8.5-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -141,6 +141,14 @@ Claude 和 Codex 的 `/health` 端点会暴露这些画像，外部工具无需�
 `export_diagnostics` 生成全面的 JSON 包，包含：运行时特性状态、所有 Provider 能力画像、基准测试结果、Provider 配置、路由配置、Codex 路由配置、和近期请求日志 — 远程复现和调试问题所需的一切。
 
 ---
+
+## 1.8.5 推荐脚本更新重点
+
+- **新增 Recommended Scripts 面板。** Codex++ 脚本市场页顶部现在会展示 `Codex Context Used Meter`、`Hide Usage Alert`、`Codex Token Usage`、`Codex List Pagebuster` 四个推荐脚本的状态。
+- **优先复用原生用户脚本机制。** Gateway Switch 会检测当前 Codex++ runtime 是否暴露原生 user-script storage，只有检测到稳定机制时才允许安装。
+- **安全门禁防止假安装。** 当前 runtime 未暴露用户脚本机制时，安装按钮会禁用/报错，并明确说明不会把脚本写入未知路径。
+- **新增后端检测命令。** Tauri 新增推荐脚本状态报告与安装入口，后续可在 Codex++ 上游恢复脚本机制后无缝启用。
+- **新增回归测试。** 覆盖“未暴露脚本机制时保持 unknown”以及“检测到原生脚本目录时识别 installed/missing”的行为。
 
 ## 1.8.4 UI 更新重点
 
@@ -488,7 +496,7 @@ pnpm tauri build
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.4_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.5_aarch64.dmg
 ```
 
 ---

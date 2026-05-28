@@ -2,6 +2,22 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.8.5 - 2026-05-28
+
+- Added a Codex++ Recommended Scripts panel for `Codex Context Used Meter`, `Hide Usage Alert`, `Codex Token Usage`, and `Codex List Pagebuster`.
+- Added native detection for Codex++ user-script storage before enabling recommended script installation.
+- Added safe install gating so Gateway Switch does not write script files into unknown or unsupported runtime locations.
+- Added Tauri commands for recommended script status and install workflows.
+- Added regression tests for unknown-storage and detected-storage recommended script reports.
+
+## 1.8.4 - 2026-05-28
+
+- Refined the left navigation into five product-oriented groups: Dashboard, Products, Features, General, and System.
+- Kept long sidebar labels such as `Claude Code`, `MCP Sync`, and `Cold Start` on a single line instead of forcing manual line breaks.
+- Added responsive sidebar behavior: full text labels on wider windows and compact icon-only rail on narrow windows.
+- Strengthened grid and card responsiveness with `minmax(0, 1fr)` constraints, safer table scrolling, and overflow protection for dense content.
+- Lowered the app minimum window size to `760x560` so users can resize the desktop window more flexibly without layout corruption.
+
 ## 1.8.3 - 2026-05-28
 
 - Fixed Codex++ watcher generation so launchd no longer stores a transient `/Volumes/Gateway Switch/...` DMG executable path after running Gateway Switch from a mounted installer.

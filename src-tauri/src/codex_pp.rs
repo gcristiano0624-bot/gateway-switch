@@ -25,6 +25,8 @@ const ASAR_BLOCK_SIZE: usize = 4 * 1024 * 1024;
 const NATIVE_BOOTSTRAP_STATE_FILE: &str = "native-bootstrap-state.json";
 const DEFAULT_LOCAL_SIGNING_IDENTITY: &str = "Codex++ Local Signing";
 const WATCHER_LABEL: &str = "com.codexplusplus.watcher";
+const INSTALLED_GATEWAY_SWITCH_EXECUTABLE: &str =
+    "/Applications/Gateway Switch.app/Contents/MacOS/gateway-switch";
 const UI_IMPROVEMENTS_TWEAK_ID: &str = "co.bennett.ui-improvements";
 const DEFAULT_TWEAKS: [(&str, &str); 2] = [
     (
@@ -1292,10 +1294,30 @@ fn stage_runtime_assets(
         fs::remove_dir_all(&runtime_dst).map_err(|e| e.to_string())?;
     }
     copy_dir(&runtime_src, &runtime_dst)?;
+    patch_runtime_health_compatibility(&runtime_dst)?;
     ctx.log(
         "stdout",
         format!("Staged runtime assets to {}", runtime_dst.display()),
     );
+    Ok(())
+}
+
+fn patch_runtime_health_compatibility(runtime_dir: &Path) -> Result<(), String> {
+    let old = r#"const loaded = commandSucceeds("launchctl", ["list", LAUNCHD_LABEL]);"#;
+    let new = r#"const loaded = commandSucceeds("launchctl", ["list", LAUNCHD_LABEL]) || commandSucceeds("launchctl", ["print", `gui/${process.getuid?.() ?? ""}/${LAUNCHD_LABEL}`]);"#;
+    for relative in ["watcher-health.js", "main.js"] {
+        let path = runtime_dir.join(relative);
+        if !path.exists() {
+            continue;
+        }
+        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        if content.contains(new) {
+            continue;
+        }
+        if content.contains(old) {
+            fs::write(&path, content.replace(old, new)).map_err(|e| e.to_string())?;
+        }
+    }
     Ok(())
 }
 
@@ -2423,18 +2445,47 @@ fn install_watcher_native(root: &Path, codex: &NativeCodexInstall) -> Result<Str
     let launch_agents = home.join("Library").join("LaunchAgents");
     fs::create_dir_all(&launch_agents).map_err(|e| e.to_string())?;
     let plist_path = launch_agents.join(format!("{}.plist", WATCHER_LABEL));
-    let gateway_switch = native_gateway_switch_executable()?;
+    let cli_shim = root.join("bin").join("codexplusplus");
+    if !cli_shim.exists() {
+        return Err(format!(
+            "codexplusplus CLI shim not found at {}; run repair again",
+            cli_shim.display()
+        ));
+    }
+    let watcher_command = format!(
+        "CODEX_PLUSPLUS_WATCHER=1 {} update --watcher --quiet",
+        shell_quote(&cli_shim.display().to_string())
+    );
+    let watcher_log = home
+        .join("Library")
+        .join("Logs")
+        .join("codex-plusplus-watcher.log");
+    if let Some(parent) = watcher_log.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::write(
+        &watcher_log,
+        format!(
+            "[{}] Gateway Switch installed Codex++ watcher.\n",
+            chrono::Utc::now().to_rfc3339()
+        ),
+    )
+    .map_err(|e| e.to_string())?;
     let plist = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>Label</key><string>{label}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>CODEX_PLUSPLUS_WATCHER</key><string>1</string>
+  </dict>
   <key>ProgramArguments</key>
   <array>
-    <string>{gateway_switch}</string>
-    <string>codexpp</string>
-    <string>repair</string>
+    <string>/bin/sh</string>
+    <string>-lc</string>
+    <string>{watcher_command}</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>WatchPaths</key>
@@ -2448,17 +2499,11 @@ fn install_watcher_native(root: &Path, codex: &NativeCodexInstall) -> Result<Str
 </plist>
 "#,
         label = WATCHER_LABEL,
-        gateway_switch = xml_escape(&gateway_switch.display().to_string()),
+        watcher_command = xml_escape(&watcher_command),
         asar = xml_escape(&codex.asar_path.display().to_string()),
         cwd = xml_escape(&root.display().to_string()),
-        stdout = xml_escape(&root.join("log").join("watcher.log").display().to_string()),
-        stderr = xml_escape(
-            &root
-                .join("log")
-                .join("watcher-error.log")
-                .display()
-                .to_string()
-        ),
+        stdout = xml_escape(&watcher_log.display().to_string()),
+        stderr = xml_escape(&watcher_log.display().to_string()),
     );
     fs::write(&plist_path, plist).map_err(|e| e.to_string())?;
     let _ = Command::new("launchctl")
@@ -2791,6 +2836,10 @@ fn native_gateway_switch_executable() -> Result<PathBuf, String> {
         }
     }
     let current = std::env::current_exe().map_err(|e| e.to_string())?;
+    let installed = PathBuf::from(INSTALLED_GATEWAY_SWITCH_EXECUTABLE);
+    if installed.exists() && current.starts_with("/Volumes") {
+        return Ok(installed);
+    }
     if current
         .components()
         .any(|component| component.as_os_str() == "deps")
@@ -2803,6 +2852,10 @@ fn native_gateway_switch_executable() -> Result<PathBuf, String> {
         }
     }
     Ok(current)
+}
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
 }
 
 fn find_command_on_path(command: &str) -> Option<String> {
@@ -3271,7 +3324,9 @@ mod native_install_acceptance_tests {
                 .join(format!("{}.plist", WATCHER_LABEL)),
         )
         .expect("watcher plist should exist");
-        assert!(watcher.contains("<string>codexpp</string>"));
+        assert!(watcher.contains("CODEX_PLUSPLUS_WATCHER=1"));
+        assert!(watcher.contains(" update --watcher --quiet"));
+        assert!(watcher.contains("codexplusplus"));
         assert!(!watcher.contains("cli.js"));
         std::env::remove_var("GATEWAY_SWITCH_EXECUTABLE_OVERRIDE");
     }

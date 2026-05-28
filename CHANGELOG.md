@@ -2,6 +2,14 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.8.3 - 2026-05-28
+
+- Fixed Codex++ watcher generation so launchd no longer stores a transient `/Volumes/Gateway Switch/...` DMG executable path after running Gateway Switch from a mounted installer.
+- Changed the native watcher command to the Codex++ health-check-compatible `CODEX_PLUSPLUS_WATCHER=1 codexplusplus update --watcher --quiet` form.
+- Patched staged Codex++ runtime health checks to accept modern macOS `launchctl print gui/$UID/com.codexplusplus.watcher` results when `launchctl list <label>` reports false negatives.
+- Reset watcher health logging to `~/Library/Logs/codex-plusplus-watcher.log`, the path read by the Codex++ settings page, so stale EPERM/DMG errors no longer keep the page in Review/Failed state after repair.
+- Added installed-app path preference for native shims when Gateway Switch is launched from a DMG, preventing maintenance buttons from re-opening a quarantined disk-image app.
+
 ## 1.8.2 - 2026-05-27
 
 - Added a dedicated Codex++ native debug log at `~/Library/Application Support/codex-plusplus/log/native-debug.log`.

@@ -1,6 +1,6 @@
 # Gateway Switch Project Documentation
 
-Version: 1.8.2
+Version: 1.8.3
 
 This document is the single technical source of truth for Gateway Switch. It merges the former project architecture notes and the Codex Gateway notes into one maintained file.
 
@@ -9,7 +9,7 @@ This document is the single technical source of truth for Gateway Switch. It mer
 If another AI receives this repository, start here:
 
 - Product: macOS Tauri app that routes Claude Desktop, Claude Code, and Codex App to third-party model providers.
-- Current version: `1.8.2`.
+- Current version: `1.8.3`.
 - Main frontend: `src/App.tsx` and `src/App.css`.
 - Main backend: `src-tauri/src/*.rs`.
 - Claude gateway: `src-tauri/src/gateway.rs`, local Anthropic Messages surface on `127.0.0.1:3456`.
@@ -36,7 +36,18 @@ The app solves two related but different protocol problems:
 
 The shared design goal is simple: providers share identity, auth header, auth scheme, and API key, but they do not share one universal Base URL. Provider URLs are split by protocol: OpenAI Base URL for Codex and Chat Completions fallback, Anthropic Base URL for Claude and Claude Code direct requests.
 
-## 2. Version 1.8.2 Hotfix Scope
+## 2. Version 1.8.3 Hotfix Scope
+
+Version 1.8.3 focuses on Codex++ watcher reliability after running Gateway Switch from a DMG.
+
+Main changes:
+
+- Native CLI shim and watcher generation avoid transient `/Volumes/Gateway Switch/...` executable paths and prefer `/Applications/Gateway Switch.app`.
+- The launchd watcher command now matches Codex++ runtime health expectations: `CODEX_PLUSPLUS_WATCHER=1 codexplusplus update --watcher --quiet`.
+- Staged Codex++ runtime files patch watcher health detection to accept `launchctl print gui/$UID/com.codexplusplus.watcher` on modern macOS.
+- Watcher health logs are reset and written to `~/Library/Logs/codex-plusplus-watcher.log`, which is the path the Codex++ settings page reads.
+
+## 3. Version 1.8.2 Hotfix Scope
 
 Version 1.8.2 focuses on debuggability and safe page-enhancement fallback behavior.
 
@@ -48,7 +59,7 @@ Main changes:
 - Node/npm diagnostics include raw GUI/launchd PATH, augmented PATH, and per-candidate path resolution.
 - `codexPlusPlus.uiSafeMode` is now a first-class config key with default `false`. Setting it to `true` disables only `co.bennett.ui-improvements`.
 
-## 3. Version 1.8.1 Hotfix Scope
+## 4. Version 1.8.1 Hotfix Scope
 
 Version 1.8.1 is a focused hotfix for Codex++ native repair stability and Claude Desktop route error handling.
 
@@ -67,7 +78,7 @@ Verification for 1.8.1:
 - `pnpm build`
 - `CI=false PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build`
 
-## 3. Version 1.8.0 Scope
+## 5. Version 1.8.0 Scope
 
 Version 1.8.0 focuses on turning codex++ support from an external wrapper into a native Gateway Switch product capability with real-machine validation against `Codex.app`.
 
@@ -1047,7 +1058,7 @@ macOS artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.2_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.3_aarch64.dmg
 ```
 
 ## 25. Release Checklist

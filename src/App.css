@@ -332,6 +332,7 @@ code, pre, .mono {
   padding: 24px 28px;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
+  min-width: 0;
 }
 .main-content::-webkit-scrollbar { width: 5px; }
 .main-content::-webkit-scrollbar-track { background: transparent; }
@@ -437,7 +438,7 @@ code, pre, .mono {
    ══════════════════════════════════════ */
 .two-col {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
   margin-bottom: 20px;
 }
@@ -447,6 +448,7 @@ code, pre, .mono {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
+  min-width: 0;
 }
 
 .card-title {
@@ -1116,7 +1118,7 @@ code, pre, .mono {
    ══════════════════════════════════════ */
 .providers-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 20px;
 }
@@ -1178,6 +1180,7 @@ code, pre, .mono {
 }
 
 table { width: 100%; border-collapse: collapse; }
+table { min-width: 760px; }
 
 th {
   text-align: left;
@@ -1232,7 +1235,7 @@ tr:hover td { background: var(--bg-subtle); }
    ══════════════════════════════════════ */
 .form-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -1793,6 +1796,7 @@ tr:hover td { background: var(--bg-subtle); }
   font-size: 11.5px;
   line-height: 1.4;
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -1864,7 +1868,7 @@ tr:hover td { background: var(--bg-subtle); }
    ══════════════════════════════════════ */
 .app-layout {
   grid-template-rows: none;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: clamp(190px, 20vw, 240px) minmax(0, 1fr);
 }
 
 .sidebar {
@@ -1925,6 +1929,7 @@ tr:hover td { background: var(--bg-subtle); }
   border: 1px solid transparent;
   border-radius: 7px;
   color: var(--fg-secondary);
+  min-width: 0;
 }
 
 .sidebar .nav-item.active {
@@ -1935,7 +1940,20 @@ tr:hover td { background: var(--bg-subtle); }
 }
 
 .sidebar .nav-item.active::after { display: none; }
-.sidebar .nav-label { flex: 1; text-align: left; }
+.sidebar .nav-label {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.sidebar .nav-badge {
+  flex-shrink: 0;
+}
 
 .sidebar-footer {
   margin-top: auto;
@@ -1997,7 +2015,7 @@ tr:hover td { background: var(--bg-subtle); }
 @media (max-width: 1000px) {
   .main-content { padding: 16px 18px; }
   .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .providers-grid { grid-template-columns: repeat(2, 1fr); }
+  .providers-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mcp-target-grid { grid-template-columns: 1fr; }
   .two-col, .form-row { grid-template-columns: 1fr; }
   .alias-manager-head { flex-direction: column; }
@@ -2010,6 +2028,34 @@ tr:hover td { background: var(--bg-subtle); }
   .cold-score-grid, .mcp-kpi-row, .cold-matrix { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+@media (max-width: 860px) {
+  .app-layout {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .sidebar {
+    padding: 10px 8px;
+  }
+
+  .sidebar-brand {
+    justify-content: center;
+    padding: 4px 0 12px;
+  }
+
+  .brand-text,
+  .nav-group-label,
+  .sidebar .nav-label,
+  .sidebar .nav-badge,
+  .sidebar-footer {
+    display: none;
+  }
+
+  .sidebar .nav-item {
+    justify-content: center;
+    padding: 9px 8px;
+  }
+}
+
 @media (max-width: 700px) {
   .topnav { padding: 0 12px; }
   .topnav-brand-name { display: none; }
@@ -2020,6 +2066,10 @@ tr:hover td { background: var(--bg-subtle); }
   .mcp-target-grid, .mcp-kpi-row { grid-template-columns: 1fr; }
   .cold-score-grid, .cold-matrix { grid-template-columns: 1fr; }
   .mode-switch { grid-template-columns: 1fr; }
+  .page-header-row,
+  .alias-manager-head {
+    min-width: 0;
+  }
 }
 
 /* ── Animations ── */

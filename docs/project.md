@@ -1,6 +1,6 @@
 # Gateway Switch Project Documentation
 
-Version: 1.8.3
+Version: 1.8.4
 
 This document is the single technical source of truth for Gateway Switch. It merges the former project architecture notes and the Codex Gateway notes into one maintained file.
 
@@ -9,7 +9,7 @@ This document is the single technical source of truth for Gateway Switch. It mer
 If another AI receives this repository, start here:
 
 - Product: macOS Tauri app that routes Claude Desktop, Claude Code, and Codex App to third-party model providers.
-- Current version: `1.8.3`.
+- Current version: `1.8.4`.
 - Main frontend: `src/App.tsx` and `src/App.css`.
 - Main backend: `src-tauri/src/*.rs`.
 - Claude gateway: `src-tauri/src/gateway.rs`, local Anthropic Messages surface on `127.0.0.1:3456`.
@@ -36,9 +36,9 @@ The app solves two related but different protocol problems:
 
 The shared design goal is simple: providers share identity, auth header, auth scheme, and API key, but they do not share one universal Base URL. Provider URLs are split by protocol: OpenAI Base URL for Codex and Chat Completions fallback, Anthropic Base URL for Claude and Claude Code direct requests.
 
-## 2. Version 1.8.3 Hotfix Scope
+## 2. Version 1.8.4 Hotfix Scope
 
-Version 1.8.3 focuses on Codex++ watcher reliability after running Gateway Switch from a DMG.
+Version 1.8.4 focuses on Codex++ watcher reliability after running Gateway Switch from a DMG.
 
 Main changes:
 
@@ -1058,7 +1058,7 @@ macOS artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.3_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.4_aarch64.dmg
 ```
 
 ## 25. Release Checklist

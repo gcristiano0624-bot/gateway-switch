@@ -356,13 +356,14 @@ const ZH_TEXT: Record<string, string> = {
   "Claude": "Claude",
   "Claude Code": "Claude Code",
   "Codex": "Codex",
-  "MCP Sync": "MCP 同步",
+  "MCP Sync": "MCP Sync",
   "Cold Start": "冷启动",
   "Providers": "模型服务商",
   "Logs": "日志",
   "Settings": "设置",
   "Products": "产品",
-  "Shared": "共享",
+  "Features": "功能",
+  "General": "通用",
   "System": "系统",
   "Read-only product gateway overview": "只读的产品网关总览",
   "Claude Gateway": "Claude Gateway",
@@ -1872,7 +1873,7 @@ function App() {
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.8.3</div>
+          <div className="brand-sub">v1.8.4</div>
         </div>
       </div>
 
@@ -1893,26 +1894,30 @@ function App() {
         </button>
         <button className={`nav-item ${page === "claudeCode" ? "active" : ""}`} aria-label={t("Claude Code")} title={t("Claude Code")} onClick={() => setPage("claudeCode")}>
           <IconTerminal />
-          <span className="nav-label">Claude<br />Code</span>
+          <span className="nav-label">{t("Claude Code")}</span>
         </button>
         <button className={`nav-item ${page === "codex" ? "active" : ""}`} aria-label={t("Codex")} title={t("Codex")} onClick={() => setPage("codex")}>
           <IconTerminal />
           <span className="nav-label">{t("Codex")}</span>
           {codexRoutes.length > 0 && <span className="nav-badge">{codexRoutes.length}</span>}
         </button>
+      </div>
+
+      <div className="nav-group">
+        <div className="nav-group-label">{t("Features")}</div>
         <button className={`nav-item ${page === "mcpSync" ? "active" : ""}`} aria-label={t("MCP Sync")} title={t("MCP Sync")} onClick={() => setPage("mcpSync")}>
           <IconShuffle />
-          <span className="nav-label">MCP<br />Sync</span>
+          <span className="nav-label">{t("MCP Sync")}</span>
           {mcpPreview?.merged_count ? <span className="nav-badge">{mcpPreview.merged_count}</span> : null}
         </button>
         <button className={`nav-item ${page === "coldstart" ? "active" : ""}`} aria-label={t("Cold Start")} title={t("Cold Start")} onClick={() => setPage("coldstart")}>
           <IconZap />
-          <span className="nav-label">{language === "zh" ? "冷启动" : <>Cold<br />Start</>}</span>
+          <span className="nav-label">{t("Cold Start")}</span>
         </button>
       </div>
 
       <div className="nav-group">
-        <div className="nav-group-label">{t("Shared")}</div>
+        <div className="nav-group-label">{t("General")}</div>
         <button className={`nav-item ${page === "providers" ? "active" : ""}`} aria-label={t("Providers")} title={t("Providers")} onClick={() => setPage("providers")}>
           <IconSun />
           <span className="nav-label">{t("Providers")}</span>
@@ -1937,7 +1942,7 @@ function App() {
         <span className="status-text">
           Claude <strong>{status?.gateway_running ? t("Running") : t("Stopped")}</strong> · Codex <strong>{codexStatus?.running ? t("Running") : t("Stopped")}</strong>
         </span>
-        <span className="sidebar-version">v1.8.3</span>
+        <span className="sidebar-version">v1.8.4</span>
       </div>
     </aside>
   );

@@ -6,7 +6,7 @@
 
 > Gateway Switch is not just a model router. It is a **runtime compatibility layer** that sits between AI-native desktop applications and third-party model providers, bridging protocol gaps, repairing malformed tool calls, enforcing safety boundaries, and degrading gracefully when upstream providers misbehave.
 
-[![Version](https://img.shields.io/badge/Version-1.8.3-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.8.4-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -142,7 +142,7 @@ For long-running agent workflows:
 
 ---
 
-## Version 1.8.3 Hotfix Highlights
+## Version 1.8.4 Hotfix Highlights
 
 - **Fixed DMG path pollution.** When Gateway Switch is launched from a mounted disk image, Codex++ watcher and CLI shim generation now prefer `/Applications/Gateway Switch.app` instead of storing `/Volumes/Gateway Switch/...` in future repair entrypoints.
 - **Fixed Codex++ settings watcher false errors.** The watcher plist now uses the Codex++ health-check-compatible `CODEX_PLUSPLUS_WATCHER=1 codexplusplus update --watcher --quiet` command shape.
@@ -480,7 +480,7 @@ Artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.3_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.4_aarch64.dmg
 ```
 
 ---

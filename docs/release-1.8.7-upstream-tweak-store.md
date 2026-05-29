@@ -1,8 +1,8 @@
-# Gateway Switch 1.8.6 Release Notes
+# Gateway Switch 1.8.7 Release Notes
 
 ## Summary
 
-Gateway Switch 1.8.6 adds a full Codex++ Upstream Tweak Store view and folds the Cold Start diagnostic refactor into the same release.
+Gateway Switch 1.8.7 adds a full Codex++ Upstream Tweak Store view and folds the Cold Start diagnostic refactor into the same release.
 
 ## Changes
 
@@ -23,5 +23,5 @@ Gateway Switch 1.8.6 adds a full Codex++ Upstream Tweak Store view and folds the
 
 ## Local Artifact
 
-- `src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.6_aarch64.dmg`
+- `src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.7_aarch64.dmg`
 

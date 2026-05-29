@@ -2,7 +2,7 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
-## 1.8.6 - 2026-05-28
+## 1.8.7 - 2026-05-28
 
 - Added a full Codex++ Upstream Tweak Store view sourced from the approved upstream registry at `https://b-nnett.github.io/codex-plusplus/store/index.json`.
 - Added derived archive URLs, source repository links, approved commit display, install status, and installed path reporting for upstream tweak entries.

@@ -6,7 +6,7 @@
 
 > Gateway Switch 不仅仅是一个模型路由器。它是一个**运行时兼容性层**，驻留在 AI 原生桌面应用与第三方模型服务之间，弥合协议鸿沟、修复畸形工具调用、强制安全边界，并在上游 Provider 异常时优雅降级。
 
-[![Version](https://img.shields.io/badge/Version-1.8.6-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.8.7-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -141,6 +141,14 @@ Claude 和 Codex 的 `/health` 端点会暴露这些画像，外部工具无需�
 `export_diagnostics` 生成全面的 JSON 包，包含：运行时特性状态、所有 Provider 能力画像、基准测试结果、Provider 配置、路由配置、Codex 路由配置、和近期请求日志 — 远程复现和调试问题所需的一切。
 
 ---
+
+## 1.8.7 上游 Tweak Store 更新重点
+
+- **完整接入上游商店。** Codex++ 脚本市场页现在展示上游 approved Tweak Store 的全部条目，数据源为 `https://b-nnett.github.io/codex-plusplus/store/index.json`。
+- **展示真实安装地址。** 每个 tweak 都会显示 GitHub repo、approved commit、派生的 `codeload.github.com` archive URL、安装状态和本地安装路径。
+- **保留旧脚本名说明。** `Codex Context Used Meter`、`Hide Usage Alert`、`Codex Token Usage`、`Codex List Pagebuster` 会被标注为 legacy requested items；若上游没有精确条目，会显示最接近的替代项。
+- **安全校验更严格。** Gateway Switch 会校验 registry schema、`owner/repo`、manifest repo 一致性和 40 位 approved commit SHA，避免从不可信路径安装。
+- **Cold Start 架构整理。** Cold Start 检查/修复逻辑从 `commands.rs` 拆分到 `coldstart.rs`，便于后续维护诊断流程。
 
 ## 1.8.5 推荐脚本更新重点
 
@@ -496,7 +504,7 @@ pnpm tauri build
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.6_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.7_aarch64.dmg
 ```
 
 ---

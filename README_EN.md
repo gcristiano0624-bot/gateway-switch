@@ -6,7 +6,7 @@
 
 > Gateway Switch is not just a model router. It is a **runtime compatibility layer** that sits between AI-native desktop applications and third-party model providers, bridging protocol gaps, repairing malformed tool calls, enforcing safety boundaries, and degrading gracefully when upstream providers misbehave.
 
-[![Version](https://img.shields.io/badge/Version-1.8.6-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.8.7-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -141,6 +141,14 @@ For long-running agent workflows:
 `export_diagnostics` generates a comprehensive JSON bundle containing: runtime feature status, all provider capability profiles, benchmark results, provider configurations, route configurations, Codex route configurations, and recent request logs — everything needed to reproduce and debug an issue remotely.
 
 ---
+
+## Version 1.8.7 Upstream Tweak Store Highlights
+
+- **Added the full upstream store.** The Codex++ market page now displays all approved upstream Tweak Store entries from `https://b-nnett.github.io/codex-plusplus/store/index.json`.
+- **Shows real source addresses.** Each tweak shows its GitHub repo, approved commit, derived `codeload.github.com` archive URL, install status, and installed path.
+- **Keeps legacy script clarity.** `Codex Context Used Meter`, `Hide Usage Alert`, `Codex Token Usage`, and `Codex List Pagebuster` are shown as legacy requested items; when no exact upstream entry exists, Gateway Switch points to the closest approved replacement.
+- **Hardens store validation.** Gateway Switch validates registry schema, safe `owner/repo` values, manifest repo consistency, and full 40-character approved commit SHAs before deriving install URLs.
+- **Refactors Cold Start diagnostics.** Cold Start check/repair logic moved from `commands.rs` into `coldstart.rs` for easier maintenance.
 
 ## Version 1.8.5 Recommended Scripts Highlights
 
@@ -496,7 +504,7 @@ Artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.6_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.7_aarch64.dmg
 ```
 
 ---

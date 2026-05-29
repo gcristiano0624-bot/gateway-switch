@@ -1998,7 +1998,7 @@ function App() {
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.8.6</div>
+          <div className="brand-sub">v1.8.7</div>
         </div>
       </div>
 
@@ -2067,7 +2067,7 @@ function App() {
         <span className="status-text">
           Claude <strong>{status?.gateway_running ? t("Running") : t("Stopped")}</strong> · Codex <strong>{codexStatus?.running ? t("Running") : t("Stopped")}</strong>
         </span>
-        <span className="sidebar-version">v1.8.6</span>
+        <span className="sidebar-version">v1.8.7</span>
       </div>
     </aside>
   );

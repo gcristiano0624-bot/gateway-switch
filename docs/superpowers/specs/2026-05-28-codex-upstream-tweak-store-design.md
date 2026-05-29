@@ -2,7 +2,7 @@
 
 ## Goal
 
-Gateway Switch 1.8.6 will turn the Codex++ page into a more faithful control console for the current upstream Codex++ Tweak Store.
+Gateway Switch 1.8.7 will turn the Codex++ page into a more faithful control console for the current upstream Codex++ Tweak Store.
 
 The user selected the "all store" scope. Gateway Switch should fetch and display every approved upstream store entry from:
 
@@ -26,7 +26,7 @@ https://codeload.github.com/<repo>/tar.gz/<approvedCommitSha>
 - Surface source URLs and metadata so the user can inspect upstream code before installing.
 - Reuse the existing Gateway Switch / Codex++ tweak install path instead of inventing a separate script directory.
 - Keep the current `Recommended Scripts` panel, but label the four old script names as legacy requested items when no exact upstream match exists.
-- Include the existing coldstart module split in the 1.8.6 release, because the user explicitly approved merging those changes into this version.
+- Include the existing coldstart module split in the 1.8.7 release, because the user explicitly approved merging those changes into this version.
 
 ## Non-Goals
 
@@ -99,7 +99,7 @@ The working tree already contains a coldstart extraction:
 - `src-tauri/src/lib.rs` with `mod coldstart;`
 - `src-tauri/src/commands.rs` calling `coldstart::{run_coldstart_checks, RunMode}`
 
-This refactor is accepted into the 1.8.6 scope.
+This refactor is accepted into the 1.8.7 scope.
 
 Implementation rules:
 
@@ -172,9 +172,9 @@ Required checks before release:
 
 If implementation succeeds:
 
-- Bump app version to `1.8.6`.
+- Bump app version to `1.8.7`.
 - Update `README.md`, `README_EN.md`, `CHANGELOG.md`, `docs/project.md`, and release notes.
 - Run tests and build.
 - Package DMG and app zip.
-- Publish `v1.8.6` with `macos-dmg-github-release`.
+- Publish `v1.8.7` with `macos-dmg-github-release`.
 

@@ -2,6 +2,14 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.13.0 - 2026-05-30
+
+- Added shared `LoopGuard` for Claude Desktop, Claude Code, and Codex Gateway streaming paths to suppress repeated upstream text chunks without truncating valid long-form output.
+- Wired Codex Gateway Responses streaming through the same guard before emitting `response.output_text.delta` events.
+- Added duplicate tool-call fingerprint diagnostics and compact request-log summaries for loop suppression activity.
+- Changed Xiaomi MiMo Codex compatibility defaults to avoid strict tool-call enforcement and downgrade configured strict mode to `auto`.
+- Added regression tests for loop suppression, long unique reports, duplicate tool-call detection, and Xiaomi Codex strict-mode downgrade.
+
 ## 1.12.2 - 2026-05-29
 
 - Fixed Claude Code Gateway Route compatibility for Chat-only providers by forcing OpenAI Chat fallback for Xiaomi MiMo, DeepSeek, Moonshot/Kimi, Qwen/DashScope, and generic OpenAI Chat profiles even when an Anthropic URL is configured.

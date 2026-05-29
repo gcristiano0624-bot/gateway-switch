@@ -6,7 +6,7 @@
 
 > Gateway Switch 不仅仅是一个模型路由器。它是一个**运行时兼容性层**，驻留在 AI 原生桌面应用与第三方模型服务之间，弥合协议鸿沟、修复畸形工具调用、强制安全边界，并在上游 Provider 异常时优雅降级。
 
-[![Version](https://img.shields.io/badge/Version-1.12.2-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.13.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -17,13 +17,13 @@
 
 ---
 
-## 1.12.2 统一诊断中心更新重点
+## 1.13.0 Unified Loop Guard 更新重点
 
-- **统一诊断中心。** 新增 Diagnostics 页面，集中展示 Claude Desktop、Claude Code、Codex Gateway、Codex++、Provider 和安装运行来源的健康分数。
-- **失败聚类建议。** 最近失败请求会按 Provider、状态码和 surface 聚合，并给出 `system_to_user`、`tool_to_user`、`strip_reasoning` 等策略建议。
-- **Provider Preset。** 内置 OpenRouter、火山方舟 DeepSeek、DeepSeek 官方、Moonshot Kimi、Qwen DashScope、小米 MiMo、标准 Anthropic、OpenAI Chat 等预设。
-- **安全应用预设。** 应用预设会创建/更新 Provider 与兼容策略，但不会用空值覆盖已有 API Key。
-- **诊断包导出。** 支持导出统一诊断 bundle，继续沿用本地脱敏策略，方便排查问题。
+- **跨应用重复输出抑制。** Claude Desktop、Claude Code 和 Codex Gateway 共享 `LoopGuard`，按归一化文本块与句段指纹抑制重复增量，而不是粗暴截断长文本。
+- **Codex Responses 流保护。** Codex Gateway 在 `response.output_text.delta` 转换前过滤重复 Chat delta，并在请求日志中记录 `loop_guard` 摘要。
+- **工具调用重复诊断。** 流式工具调用完成时记录函数名与参数指纹，帮助定位重复 tool-call 计划循环。
+- **Xiaomi MiMo 策略降级。** 小米 MiMo Codex 默认不再强制 strict tool-call，已配置的 strict 模式会降级到 `auto`，降低重复思考和重复工具计划风险。
+- **保留长文输出。** 正常长篇报告按新内容持续放行，只抑制完全重复或高度重复的文本块。
 
 ## Gateway Switch 是什么？
 

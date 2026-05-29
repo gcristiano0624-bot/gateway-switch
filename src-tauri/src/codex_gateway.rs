@@ -19,6 +19,7 @@ use uuid::Uuid;
 
 use crate::{
     compatibility, database, gateway,
+    loop_guard::{LoopGuard, TextGuardAction},
     models::{GatewayProfile, Provider, RequestLog},
     state::{AppState, GatewayHandle, GatewayStatus},
 };
@@ -479,6 +480,7 @@ async fn responses_handler(
         let mut next_output_index: i64 = 1;
         let mut finish_reason: Option<String> = None;
         let mut stream_error = false;
+        let mut loop_guard = LoopGuard::default();
 
         // Process a single SSE stream with timeout and finish_reason tracking
         macro_rules! process_chat_stream {
@@ -493,6 +495,10 @@ async fn responses_handler(
                                 let line = buf[..pos].to_string();
                                 buf = buf[pos + 1..].to_string();
                                 if let Some(text) = extract_chat_delta(&line) {
+                                    let text = match loop_guard.observe_text(&text) {
+                                        TextGuardAction::Pass(text) => text,
+                                        TextGuardAction::Suppress => continue,
+                                    };
                                     full_text.push_str(&text);
                                     let delta_event = json!({
                                         "type": "response.output_text.delta",
@@ -639,6 +645,7 @@ async fn responses_handler(
             let arguments = compatibility::repair_json_object(&tool.arguments)
                 .map(|v| v.to_string())
                 .unwrap_or(tool.arguments);
+            let _duplicate_tool_call = loop_guard.observe_tool_call(&tool.name, &arguments);
             let args_done = json!({
                 "type": "response.function_call_arguments.done",
                 "item_id": tool.item_id,
@@ -750,7 +757,7 @@ async fn responses_handler(
         } else if strict_tool_error {
             trace_error = Some("strict_tool_call_missing".into());
         }
-        let error_summary = Some(tool_trace_summary(
+        let mut error_summary_text = tool_trace_summary(
             &tool_call_mode,
             &tool_choice,
             request_tool_count,
@@ -758,7 +765,12 @@ async fn responses_handler(
             finish_reason.as_deref(),
             strict_tool_error,
             trace_error.as_deref(),
-        ));
+        );
+        if let Some(loop_summary) = loop_guard.summary().to_log_summary() {
+            error_summary_text.push_str("; ");
+            error_summary_text.push_str(&loop_summary);
+        }
+        let error_summary = Some(error_summary_text);
         let _ = database::insert_log(&db, &RequestLog {
             request_id: log_req_id, claude_alias: display,
             provider_id, upstream_model: upstream_model_name, status_code: Some(status.as_u16()),
@@ -1476,15 +1488,13 @@ fn resolve(db: &PathBuf, model: &str) -> Result<Route, String> {
         .ok_or_else(|| format!("Provider '{}' not found", route.provider_id))?;
     let strategy =
         gateway::effective_provider_compatibility_profile(db, &provider, &route.upstream_model);
+    let tool_call_mode =
+        effective_codex_tool_call_mode(&strategy, Some(route.tool_call_mode.as_str()));
     Ok(Route {
         display: route.codex_model,
         provider_id: provider.id.clone(),
         upstream_model: route.upstream_model.trim().to_string(),
-        tool_call_mode: if strategy.codex_strict_tool_calls {
-            "strict_execution".to_string()
-        } else {
-            normalize_tool_call_mode(&route.tool_call_mode).to_string()
-        },
+        tool_call_mode,
         base_url: provider.openai_base_url.trim_end_matches('/').to_string(),
         strategy,
         headers: auth_headers(&provider),
@@ -1500,11 +1510,8 @@ pub fn route_diagnostics(db: &PathBuf) -> Result<Vec<CodexRouteDiagnostic>, Stri
             let provider = providers.iter().find(|p| p.id == route.provider_id)?;
             let strategy =
                 gateway::effective_provider_compatibility_profile(db, provider, &route.upstream_model);
-            let effective_mode = if strategy.codex_strict_tool_calls {
-                "strict_execution".to_string()
-            } else {
-                normalize_tool_call_mode(&route.tool_call_mode).to_string()
-            };
+            let effective_mode =
+                effective_codex_tool_call_mode(&strategy, Some(route.tool_call_mode.as_str()));
             let mut warnings = Vec::new();
             let mut recommendations = Vec::new();
             if strategy.codex_disable_responses {
@@ -1540,6 +1547,22 @@ fn normalize_tool_call_mode(mode: &str) -> &'static str {
         "auto" => "auto",
         "strict_execution" => "strict_execution",
         _ => "force_when_tools_present",
+    }
+}
+
+fn effective_codex_tool_call_mode(
+    strategy: &gateway::ProviderCompatibilityProfile,
+    configured_mode: Option<&str>,
+) -> String {
+    if strategy.codex_strict_tool_calls {
+        return "strict_execution".into();
+    }
+    let configured = configured_mode.unwrap_or("force_when_tools_present");
+    let normalized = normalize_tool_call_mode(configured);
+    if strategy.strategy_id == "xiaomi_mimo_chat" && normalized == "strict_execution" {
+        "auto".into()
+    } else {
+        normalized.into()
     }
 }
 
@@ -1666,6 +1689,23 @@ mod tests {
             codex_strip_reasoning: false,
             summary: "test".into(),
         }
+    }
+
+    #[test]
+    fn test_xiaomi_codex_strategy_downgrades_configured_strict_mode() {
+        let mut strategy = standard_strategy();
+        strategy.strategy_id = "xiaomi_mimo_chat".into();
+
+        assert_eq!(
+            effective_codex_tool_call_mode(&strategy, Some("strict_execution")),
+            "auto"
+        );
+
+        strategy.codex_strict_tool_calls = true;
+        assert_eq!(
+            effective_codex_tool_call_mode(&strategy, Some("auto")),
+            "strict_execution"
+        );
     }
 
     #[test]

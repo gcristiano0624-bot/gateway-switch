@@ -6,7 +6,7 @@
 
 > Gateway Switch is not just a model router. It is a **runtime compatibility layer** that sits between AI-native desktop applications and third-party model providers, bridging protocol gaps, repairing malformed tool calls, enforcing safety boundaries, and degrading gracefully when upstream providers misbehave.
 
-[![Version](https://img.shields.io/badge/Version-1.12.2-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.13.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -17,13 +17,13 @@ English | [中文](./README.md)
 
 ---
 
-## 1.12.2 Unified Diagnostics Update
+## 1.13.0 Unified Loop Guard Update
 
-- **Unified Diagnostics Center.** Adds a Diagnostics page for Claude Desktop, Claude Code, Codex Gateway, Codex++, Providers, and install/runtime health.
-- **Failure clustering.** Recent failed requests are grouped by provider, status code, and surface, with strategy recommendations such as `system_to_user`, `tool_to_user`, and `strip_reasoning`.
-- **Provider Presets.** Adds built-in presets for OpenRouter, Volcengine Ark DeepSeek, DeepSeek official, Moonshot Kimi, Qwen DashScope, Xiaomi MiMo, standard Anthropic-compatible, and OpenAI Chat-compatible providers.
-- **Safe preset application.** Applying a preset creates or updates provider URLs and compatibility policies without overwriting existing API keys with empty values.
-- **Diagnostics bundle export.** Exports a unified local troubleshooting bundle while preserving the redaction model.
+- **Cross-app repetition suppression.** Claude Desktop, Claude Code, and Codex Gateway now share `LoopGuard`, suppressing repeated text deltas by normalized chunk and sentence fingerprints instead of truncating long output.
+- **Codex Responses stream protection.** Codex Gateway filters repeated Chat deltas before emitting `response.output_text.delta` and stores compact `loop_guard` summaries in request logs.
+- **Tool-call duplicate diagnostics.** Streaming tool calls are fingerprinted by function name and arguments when completed, making repeated tool-planning loops visible in diagnostics.
+- **Xiaomi MiMo policy downgrade.** Xiaomi MiMo Codex routes no longer default to strict tool-call enforcement; configured strict mode is downgraded to `auto` to reduce repeated reasoning and tool-planning loops.
+- **Long-form output preserved.** Normal long reports continue streaming as long as they contain new content; only exact or highly repeated blocks are suppressed.
 
 ## What is Gateway Switch?
 

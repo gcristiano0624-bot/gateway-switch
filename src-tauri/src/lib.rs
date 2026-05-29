@@ -8,6 +8,7 @@ mod compatibility;
 mod database;
 mod desktop_binding;
 mod gateway;
+mod loop_guard;
 mod mcp_sync;
 mod models;
 mod settings;

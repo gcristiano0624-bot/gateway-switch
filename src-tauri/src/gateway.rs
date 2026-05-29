@@ -19,6 +19,7 @@ use uuid::Uuid;
 
 use crate::{
     compatibility, database,
+    loop_guard::{LoopGuard, TextGuardAction},
     models::{
         GatewayProfile, Provider, ProviderCompatibilityPolicy, RequestDiagnosticSnapshot,
         RequestLog,
@@ -640,7 +641,7 @@ async fn chat_completion_fallback(
         let mut text_index: i64 = 0;
         let mut next_content_index: i64 = 0;
         let mut tool_blocks: HashMap<i64, (i64, String, String, String)> = HashMap::new();
-        let mut repeat_guard = StreamRepeatGuard::default();
+        let mut loop_guard = LoopGuard::default();
         let start_event = json!({
             "type": "message_start",
             "message": {
@@ -680,16 +681,10 @@ async fn chat_completion_fallback(
                             return;
                         }
                         if let Some(text) = extract_chat_delta(&line) {
-                            if let Some(warning) = repeat_guard.observe(&text) {
-                                let warning_event = json!({
-                                    "type": "gateway_warning",
-                                    "warning": warning,
-                                });
-                                yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!(
-                                    "event: gateway_warning\ndata: {}\n\n",
-                                    serde_json::to_string(&warning_event).unwrap()
-                                )));
-                            }
+                            let text = match loop_guard.observe_text(&text) {
+                                TextGuardAction::Pass(text) => text,
+                                TextGuardAction::Suppress => continue,
+                            };
                             if !text_started {
                                 text_index = next_content_index;
                                 let block_start = json!({"type":"content_block_start","index":text_index,"content_block":{"type":"text","text":""}});
@@ -735,7 +730,7 @@ async fn chat_completion_fallback(
         let message_stop = json!({"type":"message_stop"});
         yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!("event: message_stop\ndata: {}\n\n", serde_json::to_string(&message_stop).unwrap())));
 
-        let loop_warning = repeat_guard.warning_summary();
+        let loop_warning = loop_guard.summary().to_log_summary();
         let _ = database::insert_log(&db, &RequestLog {
             request_id: log_req_id, claude_alias: display,
             provider_id, upstream_model, status_code: Some(status.as_u16()),
@@ -854,9 +849,9 @@ pub fn provider_compatibility_profile(
             direct_provider_safe: false,
             gateway_route_recommended: true,
             codex_disable_responses: true,
-            codex_strict_tool_calls: true,
+            codex_strict_tool_calls: false,
             codex_strip_reasoning: true,
-            summary: "Xiaomi MiMo is treated as an OpenAI Chat provider; Gateway Route and Codex Chat fallback are recommended.".into(),
+            summary: "Xiaomi MiMo is treated as an OpenAI Chat provider; Gateway Route and Codex Chat fallback are recommended, with strict Codex tool enforcement disabled to avoid tool-planning loops.".into(),
         }
     } else if key.contains("deepseek") {
         ProviderCompatibilityProfile {
@@ -1637,91 +1632,6 @@ fn extract_chat_message_text(message: &Value) -> String {
         .unwrap_or_default()
 }
 
-#[derive(Default)]
-struct StreamRepeatGuard {
-    window: String,
-    repeated_hits: usize,
-    warned: bool,
-}
-
-impl StreamRepeatGuard {
-    fn observe(&mut self, text: &str) -> Option<String> {
-        if text.trim().is_empty() {
-            return None;
-        }
-        self.window.push_str(text);
-        if self.window.chars().count() > 2400 {
-            self.window = self
-                .window
-                .chars()
-                .rev()
-                .take(2400)
-                .collect::<String>()
-                .chars()
-                .rev()
-                .collect();
-        }
-        let normalized = normalize_repetition_probe(&self.window);
-        let detected = repeated_phrase_score(&normalized) >= 6;
-        if detected {
-            self.repeated_hits += 1;
-        } else {
-            self.repeated_hits = self.repeated_hits.saturating_sub(1);
-        }
-        if self.repeated_hits >= 3 && !self.warned {
-            self.warned = true;
-            return Some(
-                "Possible upstream repetition loop detected; Gateway Switch logged this as a diagnostic warning."
-                    .into(),
-            );
-        }
-        None
-    }
-
-    fn warning_summary(&self) -> Option<String> {
-        self.warned.then(|| {
-            "Gateway warning: possible upstream repetition loop detected in streamed text.".into()
-        })
-    }
-}
-
-fn normalize_repetition_probe(text: &str) -> String {
-    text.split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .chars()
-        .take(1200)
-        .collect()
-}
-
-fn repeated_phrase_score(text: &str) -> usize {
-    let chars = text.chars().collect::<Vec<_>>();
-    for len in 24..=160 {
-        if chars.len() < len * 3 {
-            continue;
-        }
-        let tail = chars[chars.len() - len..].iter().collect::<String>();
-        if tail.trim().chars().count() < 12 {
-            continue;
-        }
-        let mut count = 1;
-        let mut end = chars.len() - len;
-        while end >= len {
-            let prev = chars[end - len..end].iter().collect::<String>();
-            if prev == tail {
-                count += 1;
-                end -= len;
-            } else {
-                break;
-            }
-        }
-        if count >= 3 {
-            return count;
-        }
-    }
-    0
-}
-
 fn extract_chat_delta(line: &str) -> Option<String> {
     if !line.starts_with("data:") {
         return None;
@@ -2134,22 +2044,6 @@ mod tests {
             "https://token-plan-sgp.xiaomimimo.com/v1"
         );
         assert_eq!(route.chat_role_mode, ChatRoleMode::Standard);
-    }
-
-    #[test]
-    fn test_stream_repeat_guard_warns_without_truncating() {
-        let mut guard = StreamRepeatGuard::default();
-        let phrase = "Now let me update the trading review MOC link:";
-        let mut warning = None;
-        for _ in 0..10 {
-            warning = warning.or_else(|| guard.observe(phrase));
-        }
-
-        assert!(warning
-            .as_deref()
-            .unwrap_or_default()
-            .contains("repetition loop"));
-        assert!(guard.warning_summary().is_some());
     }
 
     #[test]

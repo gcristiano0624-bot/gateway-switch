@@ -2,6 +2,15 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.12.0 - 2026-05-29
+
+- Added a Unified Diagnostics Center that aggregates Claude Desktop, Claude Code, Codex Gateway, Codex++, Providers, and install/runtime health into one scorecard.
+- Added failure clustering across recent diagnostic snapshots with provider/status/surface grouping and strategy recommendations for role, tool, reasoning, rate-limit, and server errors.
+- Added built-in Provider Presets for OpenRouter, Volcengine Ark DeepSeek, DeepSeek official, Moonshot Kimi, Qwen DashScope, Xiaomi MiMo, Anthropic-compatible, and OpenAI Chat-compatible providers.
+- Added preset application that creates or updates provider URLs and compatibility policies without overwriting existing API keys with empty values.
+- Added exportable unified diagnostics bundles for local troubleshooting while preserving the v1.10.0 redaction model.
+- Updated the app UI version to v1.12.0 and expanded provider setup guidance.
+
 ## 1.10.0 - 2026-05-29
 
 - Added real failed-request diagnostic snapshots with sanitized original payload, converted upstream payload, local replay preview, and likely-cause classification for 400/413/429/5xx/network failures.

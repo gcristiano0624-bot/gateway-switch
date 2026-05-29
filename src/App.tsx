@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 
 // ── Types ──
-type Page = "dashboard" | "claude" | "claudeCode" | "codex" | "mcpSync" | "coldstart" | "providers" | "logs" | "settings";
+type Page = "dashboard" | "claude" | "claudeCode" | "codex" | "mcpSync" | "coldstart" | "providers" | "diagnostics" | "logs" | "settings";
 type CodexTab = "routes" | "enhance" | "market" | "sessions" | "diagnostics";
 type ThemeMode = "system" | "light" | "dark";
 
@@ -222,6 +222,65 @@ type SafeInstallPlan = {
   release_artifacts_dir: string | null;
   steps: string[];
   warning: string | null;
+};
+
+type DiagnosticsMetric = {
+  label: string;
+  value: string;
+  status: string;
+};
+
+type DiagnosticsAction = {
+  id: string;
+  label: string;
+  target: string;
+  severity: string;
+  detail: string;
+};
+
+type FailureCluster = {
+  key: string;
+  provider_id: string | null;
+  surface: string;
+  status_code: number | null;
+  count: number;
+  sample_error: string | null;
+  recommendation: string;
+};
+
+type DiagnosticsSection = {
+  id: string;
+  title: string;
+  status: string;
+  score: number;
+  summary: string;
+  metrics: DiagnosticsMetric[];
+  actions: DiagnosticsAction[];
+};
+
+type UnifiedDiagnosticsReport = {
+  generated_at: string;
+  status: string;
+  score: number;
+  summary: string;
+  sections: DiagnosticsSection[];
+  failure_clusters: FailureCluster[];
+};
+
+type BackendProviderPreset = {
+  id: string;
+  name: string;
+  description: string;
+  base_url: string;
+  openai_base_url: string;
+  anthropic_base_url: string | null;
+  auth_header: string;
+  auth_scheme: string | null;
+  recommended_claude_alias: string;
+  recommended_codex_model: string;
+  upstream_model_example: string;
+  recommended_policy: ProviderCompatibilityPolicy;
+  warnings: string[];
 };
 
 type Settings = {
@@ -1053,6 +1112,84 @@ const MOCK_SAFE_INSTALL_PLAN: SafeInstallPlan = {
   warning: null,
 };
 
+const MOCK_UNIFIED_DIAGNOSTICS: UnifiedDiagnosticsReport = {
+  generated_at: "browser preview",
+  status: "attention",
+  score: 82,
+  summary: "6 sections checked, 1 issue cluster found.",
+  sections: [
+    {
+      id: "claude_desktop",
+      title: "Claude Desktop",
+      status: "healthy",
+      score: 95,
+      summary: "Claude Desktop binding is present.",
+      metrics: [
+        { label: "Binding", value: "managed", status: "healthy" },
+        { label: "Enabled routes", value: "2", status: "healthy" },
+      ],
+      actions: [],
+    },
+    {
+      id: "providers",
+      title: "Providers",
+      status: "attention",
+      score: 75,
+      summary: "2 enabled providers, 1 failure cluster.",
+      metrics: [
+        { label: "Enabled providers", value: "2", status: "healthy" },
+        { label: "Gateway-recommended routes", value: "1", status: "info" },
+      ],
+      actions: [
+        { id: "review_failure_clusters", label: "Review provider failure clusters", target: "logs", severity: "attention", detail: "Recent failures indicate provider-specific issues." },
+      ],
+    },
+  ],
+  failure_clusters: [
+    {
+      key: "xiaomimo|claude_chat_fallback|502",
+      provider_id: "xiaomimo",
+      surface: "claude_chat_fallback",
+      status_code: 502,
+      count: 1,
+      sample_error: "502 Bad Gateway",
+      recommendation: "Provider is unhealthy or the upstream gateway is returning server errors.",
+    },
+  ],
+};
+
+const MOCK_PROVIDER_PRESETS: BackendProviderPreset[] = [
+  {
+    id: "volcengine",
+    name: "Volcengine Ark DeepSeek",
+    description: "Volcengine Ark DeepSeek coding endpoints usually accept only user/assistant chat roles.",
+    base_url: "https://ark.cn-beijing.volces.com/api/v3",
+    openai_base_url: "https://ark.cn-beijing.volces.com/api/v3",
+    anthropic_base_url: null,
+    auth_header: "Authorization",
+    auth_scheme: "Bearer",
+    recommended_claude_alias: "deepseek-v4-pro",
+    recommended_codex_model: "codex-volcengine",
+    upstream_model_example: "deepseek-v4-pro",
+    recommended_policy: {
+      provider_id: "volcengine",
+      system_to_user: true,
+      tool_to_user: true,
+      disable_tools: null,
+      strip_unsupported_params: true,
+      direct_provider_safe: false,
+      gateway_route_recommended: true,
+      codex_disable_responses: true,
+      codex_strict_tool_calls: false,
+      codex_strip_reasoning: true,
+      notes: "Applied from built-in provider preset",
+      updated_by: "preset",
+      updated_at: null,
+    },
+    warnings: ["Use Gateway Route instead of Claude Code Direct Provider."],
+  },
+];
+
 const MOCK_CODEX_ROUTES: CodexRoute[] = [
   { id: "codex-mimo", codex_model: "gpt-5.2", display_name: "Codex via MiMo", provider_id: "xiaomimo", upstream_model: "mimo-v2.5-pro", tool_call_mode: "force_when_tools_present", enabled: true },
 ];
@@ -1608,6 +1745,8 @@ function App() {
   const [codexRouteDiagnostics, setCodexRouteDiagnostics] = useState<CodexRouteDiagnostic[]>([]);
   const [updateReport, setUpdateReport] = useState<UpdateCheckReport | null>(null);
   const [safeInstallPlan, setSafeInstallPlan] = useState<SafeInstallPlan | null>(null);
+  const [unifiedDiagnostics, setUnifiedDiagnostics] = useState<UnifiedDiagnosticsReport | null>(null);
+  const [providerPresets, setProviderPresets] = useState<BackendProviderPreset[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
   const [codexHealth, setCodexHealth] = useState<Health | null>(null);
@@ -1698,6 +1837,8 @@ function App() {
       setCodexRouteDiagnostics(MOCK_CODEX_ROUTE_DIAGNOSTICS);
       setUpdateReport(MOCK_UPDATE_REPORT);
       setSafeInstallPlan(MOCK_SAFE_INSTALL_PLAN);
+      setUnifiedDiagnostics(MOCK_UNIFIED_DIAGNOSTICS);
+      setProviderPresets(MOCK_PROVIDER_PRESETS);
       setSettings(MOCK_SETTINGS);
       setCodexStatus(MOCK_CODEX_STATUS);
       setCodexRoutes(MOCK_CODEX_ROUTES);
@@ -1716,7 +1857,7 @@ function App() {
     }
 
     try {
-      const [s, p, r, d, cc, l, rd, rs, policies, failed, codexDiag, installPlan, cfg, cs, cr, cb, cold, mcp, ca, cma, cppInstall, cppTweaks, cppHealth, cppPreflight, cppScripts] = await Promise.all([
+      const [s, p, r, d, cc, l, rd, rs, policies, failed, codexDiag, installPlan, unified, presets, cfg, cs, cr, cb, cold, mcp, ca, cma, cppInstall, cppTweaks, cppHealth, cppPreflight, cppScripts] = await Promise.all([
         invoke<Status>("get_status"),
         invoke<Provider[]>("list_providers"),
         invoke<ModelRoute[]>("list_routes"),
@@ -1729,6 +1870,8 @@ function App() {
         invoke<FailedRequestDiagnosticCandidate[]>("list_failed_request_diagnostics"),
         invoke<CodexRouteDiagnostic[]>("get_codex_route_diagnostics"),
         invoke<SafeInstallPlan>("get_safe_install_plan"),
+        invoke<UnifiedDiagnosticsReport>("get_unified_diagnostics"),
+        invoke<BackendProviderPreset[]>("list_provider_presets"),
         invoke<Settings>("get_settings"),
         invoke<CodexGatewayStatus>("get_codex_status"),
         invoke<CodexRoute[]>("list_codex_routes"),
@@ -1755,6 +1898,8 @@ function App() {
       setFailedDiagnostics(failed);
       setCodexRouteDiagnostics(codexDiag);
       setSafeInstallPlan(installPlan);
+      setUnifiedDiagnostics(unified);
+      setProviderPresets(presets);
       setSettings(cfg);
       setCodexStatus(cs);
       setCodexRoutes(cr);
@@ -2020,6 +2165,31 @@ function App() {
     }
   };
 
+  const applyProviderPreset = async (preset: BackendProviderPreset) => {
+    try {
+      const nextProviders = isTauriRuntime
+        ? await invoke<Provider[]>("apply_provider_preset", { payload: { preset_id: preset.id, api_key: null } })
+        : providers.some(p => p.id === preset.id)
+          ? providers
+          : [...providers, {
+              id: preset.id,
+              name: preset.name,
+              base_url: preset.base_url,
+              openai_base_url: preset.openai_base_url,
+              anthropic_base_url: preset.anthropic_base_url,
+              auth_header: preset.auth_header,
+              auth_scheme: preset.auth_scheme,
+              api_key: null,
+              enabled: true,
+            }];
+      setProviders(nextProviders);
+      await loadAll();
+      flash(`Provider preset applied: ${preset.name}`);
+    } catch (e) {
+      flash(String(e), "error");
+    }
+  };
+
   // Route CRUD
   const saveRoute = async () => {
     try {
@@ -2061,6 +2231,16 @@ function App() {
   };
   const doExport = async () => {
     try { const p = await invoke<string>("export_config"); flash(`Exported to ${p}`); } catch (e) { flash(String(e), "error"); }
+  };
+  const exportUnifiedDiagnostics = async () => {
+    try {
+      const p = isTauriRuntime
+        ? await invoke<string>("export_unified_diagnostics_bundle")
+        : "browser-preview-unified-diagnostics.json";
+      flash(`Exported to ${p}`);
+    } catch (e) {
+      flash(String(e), "error");
+    }
   };
   const checkUpdate = async () => {
     try {
@@ -2361,7 +2541,7 @@ function App() {
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.10.0</div>
+          <div className="brand-sub">v1.12.0</div>
         </div>
       </div>
 
@@ -2415,6 +2595,11 @@ function App() {
 
       <div className="nav-group">
         <div className="nav-group-label">{t("System")}</div>
+        <button className={`nav-item ${page === "diagnostics" ? "active" : ""}`} aria-label="Diagnostics" title="Diagnostics" onClick={() => setPage("diagnostics")}>
+          <IconPulse />
+          <span className="nav-label">Diagnostics</span>
+          {unifiedDiagnostics && unifiedDiagnostics.status !== "healthy" && <span className="nav-badge">{unifiedDiagnostics.score}</span>}
+        </button>
         <button className={`nav-item ${page === "logs" ? "active" : ""}`} aria-label={t("Logs")} title={t("Logs")} onClick={() => setPage("logs")}>
           <IconTerminal />
           <span className="nav-label">{t("Logs")}</span>
@@ -2430,7 +2615,7 @@ function App() {
         <span className="status-text">
           Claude <strong>{status?.gateway_running ? t("Running") : t("Stopped")}</strong> · Codex <strong>{codexStatus?.running ? t("Running") : t("Stopped")}</strong>
         </span>
-        <span className="sidebar-version">v1.10.0</span>
+        <span className="sidebar-version">v1.12.0</span>
       </div>
     </aside>
   );
@@ -2645,6 +2830,44 @@ function App() {
             </div>
           );
         })}
+      </div>
+
+      <div className="card" style={{ marginTop: 20, marginBottom: 20 }}>
+        <div className="card-title">Provider Presets & Strategy Templates</div>
+        <p style={{ color: "var(--muted)", marginBottom: 14 }}>
+          Built-in presets create or update provider URLs and apply the recommended compatibility strategy without overwriting existing API keys.
+        </p>
+        <div className="route-list" style={{ marginBottom: 0 }}>
+          {providerPresets.map(preset => {
+            const connected = providers.some(p => p.id === preset.id);
+            const policy = preset.recommended_policy;
+            const enabledFlags = [
+              policy.system_to_user ? "system_to_user" : null,
+              policy.tool_to_user ? "tool_to_user" : null,
+              policy.strip_unsupported_params ? "strip_params" : null,
+              policy.gateway_route_recommended ? "gateway_route" : null,
+              policy.codex_disable_responses ? "codex_chat_fallback" : null,
+              policy.codex_strict_tool_calls ? "strict_tools" : null,
+              policy.codex_strip_reasoning ? "strip_reasoning" : null,
+            ].filter(Boolean);
+            return (
+              <div key={preset.id} className="route-item" style={{ alignItems: "flex-start" }}>
+                <div className="route-info">
+                  <div className="route-name">{preset.name}</div>
+                  <div className="route-path">{preset.description}</div>
+                  <div className="route-path">model: {preset.upstream_model_example} · Claude alias: {preset.recommended_claude_alias} · Codex: {preset.recommended_codex_model}</div>
+                  <div className="qa-buttons" style={{ marginTop: 8 }}>
+                    {enabledFlags.map(flag => <span key={flag} className="badge badge-blue">{flag}</span>)}
+                    {preset.warnings.map(warning => <span key={warning} className="badge badge-amber">{warning}</span>)}
+                  </div>
+                </div>
+                <button className={`btn ${connected ? "" : "btn-primary"}`} onClick={() => void applyProviderPreset(preset)}>
+                  {connected ? "Reapply" : "Apply"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Add/Edit form */}
@@ -4220,6 +4443,127 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
   };
 
   // =====================================================
+  //  DIAGNOSTICS PAGE
+  // =====================================================
+  const DiagnosticsPage = () => {
+    const report = unifiedDiagnostics ?? MOCK_UNIFIED_DIAGNOSTICS;
+    const statusBadge = (status: string) => {
+      if (status === "healthy") return "badge-green";
+      if (status === "attention") return "badge-amber";
+      if (status === "degraded") return "badge-blue";
+      if (status === "critical") return "badge-red";
+      return "badge-gray";
+    };
+    return (
+      <div>
+        <div className="page-header page-header-row">
+          <div>
+            <h1>Unified Diagnostics Center</h1>
+            <p>Cross-product health for Claude Desktop, Claude Code, Codex, Codex++, providers, and install runtime.</p>
+          </div>
+          <div className="qa-buttons" style={{ margin: 0 }}>
+            <button className="btn" onClick={() => void loadAll()}><IconRefresh /> Refresh</button>
+            <button className="btn btn-primary" onClick={() => void exportUnifiedDiagnostics()}><IconDownload /> Export Bundle</button>
+          </div>
+        </div>
+
+        <div className="kpi-row">
+          <div className="kpi-card">
+            <div className={`kpi-icon ${report.status === "healthy" ? "green" : report.status === "critical" ? "red" : "amber"}`}><IconPulse /></div>
+            <div className="kpi-info">
+              <div className="kpi-label">Overall Status</div>
+              <div className="kpi-value">{report.score}</div>
+              <span className={`kpi-badge ${report.status === "healthy" ? "green" : report.status === "critical" ? "red" : "amber"}`}>{report.status}</span>
+            </div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-icon blue"><IconGrid /></div>
+            <div className="kpi-info">
+              <div className="kpi-label">Sections</div>
+              <div className="kpi-value">{report.sections.length}</div>
+              <span className="kpi-badge blue">{report.generated_at}</span>
+            </div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-icon amber"><IconTerminal /></div>
+            <div className="kpi-info">
+              <div className="kpi-label">Failure Clusters</div>
+              <div className="kpi-value">{report.failure_clusters.length}</div>
+              <span className="kpi-badge amber">local-only</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="section-label">Subsystem Health</div>
+        <div className="route-list">
+          {report.sections.map(section => (
+            <div key={section.id} className="route-item" style={{ alignItems: "flex-start" }}>
+              <div className="route-info">
+                <div className="route-name">{section.title} <span className={`badge ${statusBadge(section.status)}`}>{section.status}</span></div>
+                <div className="route-path">{section.summary}</div>
+                <div className="qa-buttons" style={{ marginTop: 8 }}>
+                  {section.metrics.map(metric => (
+                    <span key={`${section.id}-${metric.label}`} className={`badge ${statusBadge(metric.status)}`}>
+                      {metric.label}: {metric.value}
+                    </span>
+                  ))}
+                </div>
+                {section.actions.length > 0 && (
+                  <div className="qa-buttons" style={{ marginTop: 8 }}>
+                    {section.actions.map(action => (
+                      <button key={action.id} className="btn" onClick={() => setPage(action.target as Page)}>
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="kpi-value" style={{ fontSize: 28 }}>{section.score}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="section-label">Failure Clusters</div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>Surface</th>
+                <th>Status</th>
+                <th>Count</th>
+                <th>Recommendation</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.failure_clusters.map(cluster => (
+                <tr key={cluster.key}>
+                  <td>{cluster.provider_id ?? "unknown"}</td>
+                  <td><span className="badge badge-blue">{cluster.surface}</span></td>
+                  <td>{cluster.status_code ?? "network"}</td>
+                  <td>{cluster.count}</td>
+                  <td>{cluster.recommendation}</td>
+                </tr>
+              ))}
+              {report.failure_clusters.length === 0 && (
+                <tr>
+                  <td colSpan={5}>
+                    <div className="empty-state">
+                      <div className="empty-icon">--</div>
+                      <h3>No failure clusters</h3>
+                      <p>Recent diagnostics do not show repeated provider failures.</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  // =====================================================
   //  LOGS PAGE
   // =====================================================
   const LogsPage = () => {
@@ -4622,6 +4966,7 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
       case "mcpSync": return McpSyncPage();
       case "coldstart": return ColdStartPage();
       case "providers": return ProvidersPage();
+      case "diagnostics": return DiagnosticsPage();
       case "logs": return LogsPage();
       case "settings": return SettingsPage();
     }

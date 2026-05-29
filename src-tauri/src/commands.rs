@@ -7,7 +7,7 @@ use crate::{
     state::{AppState, GatewayStatus},
 };
 use serde::{Deserialize, Serialize};
-use std::{fs, process::Command, time::Instant};
+use std::{collections::HashMap, fs, process::Command, time::Instant};
 use tauri::{AppHandle, State};
 
 #[tauri::command]
@@ -280,6 +280,868 @@ pub fn reveal_safe_install_locations() -> Result<String, String> {
         let _ = Command::new("open").arg(&dir).status();
     }
     Ok("Opened /Applications and the latest local release-artifacts folder when available.".into())
+}
+
+#[tauri::command]
+pub fn get_unified_diagnostics(
+    st: State<'_, AppState>,
+) -> Result<UnifiedDiagnosticsReport, String> {
+    unified_diagnostics_report(&st)
+}
+
+#[tauri::command]
+pub fn export_unified_diagnostics_bundle(st: State<'_, AppState>) -> Result<String, String> {
+    let report = unified_diagnostics_report(&st)?;
+    let path = st.backups_dir.join(format!(
+        "unified-diagnostics-{}.json",
+        chrono::Utc::now().timestamp_millis()
+    ));
+    fs::write(
+        &path,
+        serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(path.display().to_string())
+}
+
+#[tauri::command]
+pub fn list_provider_presets() -> Vec<ProviderPreset> {
+    built_in_provider_presets()
+}
+
+#[tauri::command]
+pub fn apply_provider_preset(
+    st: State<'_, AppState>,
+    payload: ApplyProviderPresetPayload,
+) -> Result<Vec<Provider>, String> {
+    let preset = built_in_provider_presets()
+        .into_iter()
+        .find(|p| p.id == payload.preset_id)
+        .ok_or_else(|| format!("Provider preset '{}' not found", payload.preset_id))?;
+    let existing = database::list_providers(&st.db_path)?
+        .into_iter()
+        .find(|p| p.id == preset.id);
+    let api_key = payload
+        .api_key
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| s.trim().to_string())
+        .or_else(|| existing.as_ref().and_then(|p| p.api_key.clone()));
+
+    if let Some(existing) = existing {
+        database::update_provider(
+            &st.db_path,
+            &UpdateProvider {
+                id: preset.id.clone(),
+                name: preset.name.clone(),
+                base_url: preset.base_url.clone(),
+                openai_base_url: Some(preset.openai_base_url.clone()),
+                anthropic_base_url: preset.anthropic_base_url.clone(),
+                auth_header: preset.auth_header.clone(),
+                auth_scheme: preset.auth_scheme.clone(),
+                api_key,
+                enabled: existing.enabled,
+            },
+        )?;
+    } else {
+        database::create_provider(
+            &st.db_path,
+            &CreateProvider {
+                id: preset.id.clone(),
+                name: preset.name.clone(),
+                base_url: preset.base_url.clone(),
+                openai_base_url: Some(preset.openai_base_url.clone()),
+                anthropic_base_url: preset.anthropic_base_url.clone(),
+                auth_header: preset.auth_header.clone(),
+                auth_scheme: preset.auth_scheme.clone(),
+                api_key,
+            },
+        )?;
+    }
+    database::upsert_provider_policy(&st.db_path, &preset.recommended_policy)?;
+    database::list_providers(&st.db_path)
+}
+
+fn unified_diagnostics_report(
+    st: &State<'_, AppState>,
+) -> Result<UnifiedDiagnosticsReport, String> {
+    let providers = database::list_providers(&st.db_path)?;
+    let routes = database::list_routes(&st.db_path)?;
+    let codex_routes = database::list_codex_routes(&st.db_path)?;
+    let logs = database::list_logs(&st.db_path, 200)?;
+    let failed = database::list_failed_request_snapshots(&st.db_path, 100)?;
+    let route_diagnostics = gateway::route_diagnostics(&st.db_path).unwrap_or_default();
+    let codex_diagnostics = codex_gateway::route_diagnostics(&st.db_path).unwrap_or_default();
+    let runtime = runtime_source_report_for_path(
+        std::env::current_exe()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|e| format!("unknown: {e}")),
+    );
+    let desktop = desktop_binding::inspect(&dirs::home_dir().ok_or("no home")?).ok();
+    let claude_code = claude_code_binding::inspect(&dirs::home_dir().ok_or("no home")?).ok();
+    let codex_status = codex_gateway::status(st).unwrap_or_default();
+    let codex_binding = codex_binding::inspect(&dirs::home_dir().ok_or("no home")?).ok();
+    let codex_pp_install = codex_pp::detect();
+    let codex_pp_health = codex_pp::health();
+    let failure_clusters = failure_clusters_from_snapshots(&failed);
+
+    let sections = vec![
+        claude_desktop_section(desktop.as_ref(), &routes, &route_diagnostics, &logs),
+        claude_code_section(claude_code.as_ref(), &route_diagnostics),
+        codex_gateway_section(
+            &codex_status,
+            codex_binding.as_ref(),
+            &codex_routes,
+            &codex_diagnostics,
+        ),
+        codex_pp_section(&codex_pp_install, &codex_pp_health),
+        providers_section(
+            &providers,
+            &route_diagnostics,
+            &codex_diagnostics,
+            &failure_clusters,
+        ),
+        install_runtime_section(&runtime),
+    ];
+    let score = if sections.is_empty() {
+        0
+    } else {
+        (sections.iter().map(|s| s.score as u16).sum::<u16>() / sections.len() as u16) as u8
+    };
+    let status = overall_status(&sections);
+    Ok(UnifiedDiagnosticsReport {
+        generated_at: chrono::Utc::now().to_rfc3339(),
+        summary: format!(
+            "{} sections checked, {} issue clusters found.",
+            sections.len(),
+            failure_clusters.len()
+        ),
+        status,
+        score,
+        sections,
+        failure_clusters,
+    })
+}
+
+fn metric(label: &str, value: impl Into<String>, status: &str) -> DiagnosticsMetric {
+    DiagnosticsMetric {
+        label: label.into(),
+        value: value.into(),
+        status: status.into(),
+    }
+}
+
+fn action(id: &str, label: &str, target: &str, severity: &str, detail: &str) -> DiagnosticsAction {
+    DiagnosticsAction {
+        id: id.into(),
+        label: label.into(),
+        target: target.into(),
+        severity: severity.into(),
+        detail: detail.into(),
+    }
+}
+
+fn section(
+    id: &str,
+    title: &str,
+    status: &str,
+    score: u8,
+    summary: impl Into<String>,
+    metrics: Vec<DiagnosticsMetric>,
+    actions: Vec<DiagnosticsAction>,
+) -> DiagnosticsSection {
+    DiagnosticsSection {
+        id: id.into(),
+        title: title.into(),
+        status: status.into(),
+        score,
+        summary: summary.into(),
+        metrics,
+        actions,
+    }
+}
+
+fn claude_desktop_section(
+    desktop: Option<&desktop_binding::DesktopInfo>,
+    routes: &[ModelRoute],
+    route_diagnostics: &[gateway::RouteCompatibilityDiagnostic],
+    logs: &[RequestLog],
+) -> DiagnosticsSection {
+    let binding_ok = desktop.map(|d| d.managed).unwrap_or(false);
+    let route_count = routes.iter().filter(|r| r.enabled).count();
+    let recent_failures = logs
+        .iter()
+        .filter(|l| l.status_code.map(|c| c >= 400).unwrap_or(false))
+        .count();
+    let unsafe_routes = route_diagnostics
+        .iter()
+        .filter(|d| !d.strategy.direct_provider_safe && d.strategy.gateway_route_recommended)
+        .count();
+    let mut actions = Vec::new();
+    if !binding_ok {
+        actions.push(action(
+            "apply_claude_binding",
+            "Apply Claude Desktop binding",
+            "claude",
+            "attention",
+            "Claude Desktop is not currently managed by Gateway Switch.",
+        ));
+    }
+    if route_count == 0 {
+        actions.push(action(
+            "create_claude_route",
+            "Create a Claude route",
+            "claude",
+            "critical",
+            "No enabled Claude route is configured.",
+        ));
+    }
+    if unsafe_routes > 0 {
+        actions.push(action(
+            "review_route_strategy",
+            "Review route strategy",
+            "claude",
+            "attention",
+            "Some routes require Gateway compatibility transformations.",
+        ));
+    }
+    let score = score_from_issues(&[
+        (!binding_ok, 25),
+        (route_count == 0, 35),
+        (recent_failures > 0, 15),
+    ]);
+    section(
+        "claude_desktop",
+        "Claude Desktop",
+        status_from_score(score),
+        score,
+        if binding_ok {
+            "Claude Desktop binding is present."
+        } else {
+            "Claude Desktop binding needs attention."
+        },
+        vec![
+            metric(
+                "Binding",
+                if binding_ok { "managed" } else { "not managed" },
+                if binding_ok { "healthy" } else { "attention" },
+            ),
+            metric(
+                "Enabled routes",
+                route_count.to_string(),
+                if route_count > 0 {
+                    "healthy"
+                } else {
+                    "critical"
+                },
+            ),
+            metric(
+                "Recent failures",
+                recent_failures.to_string(),
+                if recent_failures == 0 {
+                    "healthy"
+                } else {
+                    "attention"
+                },
+            ),
+        ],
+        actions,
+    )
+}
+
+fn claude_code_section(
+    info: Option<&ClaudeCodeInfo>,
+    route_diagnostics: &[gateway::RouteCompatibilityDiagnostic],
+) -> DiagnosticsSection {
+    let managed = info.map(|i| i.managed).unwrap_or(false);
+    let unsafe_route_count = route_diagnostics
+        .iter()
+        .filter(|d| !d.strategy.direct_provider_safe)
+        .count();
+    let mut actions = Vec::new();
+    if !managed {
+        actions.push(action(
+            "repair_claude_code_gateway",
+            "Repair Claude Code to Gateway Route",
+            "claudeCode",
+            "attention",
+            "Gateway Route is the safest default for providers with uncertain Anthropic compatibility.",
+        ));
+    }
+    let score = score_from_issues(&[(!managed, 30), (unsafe_route_count > 0, 10)]);
+    section(
+        "claude_code",
+        "Claude Code",
+        status_from_score(score),
+        score,
+        if managed {
+            "Claude Code is bound through Gateway Switch."
+        } else {
+            "Claude Code may be using an unmanaged or direct provider binding."
+        },
+        vec![
+            metric(
+                "Binding",
+                if managed { "managed" } else { "not managed" },
+                if managed { "healthy" } else { "attention" },
+            ),
+            metric(
+                "Gateway-recommended routes",
+                unsafe_route_count.to_string(),
+                if unsafe_route_count == 0 {
+                    "healthy"
+                } else {
+                    "attention"
+                },
+            ),
+        ],
+        actions,
+    )
+}
+
+fn codex_gateway_section(
+    status: &GatewayStatus,
+    binding: Option<&CodexBindingInfo>,
+    routes: &[CodexRoute],
+    diagnostics: &[codex_gateway::CodexRouteDiagnostic],
+) -> DiagnosticsSection {
+    let running = status.running;
+    let managed = binding.map(|b| b.managed).unwrap_or(false);
+    let enabled_routes = routes.iter().filter(|r| r.enabled).count();
+    let strict_routes = diagnostics
+        .iter()
+        .filter(|d| d.strategy.codex_strict_tool_calls)
+        .count();
+    let mut actions = Vec::new();
+    if !running {
+        actions.push(action(
+            "start_codex_gateway",
+            "Start Codex Gateway",
+            "codex",
+            "critical",
+            "Codex routes require the local Responses gateway to be running.",
+        ));
+    }
+    if !managed {
+        actions.push(action(
+            "apply_codex_binding",
+            "Apply Codex binding",
+            "codex",
+            "attention",
+            "Codex config is not currently managed by Gateway Switch.",
+        ));
+    }
+    let score = score_from_issues(&[(!running, 35), (!managed, 20), (enabled_routes == 0, 25)]);
+    section(
+        "codex_gateway",
+        "Codex Gateway",
+        status_from_score(score),
+        score,
+        if running {
+            "Codex Gateway is available."
+        } else {
+            "Codex Gateway is not running."
+        },
+        vec![
+            metric(
+                "Gateway",
+                if running { "running" } else { "stopped" },
+                if running { "healthy" } else { "critical" },
+            ),
+            metric(
+                "Binding",
+                if managed { "managed" } else { "not managed" },
+                if managed { "healthy" } else { "attention" },
+            ),
+            metric(
+                "Enabled routes",
+                enabled_routes.to_string(),
+                if enabled_routes > 0 {
+                    "healthy"
+                } else {
+                    "critical"
+                },
+            ),
+            metric("Strict tool routes", strict_routes.to_string(), "info"),
+        ],
+        actions,
+    )
+}
+
+fn codex_pp_section(
+    install: &codex_pp::CodexPpInstall,
+    health: &codex_pp::CodexPpHealth,
+) -> DiagnosticsSection {
+    let installed = install.installed;
+    let failed_checks = health
+        .checks
+        .iter()
+        .filter(|check| check.status == "failed" || check.status == "error")
+        .count();
+    let review_checks = health
+        .checks
+        .iter()
+        .filter(|check| check.status == "review")
+        .count();
+    let mut actions = Vec::new();
+    if !installed {
+        actions.push(action(
+            "install_codex_pp",
+            "Install Codex++",
+            "codex",
+            "attention",
+            "Codex++ is not installed in the managed runtime.",
+        ));
+    }
+    if failed_checks > 0 || review_checks > 0 {
+        actions.push(action(
+            "review_codex_pp_health",
+            "Review Codex++ health",
+            "codex",
+            "attention",
+            "One or more Codex++ checks need review.",
+        ));
+    }
+    let score = score_from_issues(&[
+        (!installed, 35),
+        (failed_checks > 0, 25),
+        (review_checks > 0, 10),
+    ]);
+    section(
+        "codex_pp",
+        "Codex++",
+        status_from_score(score),
+        score,
+        if installed {
+            "Codex++ runtime is detected."
+        } else {
+            "Codex++ runtime is not installed."
+        },
+        vec![
+            metric(
+                "Installed",
+                installed.to_string(),
+                if installed { "healthy" } else { "attention" },
+            ),
+            metric(
+                "Failed checks",
+                failed_checks.to_string(),
+                if failed_checks == 0 {
+                    "healthy"
+                } else {
+                    "critical"
+                },
+            ),
+            metric(
+                "Review checks",
+                review_checks.to_string(),
+                if review_checks == 0 {
+                    "healthy"
+                } else {
+                    "attention"
+                },
+            ),
+        ],
+        actions,
+    )
+}
+
+fn providers_section(
+    providers: &[Provider],
+    route_diagnostics: &[gateway::RouteCompatibilityDiagnostic],
+    codex_diagnostics: &[codex_gateway::CodexRouteDiagnostic],
+    failure_clusters: &[FailureCluster],
+) -> DiagnosticsSection {
+    let enabled = providers.iter().filter(|p| p.enabled).count();
+    let no_key = providers
+        .iter()
+        .filter(|p| p.enabled && p.api_key.as_deref().unwrap_or_default().is_empty())
+        .count();
+    let gateway_recommended = route_diagnostics
+        .iter()
+        .filter(|d| d.strategy.gateway_route_recommended)
+        .count()
+        + codex_diagnostics
+            .iter()
+            .filter(|d| d.strategy.gateway_route_recommended)
+            .count();
+    let provider_failures = failure_clusters
+        .iter()
+        .filter(|c| c.provider_id.is_some())
+        .count();
+    let mut actions = Vec::new();
+    if enabled == 0 {
+        actions.push(action(
+            "apply_provider_preset",
+            "Apply a Provider Preset",
+            "providers",
+            "critical",
+            "No enabled provider is configured.",
+        ));
+    }
+    if no_key > 0 {
+        actions.push(action(
+            "fill_provider_keys",
+            "Add provider API keys",
+            "providers",
+            "attention",
+            "Some enabled providers are missing API keys.",
+        ));
+    }
+    if provider_failures > 0 {
+        actions.push(action(
+            "review_failure_clusters",
+            "Review provider failure clusters",
+            "logs",
+            "attention",
+            "Recent failed requests indicate provider-specific issues.",
+        ));
+    }
+    let score = score_from_issues(&[
+        (enabled == 0, 35),
+        (no_key > 0, 20),
+        (provider_failures > 0, 15),
+    ]);
+    section(
+        "providers",
+        "Providers",
+        status_from_score(score),
+        score,
+        format!("{enabled} enabled providers, {provider_failures} failure clusters."),
+        vec![
+            metric(
+                "Enabled providers",
+                enabled.to_string(),
+                if enabled > 0 { "healthy" } else { "critical" },
+            ),
+            metric(
+                "Missing API keys",
+                no_key.to_string(),
+                if no_key == 0 { "healthy" } else { "attention" },
+            ),
+            metric(
+                "Gateway-recommended routes",
+                gateway_recommended.to_string(),
+                "info",
+            ),
+        ],
+        actions,
+    )
+}
+
+fn install_runtime_section(runtime: &RuntimeSourceReport) -> DiagnosticsSection {
+    let stable = runtime.severity == "ok";
+    let score = score_from_issues(&[(!stable, 25)]);
+    let actions = if stable {
+        Vec::new()
+    } else {
+        vec![action(
+            "safe_install",
+            "Install under /Applications",
+            "settings",
+            "attention",
+            &runtime.recommendation,
+        )]
+    };
+    section(
+        "install_runtime",
+        "Install / Runtime",
+        status_from_score(score),
+        score,
+        runtime.summary.clone(),
+        vec![
+            metric("Source", runtime.bundle_path.clone(), &runtime.severity),
+            metric(
+                "Applications",
+                runtime.is_applications.to_string(),
+                if runtime.is_applications {
+                    "healthy"
+                } else {
+                    "attention"
+                },
+            ),
+            metric(
+                "DMG",
+                runtime.is_dmg_volume.to_string(),
+                if runtime.is_dmg_volume {
+                    "attention"
+                } else {
+                    "healthy"
+                },
+            ),
+        ],
+        actions,
+    )
+}
+
+fn failure_clusters_from_snapshots(
+    snapshots: &[FailedRequestDiagnosticCandidate],
+) -> Vec<FailureCluster> {
+    let mut clusters: HashMap<String, FailureCluster> = HashMap::new();
+    for snapshot in snapshots {
+        let key = format!(
+            "{}|{}|{}",
+            snapshot.provider_id.as_deref().unwrap_or("unknown"),
+            snapshot.surface,
+            snapshot
+                .status_code
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "network".into())
+        );
+        let entry = clusters
+            .entry(key.clone())
+            .or_insert_with(|| FailureCluster {
+                key: key.clone(),
+                provider_id: snapshot.provider_id.clone(),
+                surface: snapshot.surface.clone(),
+                status_code: snapshot.status_code,
+                count: 0,
+                sample_error: snapshot.error_summary.clone(),
+                recommendation: failure_recommendation(
+                    snapshot.status_code,
+                    snapshot.error_summary.as_deref(),
+                ),
+            });
+        entry.count += 1;
+        if entry.sample_error.is_none() {
+            entry.sample_error = snapshot.error_summary.clone();
+        }
+    }
+    let mut values = clusters.into_values().collect::<Vec<_>>();
+    values.sort_by(|a, b| b.count.cmp(&a.count));
+    values
+}
+
+fn failure_recommendation(status_code: Option<u16>, error_summary: Option<&str>) -> String {
+    let lower = error_summary.unwrap_or_default().to_ascii_lowercase();
+    if lower.contains("messages.role") || lower.contains("system") {
+        "Enable system_to_user and prefer Gateway Route for this provider.".into()
+    } else if lower.contains("tool") && lower.contains("role") {
+        "Enable tool_to_user or disable_tools for this provider.".into()
+    } else if lower.contains("reasoning") || lower.contains("thinking") {
+        "Enable strip_unsupported_params and codex_strip_reasoning.".into()
+    } else {
+        match status_code {
+            Some(400) => "Review provider protocol compatibility and payload shape.".into(),
+            Some(413) => "Reduce attachment size or split the request.".into(),
+            Some(429) => {
+                "Provider rate limit or quota reached; retry later or switch provider.".into()
+            }
+            Some(500..=599) => {
+                "Provider is unhealthy or the upstream gateway is returning server errors.".into()
+            }
+            _ => "Network or unknown failure; inspect the redacted replay preview.".into(),
+        }
+    }
+}
+
+fn score_from_issues(issues: &[(bool, u8)]) -> u8 {
+    let penalty = issues
+        .iter()
+        .filter(|(active, _)| *active)
+        .map(|(_, weight)| *weight as u16)
+        .sum::<u16>();
+    100u16.saturating_sub(penalty).min(100) as u8
+}
+
+fn status_from_score(score: u8) -> &'static str {
+    match score {
+        85..=100 => "healthy",
+        65..=84 => "attention",
+        40..=64 => "degraded",
+        _ => "critical",
+    }
+}
+
+fn overall_status(sections: &[DiagnosticsSection]) -> String {
+    if sections.iter().any(|s| s.status == "critical") {
+        "critical"
+    } else if sections.iter().any(|s| s.status == "degraded") {
+        "degraded"
+    } else if sections.iter().any(|s| s.status == "attention") {
+        "attention"
+    } else {
+        "healthy"
+    }
+    .into()
+}
+
+fn built_in_provider_presets() -> Vec<ProviderPreset> {
+    vec![
+        provider_preset(
+            "openrouter",
+            "OpenRouter",
+            "Multi-provider OpenAI-compatible router with optional Anthropic-style model IDs.",
+            "https://openrouter.ai/api/v1",
+            None,
+            "Authorization",
+            Some("Bearer"),
+            "claude-sonnet-openrouter",
+            "codex-openrouter",
+            "anthropic/claude-sonnet-4",
+            preset_policy("openrouter", None, None, None, Some(true), Some(false), Some(true), Some(true), Some(false), Some(false)),
+            vec!["Prefer Gateway Route unless the specific OpenRouter model is known Anthropic-compatible.".into()],
+        ),
+        provider_preset(
+            "volcengine",
+            "Volcengine Ark DeepSeek",
+            "Volcengine Ark DeepSeek coding endpoints usually accept only user/assistant chat roles.",
+            "https://ark.cn-beijing.volces.com/api/v3",
+            None,
+            "Authorization",
+            Some("Bearer"),
+            "deepseek-v4-pro",
+            "codex-volcengine",
+            "deepseek-v4-pro",
+            preset_policy("volcengine", Some(true), Some(true), None, Some(true), Some(false), Some(true), Some(true), Some(false), Some(true)),
+            vec!["Do not use Claude Code Direct Provider for this preset; use Gateway Route.".into()],
+        ),
+        provider_preset(
+            "deepseek",
+            "DeepSeek Official",
+            "DeepSeek official OpenAI-compatible chat endpoint.",
+            "https://api.deepseek.com/v1",
+            None,
+            "Authorization",
+            Some("Bearer"),
+            "deepseek-chat",
+            "codex-deepseek",
+            "deepseek-chat",
+            preset_policy("deepseek", Some(true), Some(true), None, Some(true), Some(false), Some(true), Some(true), Some(false), Some(true)),
+            vec!["Reasoning parameters may need stripping for non-reasoner models.".into()],
+        ),
+        provider_preset(
+            "moonshot",
+            "Moonshot Kimi",
+            "Moonshot OpenAI-compatible chat endpoint for Kimi models.",
+            "https://api.moonshot.cn/v1",
+            None,
+            "Authorization",
+            Some("Bearer"),
+            "kimi-k2",
+            "codex-kimi",
+            "kimi-k2-0711-preview",
+            preset_policy("moonshot", Some(true), Some(true), None, Some(true), Some(false), Some(true), Some(true), Some(false), Some(true)),
+            vec!["Use Gateway Route for Claude clients; Direct Provider is not assumed Anthropic-compatible.".into()],
+        ),
+        provider_preset(
+            "qwen",
+            "Qwen DashScope",
+            "Alibaba DashScope OpenAI-compatible endpoint for Qwen models.",
+            "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            None,
+            "Authorization",
+            Some("Bearer"),
+            "qwen-coder",
+            "codex-qwen",
+            "qwen3-coder-plus",
+            preset_policy("qwen", Some(true), Some(true), None, Some(true), Some(false), Some(true), Some(true), Some(false), Some(true)),
+            vec!["Tool-call quality varies by model; keep Codex strict tool mode available.".into()],
+        ),
+        provider_preset(
+            "xiaomi",
+            "Xiaomi MiMo",
+            "Xiaomi MiMo OpenAI-compatible endpoint; often best through Chat fallback.",
+            "https://token-plan-sgp.xiaomimimo.com/v1",
+            None,
+            "Authorization",
+            Some("Bearer"),
+            "mimo-chat",
+            "codex-mimo",
+            "mimo-v2.5",
+            preset_policy("xiaomi", Some(true), Some(true), None, Some(true), Some(false), Some(true), Some(true), Some(false), Some(true)),
+            vec!["Singapore endpoint latency may be higher from mainland China networks.".into()],
+        ),
+        provider_preset(
+            "anthropic",
+            "Standard Anthropic-Compatible",
+            "Generic provider that genuinely supports Anthropic Messages API.",
+            "https://api.anthropic.com/v1",
+            Some("https://api.anthropic.com/v1"),
+            "x-api-key",
+            None,
+            "claude-sonnet",
+            "codex-anthropic",
+            "claude-sonnet-4-5",
+            preset_policy("anthropic", Some(false), Some(false), Some(false), Some(false), Some(true), Some(false), Some(false), Some(false), Some(false)),
+            vec!["Only use this preset for endpoints that truly implement Anthropic Messages API.".into()],
+        ),
+        provider_preset(
+            "openai-chat",
+            "OpenAI-Compatible Chat",
+            "Generic OpenAI Chat Completions provider.",
+            "https://api.openai.com/v1",
+            None,
+            "Authorization",
+            Some("Bearer"),
+            "openai-chat",
+            "codex-openai-chat",
+            "gpt-4o",
+            preset_policy("openai-chat", Some(true), Some(true), None, Some(true), Some(false), Some(true), Some(false), Some(false), Some(false)),
+            vec!["Direct Provider for Claude Code is not safe unless an Anthropic Base URL exists.".into()],
+        ),
+    ]
+}
+
+fn provider_preset(
+    id: &str,
+    name: &str,
+    description: &str,
+    openai_base_url: &str,
+    anthropic_base_url: Option<&str>,
+    auth_header: &str,
+    auth_scheme: Option<&str>,
+    recommended_claude_alias: &str,
+    recommended_codex_model: &str,
+    upstream_model_example: &str,
+    recommended_policy: ProviderCompatibilityPolicy,
+    warnings: Vec<String>,
+) -> ProviderPreset {
+    ProviderPreset {
+        id: id.into(),
+        name: name.into(),
+        description: description.into(),
+        base_url: openai_base_url.into(),
+        openai_base_url: openai_base_url.into(),
+        anthropic_base_url: anthropic_base_url.map(Into::into),
+        auth_header: auth_header.into(),
+        auth_scheme: auth_scheme.map(Into::into),
+        recommended_claude_alias: recommended_claude_alias.into(),
+        recommended_codex_model: recommended_codex_model.into(),
+        upstream_model_example: upstream_model_example.into(),
+        recommended_policy,
+        warnings,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn preset_policy(
+    provider_id: &str,
+    system_to_user: Option<bool>,
+    tool_to_user: Option<bool>,
+    disable_tools: Option<bool>,
+    strip_unsupported_params: Option<bool>,
+    direct_provider_safe: Option<bool>,
+    gateway_route_recommended: Option<bool>,
+    codex_disable_responses: Option<bool>,
+    codex_strict_tool_calls: Option<bool>,
+    codex_strip_reasoning: Option<bool>,
+) -> ProviderCompatibilityPolicy {
+    ProviderCompatibilityPolicy {
+        provider_id: provider_id.into(),
+        system_to_user,
+        tool_to_user,
+        disable_tools,
+        strip_unsupported_params,
+        direct_provider_safe,
+        gateway_route_recommended,
+        codex_disable_responses,
+        codex_strict_tool_calls,
+        codex_strip_reasoning,
+        notes: Some("Applied from built-in provider preset".into()),
+        updated_by: "preset".into(),
+        updated_at: None,
+    }
 }
 
 fn runtime_source_report_for_path(bundle_path: String) -> RuntimeSourceReport {
@@ -1180,5 +2042,53 @@ mod tests {
             .steps
             .iter()
             .any(|step| step.contains("Drag Gateway Switch.app")));
+    }
+
+    #[test]
+    fn failure_clusters_map_role_errors_to_strategy_recommendations() {
+        let snapshots = vec![FailedRequestDiagnosticCandidate {
+            request_id: "r1".into(),
+            surface: "claude_messages".into(),
+            claude_alias: Some("claude".into()),
+            provider_id: Some("volcengine".into()),
+            upstream_model: Some("deepseek".into()),
+            status_code: Some(400),
+            error_summary: Some("messages.role system is not valid".into()),
+            redaction_summary: "none".into(),
+            created_at: None,
+        }];
+
+        let clusters = failure_clusters_from_snapshots(&snapshots);
+        assert_eq!(clusters.len(), 1);
+        assert_eq!(clusters[0].count, 1);
+        assert!(clusters[0].recommendation.contains("system_to_user"));
+    }
+
+    #[test]
+    fn provider_presets_include_safe_defaults_for_volcengine() {
+        let presets = built_in_provider_presets();
+        let volcengine = presets.iter().find(|p| p.id == "volcengine").unwrap();
+        assert_eq!(volcengine.recommended_policy.system_to_user, Some(true));
+        assert_eq!(volcengine.recommended_policy.tool_to_user, Some(true));
+        assert_eq!(
+            volcengine.recommended_policy.direct_provider_safe,
+            Some(false)
+        );
+        assert!(volcengine
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("Gateway Route")));
+    }
+
+    #[test]
+    fn status_and_score_helpers_prioritize_critical_sections() {
+        let sections = vec![
+            section("ok", "OK", "healthy", 100, "ok", vec![], vec![]),
+            section("bad", "Bad", "critical", 20, "bad", vec![], vec![]),
+        ];
+        assert_eq!(status_from_score(90), "healthy");
+        assert_eq!(status_from_score(45), "degraded");
+        assert_eq!(overall_status(&sections), "critical");
+        assert_eq!(score_from_issues(&[(true, 25), (false, 50)]), 75);
     }
 }

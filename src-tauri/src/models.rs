@@ -214,6 +214,77 @@ pub struct FailedRequestDiagnosticCandidate {
     pub created_at: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiagnosticsMetric {
+    pub label: String,
+    pub value: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiagnosticsAction {
+    pub id: String,
+    pub label: String,
+    pub target: String,
+    pub severity: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FailureCluster {
+    pub key: String,
+    pub provider_id: Option<String>,
+    pub surface: String,
+    pub status_code: Option<u16>,
+    pub count: usize,
+    pub sample_error: Option<String>,
+    pub recommendation: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiagnosticsSection {
+    pub id: String,
+    pub title: String,
+    pub status: String,
+    pub score: u8,
+    pub summary: String,
+    pub metrics: Vec<DiagnosticsMetric>,
+    pub actions: Vec<DiagnosticsAction>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnifiedDiagnosticsReport {
+    pub generated_at: String,
+    pub status: String,
+    pub score: u8,
+    pub summary: String,
+    pub sections: Vec<DiagnosticsSection>,
+    pub failure_clusters: Vec<FailureCluster>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderPreset {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub base_url: String,
+    pub openai_base_url: String,
+    pub anthropic_base_url: Option<String>,
+    pub auth_header: String,
+    pub auth_scheme: Option<String>,
+    pub recommended_claude_alias: String,
+    pub recommended_codex_model: String,
+    pub upstream_model_example: String,
+    pub recommended_policy: ProviderCompatibilityPolicy,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApplyProviderPresetPayload {
+    pub preset_id: String,
+    pub api_key: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct HealthStatus {
     pub target: String,

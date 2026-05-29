@@ -1,6 +1,6 @@
 # Gateway Switch Project Documentation
 
-Version: 1.10.0
+Version: 1.12.0
 
 This document is the single technical source of truth for Gateway Switch. It merges the former project architecture notes and the Codex Gateway notes into one maintained file.
 
@@ -9,7 +9,7 @@ This document is the single technical source of truth for Gateway Switch. It mer
 If another AI receives this repository, start here:
 
 - Product: macOS Tauri app that routes Claude Desktop, Claude Code, and Codex App to third-party model providers.
-- Current version: `1.10.0`.
+- Current version: `1.12.0`.
 - Main frontend: `src/App.tsx` and `src/App.css`.
 - Main backend: `src-tauri/src/*.rs`.
 - Claude gateway: `src-tauri/src/gateway.rs`, local Anthropic Messages surface on `127.0.0.1:3456`.
@@ -36,7 +36,20 @@ The app solves two related but different protocol problems:
 
 The shared design goal is simple: providers share identity, auth header, auth scheme, and API key, but they do not share one universal Base URL. Provider URLs are split by protocol: OpenAI Base URL for Codex and Chat Completions fallback, Anthropic Base URL for Claude and Claude Code direct requests.
 
-## 3. Version 1.10.0 Unified Compatibility Diagnostics Scope
+## 3. Version 1.12.0 Unified Diagnostics and Provider Presets Scope
+
+Version 1.12.0 combines the planned diagnostics-center milestone with Provider Presets so Gateway Switch behaves like a cross-product operations console.
+
+Main changes:
+
+- A Unified Diagnostics Center aggregates Claude Desktop, Claude Code, Codex Gateway, Codex++, Providers, and Install / Runtime health into one report with section scores and action recommendations.
+- Failed request snapshots are clustered by provider, surface, and status code, then mapped to compatibility suggestions such as `system_to_user`, `tool_to_user`, `strip_unsupported_params`, `codex_strip_reasoning`, rate-limit handling, or provider outage review.
+- Built-in Provider Presets cover OpenRouter, Volcengine Ark DeepSeek, DeepSeek official, Moonshot Kimi, Qwen DashScope, Xiaomi MiMo, standard Anthropic-compatible providers, and generic OpenAI Chat providers.
+- Applying a preset creates or updates provider URLs and writes a recommended compatibility policy while preserving existing API keys when no new key is supplied.
+- The UI adds a System > Diagnostics page and a Provider Presets section under Providers.
+- Regression tests cover failure recommendation mapping, preset safety defaults, diagnostics status derivation, version comparison, and safe install warnings.
+
+## 4. Version 1.10.0 Unified Compatibility Diagnostics Scope
 
 Version 1.10.0 completes the remaining compatibility roadmap by turning the v1.9.0 diagnostics layer into a configurable control plane shared by Claude, Claude Code, and Codex.
 
@@ -50,7 +63,7 @@ Main changes:
 - Automatic profiles now cover OpenRouter, Xiaomi MiMo, DeepSeek official, Moonshot Kimi, Qwen DashScope, Volcengine Ark, standard Anthropic, and OpenAI Chat fallback providers.
 - Regression tests cover provider policy persistence, diagnostic snapshots, replay redaction, Codex diagnostics, version comparison, and safe install warnings.
 
-## 3. Version 1.9.0 Compatibility Diagnostics Scope
+## 5. Version 1.9.0 Compatibility Diagnostics Scope
 
 Version 1.9.0 turns the Volcengine DeepSeek Gateway Route hotfix into a provider compatibility diagnostics layer.
 
@@ -62,7 +75,7 @@ Main changes:
 - Runtime Source Report warns when the app runs from `/Volumes`, `/tmp`, or another non-standard location instead of `/Applications`.
 - Regression tests cover compatibility profile selection, route diagnostics, payload preview role conversion, and runtime source classification.
 
-## 4. Version 1.8.8 Upstream Tweak Store Scope
+## 6. Version 1.8.8 Upstream Tweak Store Scope
 
 Version 1.8.8 makes Gateway Switch a more faithful Codex++ upstream store console while keeping safe install boundaries.
 

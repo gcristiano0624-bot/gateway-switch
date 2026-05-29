@@ -6,7 +6,7 @@
 
 > Gateway Switch 不仅仅是一个模型路由器。它是一个**运行时兼容性层**，驻留在 AI 原生桌面应用与第三方模型服务之间，弥合协议鸿沟、修复畸形工具调用、强制安全边界，并在上游 Provider 异常时优雅降级。
 
-[![Version](https://img.shields.io/badge/Version-1.10.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.12.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -16,6 +16,14 @@
 </div>
 
 ---
+
+## 1.12.0 统一诊断中心更新重点
+
+- **统一诊断中心。** 新增 Diagnostics 页面，集中展示 Claude Desktop、Claude Code、Codex Gateway、Codex++、Provider 和安装运行来源的健康分数。
+- **失败聚类建议。** 最近失败请求会按 Provider、状态码和 surface 聚合，并给出 `system_to_user`、`tool_to_user`、`strip_reasoning` 等策略建议。
+- **Provider Preset。** 内置 OpenRouter、火山方舟 DeepSeek、DeepSeek 官方、Moonshot Kimi、Qwen DashScope、小米 MiMo、标准 Anthropic、OpenAI Chat 等预设。
+- **安全应用预设。** 应用预设会创建/更新 Provider 与兼容策略，但不会用空值覆盖已有 API Key。
+- **诊断包导出。** 支持导出统一诊断 bundle，继续沿用本地脱敏策略，方便排查问题。
 
 ## Gateway Switch 是什么？
 

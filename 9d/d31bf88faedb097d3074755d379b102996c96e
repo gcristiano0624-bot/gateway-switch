@@ -1,0 +1,63 @@
+src-tauri/src/gateway.rs
+  2ac44fed2b7842f2 1315-1352 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a190b79cc0c4b078d42572c","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1315,1352]}]}]}
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "9dd31bf88faedb097d3074755d379b102996c96e",
+  "prompts": {
+    "2ac44fed2b7842f2": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a169b45c08b9f09c4f2a210",
+        "model": "gpt-5.5__dev"
+      },
+      "human_author": "hugo0624 <gcristiano0624@gmail.com>",
+      "messages": [],
+      "total_additions": 66,
+      "total_deletions": 0,
+      "accepted_lines": 4510,
+      "overriden_lines": 0
+    }
+  },
+  "attestation_metadata": {
+    "src-tauri/src/gateway.rs": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Range": [
+              1315,
+              1352
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a190b79cc0c4b078d42572c",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1315,
+                  1352
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "remote_transcripts": {
+    "2ac44fed2b7842f2": {
+      "tool": "trae",
+      "conversation_id": "6a169b45c08b9f09c4f2a210",
+      "session_id": "6a169b45c08b9f09c4f2a210",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    }
+  }
+}

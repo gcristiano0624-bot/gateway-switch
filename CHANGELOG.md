@@ -2,6 +2,14 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.9.0 - 2026-05-29
+
+- Added Provider Compatibility Profiles for Claude routes, including `standard_anthropic`, `openai_chat_fallback`, and `volcengine_deepseek_coding`.
+- Added Claude Code Route Diagnostics that explain Direct Provider safety, Gateway Route recommendations, and system/tool role conversion behavior.
+- Added a redacted Payload Preview command and UI so users can inspect the converted upstream Chat payload without sending a request or consuming tokens.
+- Added runtime source detection to warn when Gateway Switch is launched from a DMG or temporary path instead of `/Applications`.
+- Added regression tests for route diagnostics, payload preview role conversion, and runtime source classification.
+
 ## 1.8.8 - 2026-05-29
 
 - Added Claude Code Gateway compatibility for Volcengine Ark DeepSeek coding models that reject `messages.role = system`.

@@ -1312,6 +1312,44 @@ mod tests {
     };
     use tower::ServiceExt;
 
+    #[test]
+    fn test_gateway_route_resolve_marks_volcengine_deepseek_user_assistant_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("t.db");
+        database::initialize(&db).unwrap();
+        database::create_provider(
+            &db,
+            &CreateProvider {
+                id: "volcengine".into(),
+                name: "火山方舟".into(),
+                base_url: "https://ark.cn-beijing.volces.com/api/coding/v3".into(),
+                openai_base_url: Some("https://ark.cn-beijing.volces.com/api/coding/v3".into()),
+                anthropic_base_url: Some("https://ark.cn-beijing.volces.com/api/coding".into()),
+                auth_header: "Authorization".into(),
+                auth_scheme: Some("Bearer".into()),
+                api_key: Some("k".into()),
+            },
+        )
+        .unwrap();
+        database::create_route(
+            &db,
+            &CreateModelRoute {
+                id: "deepseek-v4-pro".into(),
+                claude_alias: "claude-sonnet-4-6".into(),
+                display_name: "DeepSeek V4 Pro".into(),
+                provider_id: "volcengine".into(),
+                upstream_model: "DeepSeek-V4-Pro".into(),
+            },
+        )
+        .unwrap();
+
+        let route = resolve(&db, "claude-sonnet-4-6").unwrap();
+
+        assert_eq!(route.provider_id, "volcengine");
+        assert_eq!(route.upstream_model, "DeepSeek-V4-Pro");
+        assert_eq!(route.chat_role_mode, ChatRoleMode::UserAssistantOnly);
+    }
+
     #[tokio::test]
     async fn test_list_models_auth() {
         let tmp = tempfile::tempdir().unwrap();

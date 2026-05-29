@@ -35,10 +35,17 @@ struct Route {
     upstream_model: String,
     openai_base_url: String,
     anthropic_base_url: String,
+    chat_role_mode: ChatRoleMode,
     headers: Vec<(String, String)>,
 }
 
 const CLAUDE_REQUEST_BODY_LIMIT_BYTES: usize = 64 * 1024 * 1024;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ChatRoleMode {
+    Standard,
+    UserAssistantOnly,
+}
 
 pub fn start(st: &AppState) -> Result<String, String> {
     {
@@ -421,7 +428,12 @@ async fn chat_completion_fallback(
     is_stream: bool,
     prior: Option<(reqwest::StatusCode, Bytes)>,
 ) -> Result<Response, Response> {
-    let chat_req = anthropic_to_chat_request(&body, &route.upstream_model, is_stream);
+    let chat_req = anthropic_to_chat_request(
+        &body,
+        &route.upstream_model,
+        is_stream,
+        route.chat_role_mode,
+    );
     let resp = ctx
         .client
         .post(upstream_url(&route.openai_base_url, "chat/completions"))
@@ -639,6 +651,7 @@ fn resolve(db: &PathBuf, model: &str) -> Result<Route, String> {
             .unwrap_or(&provider.openai_base_url)
             .trim_end_matches('/')
             .to_string(),
+        chat_role_mode: chat_role_mode_for(&provider, &route.upstream_model),
         headers: auth_headers(&provider),
     })
 }
@@ -655,12 +668,35 @@ fn auth_headers(p: &Provider) -> Vec<(String, String)> {
     ]
 }
 
-fn anthropic_to_chat_request(body: &Value, upstream_model: &str, stream: bool) -> Value {
-    let mut messages: Vec<Value> = Vec::new();
+fn chat_role_mode_for(provider: &Provider, upstream_model: &str) -> ChatRoleMode {
+    let key = format!(
+        "{} {} {} {} {}",
+        provider.id, provider.name, provider.base_url, provider.openai_base_url, upstream_model
+    )
+    .to_ascii_lowercase();
+    if (key.contains("volc") || key.contains("ark.cn-") || key.contains("火山"))
+        && key.contains("deepseek")
+    {
+        ChatRoleMode::UserAssistantOnly
+    } else {
+        ChatRoleMode::Standard
+    }
+}
 
-    if let Some(system) = body.get("system") {
-        let content = anthropic_content_to_text(system);
-        if !content.is_empty() {
+fn anthropic_to_chat_request(
+    body: &Value,
+    upstream_model: &str,
+    stream: bool,
+    role_mode: ChatRoleMode,
+) -> Value {
+    let mut messages: Vec<Value> = Vec::new();
+    let mut pending_system = body
+        .get("system")
+        .map(anthropic_content_to_text)
+        .filter(|content| !content.is_empty());
+
+    if role_mode == ChatRoleMode::Standard {
+        if let Some(content) = pending_system.take() {
             messages.push(json!({"role":"system","content":content}));
         }
     }
@@ -686,14 +722,39 @@ fn anthropic_to_chat_request(body: &Value, upstream_model: &str, stream: bool) -
             }
 
             let tool_results = anthropic_tool_results_to_chat(content_value);
-            let content = anthropic_content_to_text(content_value);
+            let mut content = anthropic_content_to_text(content_value);
+            if let Some(system) = pending_system.take() {
+                content = merge_system_into_user_content(&system, &content);
+            }
             if !content.is_empty() {
                 messages.push(json!({"role": role, "content": content}));
             }
             for tool_result in tool_results {
-                messages.push(tool_result);
+                if role_mode == ChatRoleMode::UserAssistantOnly {
+                    messages.push(json!({
+                        "role": "user",
+                        "content": format!(
+                            "[tool_result:{}]\n{}",
+                            tool_result
+                                .get("tool_call_id")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("unknown"),
+                            tool_result
+                                .get("content")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                        )
+                    }));
+                } else {
+                    messages.push(tool_result);
+                }
             }
         }
+    }
+
+    if let Some(system) = pending_system.take() {
+        messages
+            .push(json!({"role":"user","content": merge_system_into_user_content(&system, "")}));
     }
 
     if messages.is_empty() {
@@ -736,6 +797,14 @@ fn anthropic_to_chat_request(body: &Value, upstream_model: &str, stream: bool) -
     }
 
     req
+}
+
+fn merge_system_into_user_content(system: &str, user: &str) -> String {
+    if user.trim().is_empty() {
+        format!("[system]\n{system}")
+    } else {
+        format!("[system]\n{system}\n\n[user]\n{user}")
+    }
 }
 
 fn anthropic_tool_uses_to_chat(value: &Value) -> Vec<Value> {
@@ -1667,6 +1736,7 @@ mod tests {
             }),
             "mimo-v2.5",
             false,
+            ChatRoleMode::Standard,
         );
 
         assert_eq!(req["tools"][0]["function"]["name"], "web_search");
@@ -1705,6 +1775,70 @@ mod tests {
         assert_eq!(
             resp["content"][0]["input"]["query"],
             "Manchester United transfers"
+        );
+    }
+
+    #[test]
+    fn test_volcengine_deepseek_chat_payload_uses_only_user_assistant_roles() {
+        let req = anthropic_to_chat_request(
+            &json!({
+                "system": "You are Claude Code.",
+                "messages": [{
+                    "role": "user",
+                    "content": "hello"
+                }, {
+                    "role": "assistant",
+                    "content": "hi"
+                }, {
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_1",
+                        "content": "tool result text"
+                    }]
+                }]
+            }),
+            "DeepSeek-V4-Pro",
+            false,
+            ChatRoleMode::UserAssistantOnly,
+        );
+
+        let messages = req["messages"].as_array().unwrap();
+        assert!(messages
+            .iter()
+            .all(|message| matches!(message["role"].as_str(), Some("user" | "assistant"))));
+        assert_eq!(messages[0]["role"], "user");
+        assert!(messages[0]["content"]
+            .as_str()
+            .unwrap()
+            .contains("[system]\nYou are Claude Code."));
+        assert!(messages.iter().any(|message| message["content"]
+            .as_str()
+            .unwrap_or("")
+            .contains("[tool_result:toolu_1]")));
+    }
+
+    #[test]
+    fn test_volcengine_deepseek_role_mode_detection() {
+        let provider = Provider {
+            id: "Volcengine".into(),
+            name: "火山方舟".into(),
+            base_url: "https://ark.cn-beijing.volces.com/api/coding/v3".into(),
+            openai_base_url: "https://ark.cn-beijing.volces.com/api/coding/v3".into(),
+            anthropic_base_url: Some("https://ark.cn-beijing.volces.com/api/coding".into()),
+            auth_header: "Authorization".into(),
+            auth_scheme: Some("Bearer".into()),
+            api_key: None,
+            enabled: true,
+        };
+
+        assert_eq!(
+            chat_role_mode_for(&provider, "DeepSeek-V4-Pro"),
+            ChatRoleMode::UserAssistantOnly
+        );
+        assert_eq!(
+            chat_role_mode_for(&provider, "claude-sonnet-4-5"),
+            ChatRoleMode::Standard
         );
     }
 }

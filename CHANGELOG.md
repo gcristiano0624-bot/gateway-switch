@@ -2,6 +2,13 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.8.8 - 2026-05-29
+
+- Added Claude Code Gateway compatibility for Volcengine Ark DeepSeek coding models that reject `messages.role = system`.
+- Gateway Chat fallback now merges Anthropic `system` instructions into the first user message for Volcengine/DeepSeek routes and converts tool results to user messages for providers that only accept `user` and `assistant` roles.
+- Added backend and frontend guards that prevent binding Volcengine DeepSeek via Claude Code Direct Provider mode, with guidance to use Gateway Route instead.
+- Added regression tests for Volcengine DeepSeek role-mode detection and user/assistant-only payload conversion.
+
 ## 1.8.7 - 2026-05-28
 
 - Added a full Codex++ Upstream Tweak Store view sourced from the approved upstream registry at `https://b-nnett.github.io/codex-plusplus/store/index.json`.

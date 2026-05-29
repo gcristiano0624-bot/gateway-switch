@@ -6,7 +6,7 @@
 
 > Gateway Switch 不仅仅是一个模型路由器。它是一个**运行时兼容性层**，驻留在 AI 原生桌面应用与第三方模型服务之间，弥合协议鸿沟、修复畸形工具调用、强制安全边界，并在上游 Provider 异常时优雅降级。
 
-[![Version](https://img.shields.io/badge/Version-1.8.7-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.8.8-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -142,7 +142,14 @@ Claude 和 Codex 的 `/health` 端点会暴露这些画像，外部工具无需�
 
 ---
 
-## 1.8.7 上游 Tweak Store 更新重点
+## 1.8.8 Claude Code 火山 DeepSeek 修复重点
+
+- **修复火山 DeepSeek 角色兼容。** 对火山方舟 / Ark / DeepSeek coding 路由，Gateway 会把 Claude Code 的 system prompt 合并进第一条 user 消息，避免上游报 `messages.role = system`。
+- **兼容只接受 user/assistant 的接口。** 该类路由的 tool result 也会转成 user 文本，避免发送 `tool` role。
+- **阻止误用直连模式。** Claude Code 页面会提示火山 DeepSeek 不适合 Direct Provider，并要求使用 Gateway Route。
+- **保留真实 Anthropic 直连。** 只有火山 DeepSeek 这类已知不兼容接口会被拦截，真实 Anthropic-compatible provider 不受影响。
+
+## 1.8.8 上游 Tweak Store 更新重点
 
 - **完整接入上游商店。** Codex++ 脚本市场页现在展示上游 approved Tweak Store 的全部条目，数据源为 `https://b-nnett.github.io/codex-plusplus/store/index.json`。
 - **展示真实安装地址。** 每个 tweak 都会显示 GitHub repo、approved commit、派生的 `codeload.github.com` archive URL、安装状态和本地安装路径。
@@ -504,7 +511,7 @@ pnpm tauri build
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.7_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.8_aarch64.dmg
 ```
 
 ---

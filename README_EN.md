@@ -6,7 +6,7 @@
 
 > Gateway Switch is not just a model router. It is a **runtime compatibility layer** that sits between AI-native desktop applications and third-party model providers, bridging protocol gaps, repairing malformed tool calls, enforcing safety boundaries, and degrading gracefully when upstream providers misbehave.
 
-[![Version](https://img.shields.io/badge/Version-1.8.7-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.8.8-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -142,7 +142,14 @@ For long-running agent workflows:
 
 ---
 
-## Version 1.8.7 Upstream Tweak Store Highlights
+## Version 1.8.8 Claude Code Volcengine DeepSeek Fix
+
+- **Fixed Volcengine DeepSeek role compatibility.** For Volcengine Ark / DeepSeek coding routes, Gateway merges Claude Code system prompts into the first user message so upstream does not receive `messages.role = system`.
+- **Supports user/assistant-only endpoints.** Tool results are converted into user text for routes that only accept `user` and `assistant` roles.
+- **Prevents unsafe Direct Provider binding.** The Claude Code page now warns that Volcengine DeepSeek should use Gateway Route instead of Direct Provider.
+- **Keeps real Anthropic direct binding.** Only known Volcengine DeepSeek-incompatible endpoints are blocked; real Anthropic-compatible providers are unaffected.
+
+## Version 1.8.8 Upstream Tweak Store Highlights
 
 - **Added the full upstream store.** The Codex++ market page now displays all approved upstream Tweak Store entries from `https://b-nnett.github.io/codex-plusplus/store/index.json`.
 - **Shows real source addresses.** Each tweak shows its GitHub repo, approved commit, derived `codeload.github.com` archive URL, install status, and installed path.
@@ -504,7 +511,7 @@ Artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.7_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.8.8_aarch64.dmg
 ```
 
 ---

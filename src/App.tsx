@@ -1583,6 +1583,10 @@ function App() {
           flash("Enter the real upstream model name for Claude Code", "error");
           return;
         }
+        if (needsClaudeCodeGatewayRoute(provider, ccUpstreamModel)) {
+          flash("Volcengine DeepSeek is not safe for Claude Code Direct Provider mode. Use Gateway Route so Gateway Switch can merge system/tool roles.", "error");
+          return;
+        }
       }
       const payload = ccMode === "gateway"
         ? { mode: "gateway", model: ccModel }
@@ -1998,7 +2002,7 @@ function App() {
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.8.7</div>
+          <div className="brand-sub">v1.8.8</div>
         </div>
       </div>
 
@@ -2067,7 +2071,7 @@ function App() {
         <span className="status-text">
           Claude <strong>{status?.gateway_running ? t("Running") : t("Stopped")}</strong> · Codex <strong>{codexStatus?.running ? t("Running") : t("Stopped")}</strong>
         </span>
-        <span className="sidebar-version">v1.8.7</span>
+        <span className="sidebar-version">v1.8.8</span>
       </div>
     </aside>
   );
@@ -2468,6 +2472,18 @@ function App() {
     </div>
   );
 
+const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamModel: string) => {
+  if (!provider) return false;
+  const key = [
+    provider.id,
+    provider.name,
+    provider.base_url,
+    provider.openai_base_url,
+    upstreamModel,
+  ].join(" ").toLowerCase();
+  return (key.includes("volc") || key.includes("ark.cn-") || key.includes("火山")) && key.includes("deepseek");
+};
+
 
   const ClaudePage = () => (
     <div>
@@ -2646,6 +2662,7 @@ function App() {
     const selectedProvider = providers.find(p => p.id === ccProviderId);
     const gatewayRouteOptions = routes.length > 0 ? routes.filter(r => r.enabled).map(r => r.claude_alias) : claudeAliasOptions;
     const directProviderReady = ccMode === "provider" && !!selectedProvider?.anthropic_base_url && !!ccUpstreamModel.trim();
+    const directProviderBlocked = ccMode === "provider" && needsClaudeCodeGatewayRoute(selectedProvider, ccUpstreamModel);
 
     return (
       <div>
@@ -2727,6 +2744,11 @@ function App() {
                 <label>{t("Upstream model")}</label>
                 <input value={ccUpstreamModel} onChange={e => setCcUpstreamModel(e.target.value)} placeholder="e.g. claude-sonnet-4-5" />
                 <p>{t("Direct Provider writes the provider's Anthropic Base URL and API key into Claude Code. Use Gateway Route when a provider only supports OpenAI Chat Completions.")}</p>
+                {directProviderBlocked && (
+                  <p style={{ color: "var(--danger)", fontSize: 12, marginTop: -4 }}>
+                    Volcengine DeepSeek rejects Claude Code Direct Provider requests with `messages.role = system`. Switch to Gateway Route so Gateway Switch can convert system/tool roles into user messages.
+                  </p>
+                )}
                 {selectedProvider && (
                   <div className="route-flow">
                     <span>{selectedProvider.name}</span>
@@ -2740,7 +2762,7 @@ function App() {
             )}
 
             <div className="qa-buttons" style={{ marginTop: 16, marginBottom: 0 }}>
-              <button className="btn btn-primary" onClick={bindClaudeCode} disabled={ccMode === "provider" && !directProviderReady}><IconLink /> {t("Bind Claude Code")}</button>
+              <button className="btn btn-primary" onClick={bindClaudeCode} disabled={ccMode === "provider" && (!directProviderReady || directProviderBlocked)}><IconLink /> {t("Bind Claude Code")}</button>
               <button className="btn" onClick={restoreClaudeCode} disabled={!claudeCode?.managed && !claudeCode?.backup_path}><IconUnlink /> {t("Restore")}</button>
             </div>
           </div>

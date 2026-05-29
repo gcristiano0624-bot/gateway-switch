@@ -313,17 +313,34 @@ pub async fn apply_claude_code_binding(
                 .into_iter()
                 .find(|p| p.id == provider_id)
                 .ok_or_else(|| format!("Provider '{provider_id}' not found"))?;
+            let upstream_model = payload.upstream_model.as_deref().unwrap_or(&payload.model);
+            if provider_requires_gateway_route_for_claude_code(&provider, upstream_model) {
+                return Err("This provider/model is not Anthropic-compatible for Claude Code Direct Provider mode. Use Gateway Route so Gateway Switch can convert system/tool roles for Volcengine DeepSeek.".into());
+            }
             claude_code_binding::apply_provider(
                 &dirs::home_dir().ok_or("no home")?,
                 provider.anthropic_base_url.as_deref().ok_or("This provider does not have an Anthropic Base URL for Claude Code Direct Provider mode")?,
                 &provider.auth_header,
                 provider.auth_scheme.as_deref(),
                 provider.api_key.as_deref().unwrap_or_default(),
-                payload.upstream_model.as_deref().unwrap_or(&payload.model),
+                upstream_model,
             )
         }
         _ => Err("Unknown Claude Code binding mode".into()),
     }
+}
+
+fn provider_requires_gateway_route_for_claude_code(
+    provider: &crate::models::Provider,
+    upstream_model: &str,
+) -> bool {
+    let key = format!(
+        "{} {} {} {} {}",
+        provider.id, provider.name, provider.base_url, provider.openai_base_url, upstream_model
+    )
+    .to_ascii_lowercase();
+    (key.contains("volc") || key.contains("ark.cn-") || key.contains("火山"))
+        && key.contains("deepseek")
 }
 
 #[tauri::command]

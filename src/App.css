@@ -1034,6 +1034,20 @@ code, pre, .mono {
   display: block;
 }
 
+.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--fg-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.check-row input {
+  margin-top: 2px;
+}
+
 /* ══════════════════════════════════════
    Health Bar
    ══════════════════════════════════════ */

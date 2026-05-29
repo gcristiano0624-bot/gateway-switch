@@ -154,6 +154,7 @@ pub struct ClaudeCodeBindPayload {
     pub model: String,
     pub provider_id: Option<String>,
     pub upstream_model: Option<String>,
+    pub force_direct_provider: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]

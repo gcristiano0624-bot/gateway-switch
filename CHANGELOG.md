@@ -2,6 +2,13 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.12.2 - 2026-05-29
+
+- Fixed Claude Code Gateway Route compatibility for Chat-only providers by forcing OpenAI Chat fallback for Xiaomi MiMo, DeepSeek, Moonshot/Kimi, Qwen/DashScope, and generic OpenAI Chat profiles even when an Anthropic URL is configured.
+- Added streamed repetition-loop diagnostics that emit a non-fatal `gateway_warning` event and store a request-log warning when upstream text appears to repeat aggressively.
+- Changed Claude Code Direct Provider binding UX so risky providers show a warning and require an explicit force checkbox instead of leaving the bind button permanently disabled.
+- Added regression tests for Xiaomi Chat fallback routing and repetition-loop warning detection.
+
 ## 1.12.1 - 2026-05-29
 
 - Added contextual tooltip help beside every Provider Strategy Overrides flag.

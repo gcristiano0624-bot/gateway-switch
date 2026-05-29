@@ -6,7 +6,7 @@
 
 > Gateway Switch is not just a model router. It is a **runtime compatibility layer** that sits between AI-native desktop applications and third-party model providers, bridging protocol gaps, repairing malformed tool calls, enforcing safety boundaries, and degrading gracefully when upstream providers misbehave.
 
-[![Version](https://img.shields.io/badge/Version-1.12.1-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.12.2-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -17,7 +17,7 @@ English | [中文](./README.md)
 
 ---
 
-## 1.12.1 Unified Diagnostics Update
+## 1.12.2 Unified Diagnostics Update
 
 - **Unified Diagnostics Center.** Adds a Diagnostics page for Claude Desktop, Claude Code, Codex Gateway, Codex++, Providers, and install/runtime health.
 - **Failure clustering.** Recent failed requests are grouped by provider, status code, and surface, with strategy recommendations such as `system_to_user`, `tool_to_user`, and `strip_reasoning`.

@@ -39,6 +39,7 @@ struct Route {
     upstream_model: String,
     openai_base_url: String,
     anthropic_base_url: String,
+    force_chat_fallback: bool,
     chat_role_mode: ChatRoleMode,
     headers: Vec<(String, String)>,
 }
@@ -317,6 +318,10 @@ async fn messages(
         .get("stream")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+
+    if route.force_chat_fallback {
+        return chat_completion_fallback(ctx, route, body, req_id, started, is_stream, None).await;
+    }
 
     let mut upstream = body.clone();
     upstream["model"] = json!(route.upstream_model);
@@ -635,6 +640,7 @@ async fn chat_completion_fallback(
         let mut text_index: i64 = 0;
         let mut next_content_index: i64 = 0;
         let mut tool_blocks: HashMap<i64, (i64, String, String, String)> = HashMap::new();
+        let mut repeat_guard = StreamRepeatGuard::default();
         let start_event = json!({
             "type": "message_start",
             "message": {
@@ -674,6 +680,16 @@ async fn chat_completion_fallback(
                             return;
                         }
                         if let Some(text) = extract_chat_delta(&line) {
+                            if let Some(warning) = repeat_guard.observe(&text) {
+                                let warning_event = json!({
+                                    "type": "gateway_warning",
+                                    "warning": warning,
+                                });
+                                yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!(
+                                    "event: gateway_warning\ndata: {}\n\n",
+                                    serde_json::to_string(&warning_event).unwrap()
+                                )));
+                            }
                             if !text_started {
                                 text_index = next_content_index;
                                 let block_start = json!({"type":"content_block_start","index":text_index,"content_block":{"type":"text","text":""}});
@@ -719,11 +735,12 @@ async fn chat_completion_fallback(
         let message_stop = json!({"type":"message_stop"});
         yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!("event: message_stop\ndata: {}\n\n", serde_json::to_string(&message_stop).unwrap())));
 
+        let loop_warning = repeat_guard.warning_summary();
         let _ = database::insert_log(&db, &RequestLog {
             request_id: log_req_id, claude_alias: display,
             provider_id, upstream_model, status_code: Some(status.as_u16()),
             duration_ms: Some(started.elapsed().as_millis() as u64),
-            is_stream: true, error_summary: None, created_at: String::new(),
+            is_stream: true, error_summary: loop_warning, created_at: String::new(),
         });
     };
 
@@ -747,6 +764,7 @@ fn resolve(db: &PathBuf, model: &str) -> Result<Route, String> {
         .find(|p| p.enabled && p.id == route.provider_id)
         .ok_or_else(|| format!("Provider '{}' not found", route.provider_id))?;
     let strategy = effective_provider_compatibility_profile(db, &provider, &route.upstream_model);
+    let force_chat_fallback = should_force_chat_fallback(&strategy);
     Ok(Route {
         display: route.claude_alias,
         provider_id: provider.id.clone(),
@@ -759,9 +777,21 @@ fn resolve(db: &PathBuf, model: &str) -> Result<Route, String> {
             .unwrap_or(&provider.openai_base_url)
             .trim_end_matches('/')
             .to_string(),
+        force_chat_fallback,
         chat_role_mode: chat_role_mode_from_profile(&strategy),
         headers: auth_headers(&provider),
     })
+}
+
+fn should_force_chat_fallback(profile: &ProviderCompatibilityProfile) -> bool {
+    matches!(
+        profile.strategy_id.as_str(),
+        "volcengine_deepseek_coding"
+            | "xiaomi_mimo_chat"
+            | "deepseek_official_chat"
+            | "moonshot_kimi_chat"
+            | "qwen_dashscope_chat"
+    )
 }
 
 fn auth_headers(p: &Provider) -> Vec<(String, String)> {
@@ -1607,6 +1637,91 @@ fn extract_chat_message_text(message: &Value) -> String {
         .unwrap_or_default()
 }
 
+#[derive(Default)]
+struct StreamRepeatGuard {
+    window: String,
+    repeated_hits: usize,
+    warned: bool,
+}
+
+impl StreamRepeatGuard {
+    fn observe(&mut self, text: &str) -> Option<String> {
+        if text.trim().is_empty() {
+            return None;
+        }
+        self.window.push_str(text);
+        if self.window.chars().count() > 2400 {
+            self.window = self
+                .window
+                .chars()
+                .rev()
+                .take(2400)
+                .collect::<String>()
+                .chars()
+                .rev()
+                .collect();
+        }
+        let normalized = normalize_repetition_probe(&self.window);
+        let detected = repeated_phrase_score(&normalized) >= 6;
+        if detected {
+            self.repeated_hits += 1;
+        } else {
+            self.repeated_hits = self.repeated_hits.saturating_sub(1);
+        }
+        if self.repeated_hits >= 3 && !self.warned {
+            self.warned = true;
+            return Some(
+                "Possible upstream repetition loop detected; Gateway Switch logged this as a diagnostic warning."
+                    .into(),
+            );
+        }
+        None
+    }
+
+    fn warning_summary(&self) -> Option<String> {
+        self.warned.then(|| {
+            "Gateway warning: possible upstream repetition loop detected in streamed text.".into()
+        })
+    }
+}
+
+fn normalize_repetition_probe(text: &str) -> String {
+    text.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(1200)
+        .collect()
+}
+
+fn repeated_phrase_score(text: &str) -> usize {
+    let chars = text.chars().collect::<Vec<_>>();
+    for len in 24..=160 {
+        if chars.len() < len * 3 {
+            continue;
+        }
+        let tail = chars[chars.len() - len..].iter().collect::<String>();
+        if tail.trim().chars().count() < 12 {
+            continue;
+        }
+        let mut count = 1;
+        let mut end = chars.len() - len;
+        while end >= len {
+            let prev = chars[end - len..end].iter().collect::<String>();
+            if prev == tail {
+                count += 1;
+                end -= len;
+            } else {
+                break;
+            }
+        }
+        if count >= 3 {
+            return count;
+        }
+    }
+    0
+}
+
 fn extract_chat_delta(line: &str) -> Option<String> {
     if !line.starts_with("data:") {
         return None;
@@ -1977,6 +2092,64 @@ mod tests {
         assert_eq!(route.provider_id, "volcengine");
         assert_eq!(route.upstream_model, "DeepSeek-V4-Pro");
         assert_eq!(route.chat_role_mode, ChatRoleMode::UserAssistantOnly);
+        assert!(route.force_chat_fallback);
+    }
+
+    #[test]
+    fn test_xiaomi_routes_force_chat_fallback_even_with_anthropic_url() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("t.db");
+        database::initialize(&db).unwrap();
+        database::create_provider(
+            &db,
+            &CreateProvider {
+                id: "xiaomi".into(),
+                name: "Xiaomi".into(),
+                base_url: "https://token-plan-sgp.xiaomimimo.com/v1".into(),
+                openai_base_url: Some("https://token-plan-sgp.xiaomimimo.com/v1".into()),
+                anthropic_base_url: Some("https://token-plan-sgp.xiaomimimo.com/anthropic".into()),
+                auth_header: "Authorization".into(),
+                auth_scheme: Some("Bearer".into()),
+                api_key: Some("k".into()),
+            },
+        )
+        .unwrap();
+        database::create_route(
+            &db,
+            &CreateModelRoute {
+                id: "mimo".into(),
+                claude_alias: "claude-sonnet-4-6".into(),
+                display_name: "mimo-v2.5".into(),
+                provider_id: "xiaomi".into(),
+                upstream_model: "mimo-v2.5".into(),
+            },
+        )
+        .unwrap();
+
+        let route = resolve(&db, "claude-sonnet-4-6").unwrap();
+
+        assert!(route.force_chat_fallback);
+        assert_eq!(
+            route.openai_base_url,
+            "https://token-plan-sgp.xiaomimimo.com/v1"
+        );
+        assert_eq!(route.chat_role_mode, ChatRoleMode::Standard);
+    }
+
+    #[test]
+    fn test_stream_repeat_guard_warns_without_truncating() {
+        let mut guard = StreamRepeatGuard::default();
+        let phrase = "Now let me update the trading review MOC link:";
+        let mut warning = None;
+        for _ in 0..10 {
+            warning = warning.or_else(|| guard.observe(phrase));
+        }
+
+        assert!(warning
+            .as_deref()
+            .unwrap_or_default()
+            .contains("repetition loop"));
+        assert!(guard.warning_summary().is_some());
     }
 
     #[test]

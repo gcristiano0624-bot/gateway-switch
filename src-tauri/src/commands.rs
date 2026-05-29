@@ -1492,7 +1492,8 @@ pub async fn apply_claude_code_binding(
                 &st.db_path,
                 &provider,
                 upstream_model,
-            ) {
+            ) && payload.force_direct_provider != Some(true)
+            {
                 return Err("This provider/model is not Anthropic-compatible for Claude Code Direct Provider mode. Use Gateway Route so Gateway Switch can convert system/tool roles for Volcengine DeepSeek.".into());
             }
             claude_code_binding::apply_provider(

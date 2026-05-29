@@ -1847,6 +1847,7 @@ function App() {
   const [ccModel, setCcModel] = useState("claude-sonnet-4-6");
   const [ccProviderId, setCcProviderId] = useState("");
   const [ccUpstreamModel, setCcUpstreamModel] = useState("");
+  const [ccForceDirectProvider, setCcForceDirectProvider] = useState(false);
 
   // Provider form
   const emptyProviderForm = { id: "", name: "", base_url: "", openai_base_url: "", anthropic_base_url: "", auth_header: "x-api-key", auth_scheme: "", api_key: "" };
@@ -2051,14 +2052,14 @@ function App() {
           flash("Enter the real upstream model name for Claude Code", "error");
           return;
         }
-        if (needsClaudeCodeGatewayRoute(provider, ccUpstreamModel)) {
-          flash("Volcengine DeepSeek is not safe for Claude Code Direct Provider mode. Use Gateway Route so Gateway Switch can merge system/tool roles.", "error");
+        if (needsClaudeCodeGatewayRoute(provider, ccUpstreamModel) && !ccForceDirectProvider) {
+          flash("This provider is risky for Claude Code Direct Provider. Tick the force option if you still want to bind it.", "error");
           return;
         }
       }
       const payload = ccMode === "gateway"
         ? { mode: "gateway", model: ccModel }
-        : { mode: "provider", model: ccUpstreamModel, provider_id: ccProviderId, upstream_model: ccUpstreamModel };
+        : { mode: "provider", model: ccUpstreamModel, provider_id: ccProviderId, upstream_model: ccUpstreamModel, force_direct_provider: ccForceDirectProvider };
       const info = await invoke<ClaudeCodeInfo>("apply_claude_code_binding", { payload });
       setClaudeCode(info);
       await loadAll();
@@ -2602,7 +2603,7 @@ function App() {
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.12.1</div>
+          <div className="brand-sub">v1.12.2</div>
         </div>
       </div>
 
@@ -2676,7 +2677,7 @@ function App() {
         <span className="status-text">
           Claude <strong>{status?.gateway_running ? t("Running") : t("Stopped")}</strong> · Codex <strong>{codexStatus?.running ? t("Running") : t("Stopped")}</strong>
         </span>
-        <span className="sidebar-version">v1.12.1</span>
+        <span className="sidebar-version">v1.12.2</span>
       </div>
     </aside>
   );
@@ -3429,6 +3430,7 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
     const gatewayRouteOptions = routes.length > 0 ? routes.filter(r => r.enabled).map(r => r.claude_alias) : claudeAliasOptions;
     const directProviderReady = ccMode === "provider" && !!selectedProvider?.anthropic_base_url && !!ccUpstreamModel.trim();
     const directProviderBlocked = ccMode === "provider" && needsClaudeCodeGatewayRoute(selectedProvider, ccUpstreamModel);
+    const directProviderCanBind = directProviderReady && (!directProviderBlocked || ccForceDirectProvider);
     const selectedRouteDiagnostic = routeDiagnostics.find(d => d.claude_alias === ccModel);
 
     return (
@@ -3492,6 +3494,7 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
                   setCcProviderId(providerId);
                   const route = routes.find(r => r.provider_id === providerId);
                   if (route && !ccUpstreamModel) setCcUpstreamModel(route.upstream_model);
+                  setCcForceDirectProvider(false);
                 }}>
                   <option value="">{t("Select provider...")}</option>
                   {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -3513,8 +3516,18 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
                 <p>{t("Direct Provider writes the provider's Anthropic Base URL and API key into Claude Code. Use Gateway Route when a provider only supports OpenAI Chat Completions.")}</p>
                 {directProviderBlocked && (
                   <p style={{ color: "var(--danger)", fontSize: 12, marginTop: -4 }}>
-                    Volcengine DeepSeek rejects Claude Code Direct Provider requests with `messages.role = system`. Switch to Gateway Route so Gateway Switch can convert system/tool roles into user messages.
+                    This provider/model is risky for Claude Code Direct Provider because system/tool roles may be rejected. Gateway Route is recommended.
                   </p>
+                )}
+                {directProviderBlocked && (
+                  <label className="check-row" style={{ marginTop: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={ccForceDirectProvider}
+                      onChange={e => setCcForceDirectProvider(e.target.checked)}
+                    />
+                    <span>I understand the risk and still want to bind Direct Provider.</span>
+                  </label>
                 )}
                 {selectedProvider && (
                   <div className="route-flow">
@@ -3529,7 +3542,7 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
             )}
 
             <div className="qa-buttons" style={{ marginTop: 16, marginBottom: 0 }}>
-              <button className="btn btn-primary" onClick={bindClaudeCode} disabled={ccMode === "provider" && (!directProviderReady || directProviderBlocked)}><IconLink /> {t("Bind Claude Code")}</button>
+              <button className="btn btn-primary" onClick={bindClaudeCode} disabled={ccMode === "provider" && !directProviderCanBind}><IconLink /> {t("Bind Claude Code")}</button>
               <button className="btn" onClick={restoreClaudeCode} disabled={!claudeCode?.managed && !claudeCode?.backup_path}><IconUnlink /> {t("Restore")}</button>
             </div>
           </div>

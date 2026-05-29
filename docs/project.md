@@ -1,6 +1,6 @@
 # Gateway Switch Project Documentation
 
-Version: 1.12.0
+Version: 1.12.1
 
 This document is the single technical source of truth for Gateway Switch. It merges the former project architecture notes and the Codex Gateway notes into one maintained file.
 
@@ -9,7 +9,7 @@ This document is the single technical source of truth for Gateway Switch. It mer
 If another AI receives this repository, start here:
 
 - Product: macOS Tauri app that routes Claude Desktop, Claude Code, and Codex App to third-party model providers.
-- Current version: `1.12.0`.
+- Current version: `1.12.1`.
 - Main frontend: `src/App.tsx` and `src/App.css`.
 - Main backend: `src-tauri/src/*.rs`.
 - Claude gateway: `src-tauri/src/gateway.rs`, local Anthropic Messages surface on `127.0.0.1:3456`.
@@ -36,9 +36,9 @@ The app solves two related but different protocol problems:
 
 The shared design goal is simple: providers share identity, auth header, auth scheme, and API key, but they do not share one universal Base URL. Provider URLs are split by protocol: OpenAI Base URL for Codex and Chat Completions fallback, Anthropic Base URL for Claude and Claude Code direct requests.
 
-## 3. Version 1.12.0 Unified Diagnostics and Provider Presets Scope
+## 3. Version 1.12.1 Unified Diagnostics and Provider Presets Scope
 
-Version 1.12.0 combines the planned diagnostics-center milestone with Provider Presets so Gateway Switch behaves like a cross-product operations console.
+Version 1.12.1 combines the planned diagnostics-center milestone with Provider Presets so Gateway Switch behaves like a cross-product operations console.
 
 Main changes:
 

@@ -2,6 +2,13 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.12.1 - 2026-05-29
+
+- Added contextual tooltip help beside every Provider Strategy Overrides flag.
+- Tooltip copy explains each flag's effect, when to enable it, default advice, and risk notes for high-impact settings.
+- Exposed the `gateway_route_recommended` and `codex_disable_responses` override controls in the provider strategy UI.
+- Kept this release as a UI-only compatibility guidance patch; no backend schema changes.
+
 ## 1.12.0 - 2026-05-29
 
 - Added a Unified Diagnostics Center that aggregates Claude Desktop, Claude Code, Codex Gateway, Codex++, Providers, and install/runtime health into one scorecard.

@@ -956,6 +956,84 @@ code, pre, .mono {
   border-color: rgba(220,38,38,0.3);
 }
 
+.strategy-flag-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  isolation: isolate;
+}
+
+.strategy-flag-btn {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.strategy-help-trigger {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+  transition: all var(--duration) var(--ease-out);
+}
+
+.strategy-help-trigger:hover,
+.strategy-help-trigger:focus {
+  border-color: var(--accent);
+  color: var(--accent);
+  outline: none;
+}
+
+.strategy-help-trigger.risk {
+  color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 36%, var(--border));
+}
+
+.strategy-help-popover {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  display: none;
+  width: min(340px, calc(100vw - 48px));
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg-secondary);
+  box-shadow: var(--shadow-lg);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: normal;
+}
+
+.strategy-help-popover strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--fg);
+  font-size: 13px;
+}
+
+.strategy-help-popover span {
+  display: block;
+}
+
+.strategy-risk {
+  margin-top: 6px;
+  color: var(--amber);
+}
+
+.strategy-flag-wrap:hover .strategy-help-popover,
+.strategy-flag-wrap:focus-within .strategy-help-popover {
+  display: block;
+}
+
 /* ══════════════════════════════════════
    Health Bar
    ══════════════════════════════════════ */

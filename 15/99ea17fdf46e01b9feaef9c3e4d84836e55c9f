@@ -1,0 +1,384 @@
+src/App.tsx
+  2ac44fed2b7842f2 10,559-618,2605,2679,3039,3045-3046,3058-3085 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19a85770b4f24c99cb691c","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":10},{"Range":[559,618]},{"Single":2605},{"Single":2679},{"Single":3039},{"Range":[3045,3046]},{"Range":[3058,3085]}]}]}
+src-tauri/tauri.conf.json
+  2ac44fed2b7842f2 4 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19a85770b4f24c99cb691c","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":4}]}]}
+CHANGELOG.md
+  2ac44fed2b7842f2 5-11 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19a85770b4f24c99cb691c","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[5,11]}]}]}
+src/App.css
+  2ac44fed2b7842f2 959-1036 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19a85770b4f24c99cb691c","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[959,1036]}]}]}
+README.md
+  2ac44fed2b7842f2 9,20 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19a85770b4f24c99cb691c","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":9},{"Single":20}]}]}
+README_EN.md
+  2ac44fed2b7842f2 9,20 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19a85770b4f24c99cb691c","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":9},{"Single":20}]}]}
+docs/release-1.12.1-provider-strategy-tooltips.md
+  2ac44fed2b7842f2 1-16 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19a85770b4f24c99cb691c","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,16]}]}]}
+package.json
+  2ac44fed2b7842f2 4 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19a85770b4f24c99cb691c","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":4}]}]}
+src-tauri/Cargo.toml
+  2ac44fed2b7842f2 3 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19a85770b4f24c99cb691c","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":3}]}]}
+docs/project.md
+  2ac44fed2b7842f2 3,12,39,41 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19a85770b4f24c99cb691c","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":3},{"Single":12},{"Single":39},{"Single":41}]}]}
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "1599ea17fdf46e01b9feaef9c3e4d84836e55c9f",
+  "prompts": {
+    "2ac44fed2b7842f2": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a169b45c08b9f09c4f2a210",
+        "model": "gpt-5.5__dev"
+      },
+      "human_author": "hugo0624 <gcristiano0624@gmail.com>",
+      "messages": [],
+      "total_additions": 316,
+      "total_deletions": 42,
+      "accepted_lines": 5904,
+      "overriden_lines": 0
+    }
+  },
+  "attestation_metadata": {
+    "CHANGELOG.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Range": [
+              5,
+              11
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19a85770b4f24c99cb691c",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  5,
+                  11
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "README.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 9
+          },
+          {
+            "Single": 20
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19a85770b4f24c99cb691c",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 9
+              },
+              {
+                "Single": 20
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "README_EN.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 9
+          },
+          {
+            "Single": 20
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19a85770b4f24c99cb691c",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 9
+              },
+              {
+                "Single": 20
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "docs/project.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 3
+          },
+          {
+            "Single": 12
+          },
+          {
+            "Single": 39
+          },
+          {
+            "Single": 41
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19a85770b4f24c99cb691c",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 3
+              },
+              {
+                "Single": 12
+              },
+              {
+                "Single": 39
+              },
+              {
+                "Single": 41
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "docs/release-1.12.1-provider-strategy-tooltips.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              16
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19a85770b4f24c99cb691c",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  16
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "package.json": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 4
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19a85770b4f24c99cb691c",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 4
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/Cargo.toml": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 3
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19a85770b4f24c99cb691c",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 3
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/tauri.conf.json": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 4
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19a85770b4f24c99cb691c",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 4
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/App.css": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Range": [
+              959,
+              1036
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19a85770b4f24c99cb691c",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  959,
+                  1036
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/App.tsx": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 10
+          },
+          {
+            "Range": [
+              559,
+              618
+            ]
+          },
+          {
+            "Single": 2605
+          },
+          {
+            "Single": 2679
+          },
+          {
+            "Single": 3039
+          },
+          {
+            "Range": [
+              3045,
+              3046
+            ]
+          },
+          {
+            "Range": [
+              3058,
+              3085
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19a85770b4f24c99cb691c",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 10
+              },
+              {
+                "Range": [
+                  559,
+                  618
+                ]
+              },
+              {
+                "Single": 2605
+              },
+              {
+                "Single": 2679
+              },
+              {
+                "Single": 3039
+              },
+              {
+                "Range": [
+                  3045,
+                  3046
+                ]
+              },
+              {
+                "Range": [
+                  3058,
+                  3085
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "remote_transcripts": {
+    "2ac44fed2b7842f2": {
+      "tool": "trae",
+      "conversation_id": "6a169b45c08b9f09c4f2a210",
+      "session_id": "6a169b45c08b9f09c4f2a210",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    }
+  }
+}

@@ -103,6 +103,49 @@ type RequestLog = {
   created_at: string;
 };
 
+type ProviderCompatibilityProfile = {
+  strategy_id: string;
+  system_to_user: boolean;
+  tool_to_user: boolean;
+  disable_tools: boolean;
+  strip_unsupported_params: boolean;
+  direct_provider_safe: boolean;
+  gateway_route_recommended: boolean;
+  summary: string;
+};
+
+type RouteCompatibilityDiagnostic = {
+  route_id: string;
+  claude_alias: string;
+  display_name: string;
+  provider_id: string;
+  provider_name: string;
+  upstream_model: string;
+  strategy: ProviderCompatibilityProfile;
+  warnings: string[];
+  recommendations: string[];
+};
+
+type RoutePayloadPreview = {
+  route_id: string;
+  claude_alias: string;
+  provider_id: string;
+  upstream_model: string;
+  strategy_id: string;
+  roles: string[];
+  payload: unknown;
+};
+
+type RuntimeSourceReport = {
+  bundle_path: string;
+  is_applications: boolean;
+  is_dmg_volume: boolean;
+  is_temp_volume: boolean;
+  severity: string;
+  summary: string;
+  recommendation: string;
+};
+
 type Settings = {
   auto_start_gateway: boolean;
   auto_takeover_desktop: boolean;
@@ -821,6 +864,49 @@ const MOCK_ROUTES: ModelRoute[] = [
   { id: "opus", claude_alias: "claude-opus-4-7", display_name: "Claude Opus", provider_id: "openrouter", upstream_model: "anthropic/claude-opus-4.1", enabled: true },
 ];
 
+const MOCK_ROUTE_DIAGNOSTICS: RouteCompatibilityDiagnostic[] = [
+  {
+    route_id: "sonnet",
+    claude_alias: "claude-sonnet-4-6",
+    display_name: "Claude Sonnet",
+    provider_id: "xiaomimo",
+    provider_name: "XiaoMiMo",
+    upstream_model: "mimo-v2.5-pro",
+    strategy: {
+      strategy_id: "standard_anthropic",
+      system_to_user: false,
+      tool_to_user: false,
+      disable_tools: false,
+      strip_unsupported_params: false,
+      direct_provider_safe: true,
+      gateway_route_recommended: false,
+      summary: "Preview profile for an Anthropic-compatible provider.",
+    },
+    warnings: [],
+    recommendations: [],
+  },
+];
+
+const MOCK_PAYLOAD_PREVIEW: RoutePayloadPreview = {
+  route_id: "sonnet",
+  claude_alias: "claude-sonnet-4-6",
+  provider_id: "xiaomimo",
+  upstream_model: "mimo-v2.5-pro",
+  strategy_id: "standard_anthropic",
+  roles: ["system", "user", "assistant", "tool"],
+  payload: { model: "mimo-v2.5-pro", messages: [{ role: "system", content: "Preview only" }] },
+};
+
+const MOCK_RUNTIME_SOURCE: RuntimeSourceReport = {
+  bundle_path: "/Applications/Gateway Switch.app/Contents/MacOS/gateway-switch",
+  is_applications: true,
+  is_dmg_volume: false,
+  is_temp_volume: false,
+  severity: "ok",
+  summary: "Gateway Switch is running from /Applications.",
+  recommendation: "Runtime source looks stable for launchd watchers and Codex++ repair actions.",
+};
+
 const MOCK_CODEX_ROUTES: CodexRoute[] = [
   { id: "codex-mimo", codex_model: "gpt-5.2", display_name: "Codex via MiMo", provider_id: "xiaomimo", upstream_model: "mimo-v2.5-pro", tool_call_mode: "force_when_tools_present", enabled: true },
 ];
@@ -1367,6 +1453,9 @@ function App() {
   const [desktop, setDesktop] = useState<DesktopInfo | null>(null);
   const [claudeCode, setClaudeCode] = useState<ClaudeCodeInfo | null>(null);
   const [logs, setLogs] = useState<RequestLog[]>([]);
+  const [routeDiagnostics, setRouteDiagnostics] = useState<RouteCompatibilityDiagnostic[]>([]);
+  const [payloadPreview, setPayloadPreview] = useState<RoutePayloadPreview | null>(null);
+  const [runtimeSource, setRuntimeSource] = useState<RuntimeSourceReport | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
   const [codexHealth, setCodexHealth] = useState<Health | null>(null);
@@ -1448,6 +1537,9 @@ function App() {
       setDesktop(MOCK_DESKTOP);
       setClaudeCode(MOCK_CLAUDE_CODE);
       setLogs(MOCK_LOGS);
+      setRouteDiagnostics(MOCK_ROUTE_DIAGNOSTICS);
+      setPayloadPreview(MOCK_PAYLOAD_PREVIEW);
+      setRuntimeSource(MOCK_RUNTIME_SOURCE);
       setSettings(MOCK_SETTINGS);
       setCodexStatus(MOCK_CODEX_STATUS);
       setCodexRoutes(MOCK_CODEX_ROUTES);
@@ -1466,13 +1558,15 @@ function App() {
     }
 
     try {
-      const [s, p, r, d, cc, l, cfg, cs, cr, cb, cold, mcp, ca, cma, cppInstall, cppTweaks, cppHealth, cppPreflight, cppScripts] = await Promise.all([
+      const [s, p, r, d, cc, l, rd, rs, cfg, cs, cr, cb, cold, mcp, ca, cma, cppInstall, cppTweaks, cppHealth, cppPreflight, cppScripts] = await Promise.all([
         invoke<Status>("get_status"),
         invoke<Provider[]>("list_providers"),
         invoke<ModelRoute[]>("list_routes"),
         invoke<DesktopInfo>("get_desktop_info"),
         invoke<ClaudeCodeInfo>("get_claude_code_info"),
         invoke<RequestLog[]>("list_logs"),
+        invoke<RouteCompatibilityDiagnostic[]>("get_route_diagnostics"),
+        invoke<RuntimeSourceReport>("get_runtime_source_report"),
         invoke<Settings>("get_settings"),
         invoke<CodexGatewayStatus>("get_codex_status"),
         invoke<CodexRoute[]>("list_codex_routes"),
@@ -1493,6 +1587,8 @@ function App() {
       setDesktop(d);
       setClaudeCode(cc);
       setLogs(l);
+      setRouteDiagnostics(rd);
+      setRuntimeSource(rs);
       setSettings(cfg);
       setCodexStatus(cs);
       setCodexRoutes(cr);
@@ -1596,6 +1692,17 @@ function App() {
       await loadAll();
       flash("Claude Code bound");
     } catch (e) { flash(String(e), "error"); }
+  };
+  const loadPayloadPreview = async (claudeAlias: string) => {
+    try {
+      const preview = isTauriRuntime
+        ? await invoke<RoutePayloadPreview>("preview_route_payload", { claudeAlias })
+        : MOCK_PAYLOAD_PREVIEW;
+      setPayloadPreview(preview);
+      flash("Payload preview generated");
+    } catch (e) {
+      flash(String(e), "error");
+    }
   };
   const restoreClaudeCode = async () => {
     try {
@@ -2002,7 +2109,7 @@ function App() {
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.8.8</div>
+          <div className="brand-sub">v1.9.0</div>
         </div>
       </div>
 
@@ -2071,7 +2178,7 @@ function App() {
         <span className="status-text">
           Claude <strong>{status?.gateway_running ? t("Running") : t("Stopped")}</strong> · Codex <strong>{codexStatus?.running ? t("Running") : t("Stopped")}</strong>
         </span>
-        <span className="sidebar-version">v1.8.8</span>
+        <span className="sidebar-version">v1.9.0</span>
       </div>
     </aside>
   );
@@ -2146,6 +2253,19 @@ function App() {
           </div>
         </div>
       </div>
+
+      {runtimeSource && runtimeSource.severity !== "ok" && (
+        <div className="card" style={{ borderColor: "var(--warning)", marginBottom: 16 }}>
+          <div className="card-title">Runtime Source Warning</div>
+          <p style={{ color: "var(--muted)", marginBottom: 12 }}>{runtimeSource.summary}</p>
+          <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+            <span className="info-key">Bundle</span>
+            <span className="info-val">{runtimeSource.bundle_path}</span>
+            <span className="info-key">Recommendation</span>
+            <span className="info-val">{runtimeSource.recommendation}</span>
+          </div>
+        </div>
+      )}
 
       <div className="two-col">
         <div className="card">
@@ -2663,6 +2783,7 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
     const gatewayRouteOptions = routes.length > 0 ? routes.filter(r => r.enabled).map(r => r.claude_alias) : claudeAliasOptions;
     const directProviderReady = ccMode === "provider" && !!selectedProvider?.anthropic_base_url && !!ccUpstreamModel.trim();
     const directProviderBlocked = ccMode === "provider" && needsClaudeCodeGatewayRoute(selectedProvider, ccUpstreamModel);
+    const selectedRouteDiagnostic = routeDiagnostics.find(d => d.claude_alias === ccModel);
 
     return (
       <div>
@@ -2769,6 +2890,33 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
         </div>
 
         <div className="card">
+          <div className="card-title">Route Diagnostics</div>
+          <p style={{ color: "var(--muted)", marginBottom: 14 }}>
+            Provider capability profile explains whether Claude Code can use Direct Provider or must use Gateway Route.
+          </p>
+          <div className="route-list" style={{ marginBottom: 0 }}>
+            {routeDiagnostics.map(diagnostic => (
+              <div key={diagnostic.route_id} className="route-item">
+                <div className="route-info">
+                  <div className="route-name">{diagnostic.claude_alias} → {diagnostic.upstream_model}</div>
+                  <div className="route-path">
+                    {diagnostic.provider_name} · {diagnostic.strategy.strategy_id} · {diagnostic.strategy.summary}
+                  </div>
+                  {diagnostic.warnings.length > 0 && (
+                    <div className="route-path" style={{ color: "var(--warning)" }}>
+                      {diagnostic.warnings.join(" · ")}
+                    </div>
+                  )}
+                </div>
+                <span className={`badge ${diagnostic.strategy.direct_provider_safe ? "badge-green" : "badge-amber"}`}>
+                  {diagnostic.strategy.direct_provider_safe ? "direct safe" : "gateway recommended"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card">
           <div className="card-title">{t("Runtime Environment")}</div>
           <div className="note-grid">
             <div>
@@ -2780,6 +2928,34 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
               <p>{t("Writes `ANTHROPIC_BASE_URL` from the provider's Anthropic URL. The OpenAI URL is reserved for Codex and Chat Completions fallback.")}</p>
             </div>
           </div>
+        </div>
+
+        <div className="card">
+          <div className="card-title">Payload Preview</div>
+          <p style={{ color: "var(--muted)", marginBottom: 14 }}>
+            Preview uses a fixed redacted sample request. It does not call the upstream provider or consume tokens.
+          </p>
+          <div className="qa-buttons" style={{ marginTop: 0 }}>
+            <button className="btn" onClick={() => void loadPayloadPreview(ccModel)}>
+              <IconPulse /> Preview Selected Route
+            </button>
+            {selectedRouteDiagnostic && (
+              <span className={`badge ${selectedRouteDiagnostic.strategy.system_to_user ? "badge-amber" : "badge-green"}`}>
+                {selectedRouteDiagnostic.strategy.strategy_id}
+              </span>
+            )}
+          </div>
+          {payloadPreview && (
+            <>
+              <div className="info-grid">
+                <span className="info-key">Route</span>
+                <span className="info-val">{payloadPreview.claude_alias} → {payloadPreview.upstream_model}</span>
+                <span className="info-key">Roles</span>
+                <span className="info-val">{payloadPreview.roles.join(" / ")}</span>
+              </div>
+              <pre className="log-view" style={{ maxHeight: 260 }}>{JSON.stringify(payloadPreview.payload, null, 2)}</pre>
+            </>
+          )}
         </div>
       </div>
     );

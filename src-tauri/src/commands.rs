@@ -6,6 +6,7 @@ use crate::{
     settings,
     state::{AppState, GatewayStatus},
 };
+use serde::{Deserialize, Serialize};
 use std::{fs, time::Instant};
 use tauri::{AppHandle, State};
 
@@ -70,6 +71,86 @@ pub fn list_provider_capabilities(
         .iter()
         .map(compatibility::provider_capability_json)
         .collect())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuntimeSourceReport {
+    pub bundle_path: String,
+    pub is_applications: bool,
+    pub is_dmg_volume: bool,
+    pub is_temp_volume: bool,
+    pub severity: String,
+    pub summary: String,
+    pub recommendation: String,
+}
+
+#[tauri::command]
+pub fn get_route_diagnostics(
+    st: State<'_, AppState>,
+) -> Result<Vec<gateway::RouteCompatibilityDiagnostic>, String> {
+    gateway::route_diagnostics(&st.db_path)
+}
+
+#[tauri::command]
+pub fn preview_route_payload(
+    st: State<'_, AppState>,
+    claude_alias: String,
+) -> Result<gateway::RoutePayloadPreview, String> {
+    gateway::preview_route_payload(&st.db_path, claude_alias)
+}
+
+#[tauri::command]
+pub fn get_runtime_source_report() -> RuntimeSourceReport {
+    runtime_source_report_for_path(
+        std::env::current_exe()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|e| format!("unknown: {e}")),
+    )
+}
+
+fn runtime_source_report_for_path(bundle_path: String) -> RuntimeSourceReport {
+    let is_applications = bundle_path.starts_with("/Applications/");
+    let is_dmg_volume = bundle_path.starts_with("/Volumes/");
+    let is_temp_volume =
+        bundle_path.starts_with("/tmp/") || bundle_path.starts_with("/private/tmp/");
+    let severity = if is_dmg_volume || is_temp_volume {
+        "warn"
+    } else if is_applications {
+        "ok"
+    } else {
+        "info"
+    }
+    .to_string();
+    let (summary, recommendation) = if is_dmg_volume {
+        (
+            "Gateway Switch is running from a mounted disk image.".into(),
+            "Copy Gateway Switch.app to /Applications before binding launchd watchers or repairing Codex++.".into(),
+        )
+    } else if is_temp_volume {
+        (
+            "Gateway Switch is running from a temporary path.".into(),
+            "Install the app under /Applications to avoid poisoned watcher or shim paths.".into(),
+        )
+    } else if is_applications {
+        (
+            "Gateway Switch is running from /Applications.".into(),
+            "Runtime source looks stable for launchd watchers and Codex++ repair actions.".into(),
+        )
+    } else {
+        (
+            "Gateway Switch is running from a non-standard location.".into(),
+            "For release builds, /Applications is recommended.".into(),
+        )
+    };
+    RuntimeSourceReport {
+        bundle_path,
+        is_applications,
+        is_dmg_volume,
+        is_temp_volume,
+        severity,
+        summary,
+        recommendation,
+    }
 }
 
 #[tauri::command]
@@ -771,5 +852,40 @@ fn upstream_url(base_url: &str, endpoint: &str) -> String {
         format!("{base}/{endpoint}")
     } else {
         format!("{base}/v1/{endpoint}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn runtime_source_report_classifies_applications_path() {
+        let report = runtime_source_report_for_path(
+            "/Applications/Gateway Switch.app/Contents/MacOS/gateway-switch".into(),
+        );
+        assert_eq!(report.severity, "ok");
+        assert!(report.is_applications);
+        assert!(!report.is_dmg_volume);
+        assert!(!report.is_temp_volume);
+    }
+
+    #[test]
+    fn runtime_source_report_warns_for_dmg_volume() {
+        let report = runtime_source_report_for_path(
+            "/Volumes/Gateway Switch/Gateway Switch.app/Contents/MacOS/gateway-switch".into(),
+        );
+        assert_eq!(report.severity, "warn");
+        assert!(report.is_dmg_volume);
+        assert!(report.recommendation.contains("/Applications"));
+    }
+
+    #[test]
+    fn runtime_source_report_warns_for_temp_path() {
+        let report = runtime_source_report_for_path(
+            "/private/tmp/Gateway Switch.app/Contents/MacOS/gateway-switch".into(),
+        );
+        assert_eq!(report.severity, "warn");
+        assert!(report.is_temp_volume);
     }
 }

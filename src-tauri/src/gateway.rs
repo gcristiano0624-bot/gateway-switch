@@ -12,6 +12,7 @@ use axum::{
 use bytes::Bytes;
 use futures_util::StreamExt;
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
 use uuid::Uuid;
@@ -41,10 +42,46 @@ struct Route {
 
 const CLAUDE_REQUEST_BODY_LIMIT_BYTES: usize = 64 * 1024 * 1024;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 enum ChatRoleMode {
     Standard,
     UserAssistantOnly,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderCompatibilityProfile {
+    pub strategy_id: String,
+    pub system_to_user: bool,
+    pub tool_to_user: bool,
+    pub disable_tools: bool,
+    pub strip_unsupported_params: bool,
+    pub direct_provider_safe: bool,
+    pub gateway_route_recommended: bool,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RouteCompatibilityDiagnostic {
+    pub route_id: String,
+    pub claude_alias: String,
+    pub display_name: String,
+    pub provider_id: String,
+    pub provider_name: String,
+    pub upstream_model: String,
+    pub strategy: ProviderCompatibilityProfile,
+    pub warnings: Vec<String>,
+    pub recommendations: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoutePayloadPreview {
+    pub route_id: String,
+    pub claude_alias: String,
+    pub provider_id: String,
+    pub upstream_model: String,
+    pub strategy_id: String,
+    pub roles: Vec<String>,
+    pub payload: Value,
 }
 
 pub fn start(st: &AppState) -> Result<String, String> {
@@ -666,6 +703,164 @@ fn auth_headers(p: &Provider) -> Vec<(String, String)> {
         ("anthropic-version".into(), "2023-06-01".into()),
         ("content-type".into(), "application/json".into()),
     ]
+}
+
+pub fn provider_compatibility_profile(
+    provider: &Provider,
+    upstream_model: &str,
+) -> ProviderCompatibilityProfile {
+    match chat_role_mode_for(provider, upstream_model) {
+        ChatRoleMode::UserAssistantOnly => ProviderCompatibilityProfile {
+            strategy_id: "volcengine_deepseek_coding".into(),
+            system_to_user: true,
+            tool_to_user: true,
+            disable_tools: false,
+            strip_unsupported_params: false,
+            direct_provider_safe: false,
+            gateway_route_recommended: true,
+            summary: "Volcengine Ark DeepSeek coding endpoints reject system/tool roles; Gateway Route converts them to user messages.".into(),
+        },
+        ChatRoleMode::Standard => ProviderCompatibilityProfile {
+            strategy_id: if provider.anthropic_base_url.is_some() {
+                "standard_anthropic".into()
+            } else {
+                "openai_chat_fallback".into()
+            },
+            system_to_user: false,
+            tool_to_user: false,
+            disable_tools: false,
+            strip_unsupported_params: false,
+            direct_provider_safe: provider.anthropic_base_url.is_some(),
+            gateway_route_recommended: provider.anthropic_base_url.is_none(),
+            summary: if provider.anthropic_base_url.is_some() {
+                "Standard Anthropic-compatible route; Direct Provider may be used when the endpoint is truly Anthropic-compatible.".into()
+            } else {
+                "OpenAI Chat fallback route; use Gateway Route for Claude and Claude Code.".into()
+            },
+        },
+    }
+}
+
+pub fn route_diagnostics(db: &PathBuf) -> Result<Vec<RouteCompatibilityDiagnostic>, String> {
+    let routes = database::list_routes(db)?;
+    let providers = database::list_providers(db)?;
+    Ok(routes
+        .into_iter()
+        .filter_map(|route| {
+            let provider = providers.iter().find(|p| p.id == route.provider_id)?;
+            let strategy = provider_compatibility_profile(provider, &route.upstream_model);
+            let mut warnings = Vec::new();
+            let mut recommendations = Vec::new();
+            if !strategy.direct_provider_safe {
+                warnings.push("Claude Code Direct Provider is not safe for this route.".into());
+                recommendations.push("Bind Claude Code using Gateway Route.".into());
+            }
+            if strategy.system_to_user {
+                warnings.push("System instructions are merged into the first user message.".into());
+            }
+            if strategy.tool_to_user {
+                warnings.push("Tool results are converted into user messages.".into());
+            }
+            if strategy.gateway_route_recommended {
+                recommendations.push("Keep Gateway Switch running before using this model.".into());
+            }
+            Some(RouteCompatibilityDiagnostic {
+                route_id: route.id,
+                claude_alias: route.claude_alias,
+                display_name: route.display_name,
+                provider_id: provider.id.clone(),
+                provider_name: provider.name.clone(),
+                upstream_model: route.upstream_model,
+                strategy,
+                warnings,
+                recommendations,
+            })
+        })
+        .collect())
+}
+
+pub fn preview_route_payload(
+    db: &PathBuf,
+    claude_alias: String,
+) -> Result<RoutePayloadPreview, String> {
+    let route = resolve(db, &claude_alias)?;
+    let body = json!({
+        "model": claude_alias,
+        "system": "You are Claude Code. Keep responses concise and safe.",
+        "messages": [{
+            "role": "user",
+            "content": "Summarize the current repository status."
+        }, {
+            "role": "assistant",
+            "content": [{
+                "type": "tool_use",
+                "id": "toolu_preview",
+                "name": "read_file",
+                "input": {"path": "README.md"}
+            }]
+        }, {
+            "role": "user",
+            "content": [{
+                "type": "tool_result",
+                "tool_use_id": "toolu_preview",
+                "content": "README excerpt redacted for preview."
+            }]
+        }],
+        "tools": [{
+            "name": "read_file",
+            "description": "Read a local file",
+            "input_schema": {"type":"object","properties":{"path":{"type":"string"}}}
+        }],
+        "max_tokens": 256,
+        "temperature": 0.2
+    });
+    let payload =
+        anthropic_to_chat_request(&body, &route.upstream_model, false, route.chat_role_mode);
+    let roles = payload
+        .get("messages")
+        .and_then(|v| v.as_array())
+        .map(|messages| {
+            messages
+                .iter()
+                .filter_map(|message| {
+                    message
+                        .get("role")
+                        .and_then(|v| v.as_str())
+                        .map(String::from)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let strategy = provider_compatibility_profile_for_route(db, &claude_alias)?;
+    Ok(RoutePayloadPreview {
+        route_id: claude_alias.clone(),
+        claude_alias,
+        provider_id: route.provider_id,
+        upstream_model: route.upstream_model,
+        strategy_id: strategy.strategy_id,
+        roles,
+        payload,
+    })
+}
+
+fn provider_compatibility_profile_for_route(
+    db: &PathBuf,
+    claude_alias: &str,
+) -> Result<ProviderCompatibilityProfile, String> {
+    let routes = database::list_routes(db)?;
+    let providers = database::list_providers(db)?;
+    let route = routes
+        .iter()
+        .find(|route| route.enabled && route.claude_alias == claude_alias)
+        .ok_or_else(|| format!("Unknown model: {claude_alias}"))?;
+    let provider = providers
+        .iter()
+        .find(|provider| provider.enabled && provider.id == route.provider_id)
+        .ok_or_else(|| format!("Provider '{}' not found", route.provider_id))?;
+    Ok(provider_compatibility_profile(
+        provider,
+        &route.upstream_model,
+    ))
 }
 
 fn chat_role_mode_for(provider: &Provider, upstream_model: &str) -> ChatRoleMode {
@@ -1348,6 +1543,57 @@ mod tests {
         assert_eq!(route.provider_id, "volcengine");
         assert_eq!(route.upstream_model, "DeepSeek-V4-Pro");
         assert_eq!(route.chat_role_mode, ChatRoleMode::UserAssistantOnly);
+    }
+
+    #[test]
+    fn test_route_diagnostics_and_payload_preview_for_volcengine_deepseek() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("t.db");
+        database::initialize(&db).unwrap();
+        database::create_provider(
+            &db,
+            &CreateProvider {
+                id: "volcengine".into(),
+                name: "火山方舟".into(),
+                base_url: "https://ark.cn-beijing.volces.com/api/coding/v3".into(),
+                openai_base_url: Some("https://ark.cn-beijing.volces.com/api/coding/v3".into()),
+                anthropic_base_url: Some("https://ark.cn-beijing.volces.com/api/coding".into()),
+                auth_header: "Authorization".into(),
+                auth_scheme: Some("Bearer".into()),
+                api_key: Some("k".into()),
+            },
+        )
+        .unwrap();
+        database::create_route(
+            &db,
+            &CreateModelRoute {
+                id: "deepseek-v4-pro".into(),
+                claude_alias: "claude-sonnet-4-6".into(),
+                display_name: "DeepSeek V4 Pro".into(),
+                provider_id: "volcengine".into(),
+                upstream_model: "DeepSeek-V4-Pro".into(),
+            },
+        )
+        .unwrap();
+
+        let diagnostics = route_diagnostics(&db).unwrap();
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(
+            diagnostics[0].strategy.strategy_id,
+            "volcengine_deepseek_coding"
+        );
+        assert!(!diagnostics[0].strategy.direct_provider_safe);
+        assert!(diagnostics[0]
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("Direct Provider")));
+
+        let preview = preview_route_payload(&db, "claude-sonnet-4-6".into()).unwrap();
+        assert_eq!(preview.strategy_id, "volcengine_deepseek_coding");
+        assert!(preview
+            .roles
+            .iter()
+            .all(|role| role == "user" || role == "assistant"));
     }
 
     #[tokio::test]

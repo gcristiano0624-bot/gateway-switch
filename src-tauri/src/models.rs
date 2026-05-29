@@ -169,6 +169,51 @@ pub struct RequestLog {
     pub created_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderCompatibilityPolicy {
+    pub provider_id: String,
+    pub system_to_user: Option<bool>,
+    pub tool_to_user: Option<bool>,
+    pub disable_tools: Option<bool>,
+    pub strip_unsupported_params: Option<bool>,
+    pub direct_provider_safe: Option<bool>,
+    pub gateway_route_recommended: Option<bool>,
+    pub codex_disable_responses: Option<bool>,
+    pub codex_strict_tool_calls: Option<bool>,
+    pub codex_strip_reasoning: Option<bool>,
+    pub notes: Option<String>,
+    pub updated_by: String,
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RequestDiagnosticSnapshot {
+    pub request_id: String,
+    pub surface: String,
+    pub claude_alias: Option<String>,
+    pub provider_id: Option<String>,
+    pub upstream_model: Option<String>,
+    pub status_code: Option<u16>,
+    pub error_summary: Option<String>,
+    pub original_payload_json: String,
+    pub converted_payload_json: Option<String>,
+    pub redaction_summary: String,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FailedRequestDiagnosticCandidate {
+    pub request_id: String,
+    pub surface: String,
+    pub claude_alias: Option<String>,
+    pub provider_id: Option<String>,
+    pub upstream_model: Option<String>,
+    pub status_code: Option<u16>,
+    pub error_summary: Option<String>,
+    pub redaction_summary: String,
+    pub created_at: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct HealthStatus {
     pub target: String,

@@ -7,7 +7,7 @@ use crate::{
     state::{AppState, GatewayStatus},
 };
 use serde::{Deserialize, Serialize};
-use std::{fs, time::Instant};
+use std::{fs, process::Command, time::Instant};
 use tauri::{AppHandle, State};
 
 #[tauri::command]
@@ -84,6 +84,39 @@ pub struct RuntimeSourceReport {
     pub recommendation: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ClaudeCodeRepairReport {
+    pub repaired: bool,
+    pub before: ClaudeCodeInfo,
+    pub after: ClaudeCodeInfo,
+    pub backup_path: Option<String>,
+    pub selected_model: String,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateCheckReport {
+    pub current_version: String,
+    pub latest_version: Option<String>,
+    pub update_available: bool,
+    pub release_url: Option<String>,
+    pub asset_names: Vec<String>,
+    pub summary: String,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SafeInstallPlan {
+    pub current_exe: String,
+    pub is_applications: bool,
+    pub is_dmg_volume: bool,
+    pub is_temp_volume: bool,
+    pub applications_app_exists: bool,
+    pub release_artifacts_dir: Option<String>,
+    pub steps: Vec<String>,
+    pub warning: Option<String>,
+}
+
 #[tauri::command]
 pub fn get_route_diagnostics(
     st: State<'_, AppState>,
@@ -100,12 +133,153 @@ pub fn preview_route_payload(
 }
 
 #[tauri::command]
+pub fn list_provider_policies(
+    st: State<'_, AppState>,
+) -> Result<Vec<ProviderCompatibilityPolicy>, String> {
+    database::list_provider_policies(&st.db_path)
+}
+
+#[tauri::command]
+pub fn upsert_provider_policy(
+    st: State<'_, AppState>,
+    payload: ProviderCompatibilityPolicy,
+) -> Result<Vec<ProviderCompatibilityPolicy>, String> {
+    let mut policy = payload;
+    if policy.updated_by.trim().is_empty() {
+        policy.updated_by = "user".into();
+    }
+    database::upsert_provider_policy(&st.db_path, &policy)?;
+    database::list_provider_policies(&st.db_path)
+}
+
+#[tauri::command]
+pub fn reset_provider_policy(
+    st: State<'_, AppState>,
+    provider_id: String,
+) -> Result<Vec<ProviderCompatibilityPolicy>, String> {
+    database::reset_provider_policy(&st.db_path, &provider_id)?;
+    database::list_provider_policies(&st.db_path)
+}
+
+#[tauri::command]
+pub fn list_failed_request_diagnostics(
+    st: State<'_, AppState>,
+) -> Result<Vec<FailedRequestDiagnosticCandidate>, String> {
+    database::list_failed_request_snapshots(&st.db_path, 100)
+}
+
+#[tauri::command]
+pub fn replay_request_diagnostic(
+    st: State<'_, AppState>,
+    request_id: String,
+) -> Result<gateway::RequestReplayReport, String> {
+    gateway::replay_request_diagnostic(&st.db_path, request_id)
+}
+
+#[tauri::command]
+pub fn get_codex_route_diagnostics(
+    st: State<'_, AppState>,
+) -> Result<Vec<codex_gateway::CodexRouteDiagnostic>, String> {
+    codex_gateway::route_diagnostics(&st.db_path)
+}
+
+#[tauri::command]
 pub fn get_runtime_source_report() -> RuntimeSourceReport {
     runtime_source_report_for_path(
         std::env::current_exe()
             .map(|path| path.display().to_string())
             .unwrap_or_else(|e| format!("unknown: {e}")),
     )
+}
+
+#[tauri::command]
+pub async fn check_app_update() -> Result<UpdateCheckReport, String> {
+    let current_version = env!("CARGO_PKG_VERSION").to_string();
+    let url = "https://api.github.com/repos/gcristiano0624-bot/gateway-switch/releases/latest";
+    let resp = reqwest::Client::new()
+        .get(url)
+        .header("user-agent", "Gateway Switch")
+        .send()
+        .await;
+    let Ok(resp) = resp else {
+        return Ok(UpdateCheckReport {
+            current_version,
+            latest_version: None,
+            update_available: false,
+            release_url: None,
+            asset_names: Vec::new(),
+            summary:
+                "Could not reach GitHub Releases. Keep using the installed version and retry later."
+                    .into(),
+            error: Some(resp.err().map(|e| e.to_string()).unwrap_or_default()),
+        });
+    };
+    if !resp.status().is_success() {
+        let status = resp.status();
+        return Ok(UpdateCheckReport {
+            current_version,
+            latest_version: None,
+            update_available: false,
+            release_url: None,
+            asset_names: Vec::new(),
+            summary: format!("GitHub Releases returned HTTP {status}."),
+            error: Some(format!("HTTP {status}")),
+        });
+    }
+    let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let tag = body
+        .get("tag_name")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim_start_matches('v').to_string());
+    let release_url = body
+        .get("html_url")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let asset_names = body
+        .get("assets")
+        .and_then(|v| v.as_array())
+        .map(|assets| {
+            assets
+                .iter()
+                .filter_map(|asset| asset.get("name").and_then(|v| v.as_str()).map(String::from))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let update_available = tag
+        .as_deref()
+        .map(|latest| version_is_newer(latest, &current_version))
+        .unwrap_or(false);
+    Ok(UpdateCheckReport {
+        current_version,
+        latest_version: tag.clone(),
+        update_available,
+        release_url,
+        asset_names,
+        summary: if update_available {
+            format!("Gateway Switch v{} is available. Download the DMG from GitHub Release and install it manually.", tag.unwrap_or_default())
+        } else {
+            "Gateway Switch is up to date or no newer release was detected.".into()
+        },
+        error: None,
+    })
+}
+
+#[tauri::command]
+pub fn get_safe_install_plan() -> SafeInstallPlan {
+    safe_install_plan_for_path(
+        std::env::current_exe()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|e| format!("unknown: {e}")),
+    )
+}
+
+#[tauri::command]
+pub fn reveal_safe_install_locations() -> Result<String, String> {
+    let _ = Command::new("open").arg("/Applications").status();
+    if let Some(dir) = latest_release_artifacts_dir() {
+        let _ = Command::new("open").arg(&dir).status();
+    }
+    Ok("Opened /Applications and the latest local release-artifacts folder when available.".into())
 }
 
 fn runtime_source_report_for_path(bundle_path: String) -> RuntimeSourceReport {
@@ -151,6 +325,63 @@ fn runtime_source_report_for_path(bundle_path: String) -> RuntimeSourceReport {
         summary,
         recommendation,
     }
+}
+
+fn safe_install_plan_for_path(current_exe: String) -> SafeInstallPlan {
+    let runtime = runtime_source_report_for_path(current_exe.clone());
+    let applications_app_exists = std::path::Path::new("/Applications/Gateway Switch.app").exists();
+    let release_artifacts_dir = latest_release_artifacts_dir();
+    let mut steps = Vec::new();
+    steps.push("Quit Gateway Switch before replacing the app bundle.".into());
+    steps.push("Open the latest Gateway Switch DMG or local release artifact.".into());
+    steps.push("Drag Gateway Switch.app into /Applications using Finder.".into());
+    steps.push("Launch Gateway Switch from /Applications, not from the mounted DMG.".into());
+    if applications_app_exists {
+        steps.push("If Finder asks, choose Replace only after the app is closed.".into());
+    }
+    SafeInstallPlan {
+        current_exe,
+        is_applications: runtime.is_applications,
+        is_dmg_volume: runtime.is_dmg_volume,
+        is_temp_volume: runtime.is_temp_volume,
+        applications_app_exists,
+        release_artifacts_dir,
+        steps,
+        warning: (runtime.severity == "warn").then_some(runtime.recommendation),
+    }
+}
+
+fn latest_release_artifacts_dir() -> Option<String> {
+    let cwd = std::env::current_dir().ok()?;
+    let dir = cwd.join("release-artifacts");
+    let entries = fs::read_dir(dir).ok()?;
+    let mut paths = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .collect::<Vec<_>>();
+    paths.sort();
+    paths.pop().map(|path| path.display().to_string())
+}
+
+fn version_is_newer(latest: &str, current: &str) -> bool {
+    let parse = |value: &str| {
+        value
+            .trim_start_matches('v')
+            .split('.')
+            .map(|part| part.parse::<u64>().unwrap_or(0))
+            .collect::<Vec<_>>()
+    };
+    let latest_parts = parse(latest);
+    let current_parts = parse(current);
+    for i in 0..latest_parts.len().max(current_parts.len()) {
+        let l = *latest_parts.get(i).unwrap_or(&0);
+        let c = *current_parts.get(i).unwrap_or(&0);
+        if l != c {
+            return l > c;
+        }
+    }
+    false
 }
 
 #[tauri::command]
@@ -395,7 +626,11 @@ pub async fn apply_claude_code_binding(
                 .find(|p| p.id == provider_id)
                 .ok_or_else(|| format!("Provider '{provider_id}' not found"))?;
             let upstream_model = payload.upstream_model.as_deref().unwrap_or(&payload.model);
-            if provider_requires_gateway_route_for_claude_code(&provider, upstream_model) {
+            if provider_requires_gateway_route_for_claude_code(
+                &st.db_path,
+                &provider,
+                upstream_model,
+            ) {
                 return Err("This provider/model is not Anthropic-compatible for Claude Code Direct Provider mode. Use Gateway Route so Gateway Switch can convert system/tool roles for Volcengine DeepSeek.".into());
             }
             claude_code_binding::apply_provider(
@@ -412,22 +647,58 @@ pub async fn apply_claude_code_binding(
 }
 
 fn provider_requires_gateway_route_for_claude_code(
+    db: &std::path::PathBuf,
     provider: &crate::models::Provider,
     upstream_model: &str,
 ) -> bool {
-    let key = format!(
-        "{} {} {} {} {}",
-        provider.id, provider.name, provider.base_url, provider.openai_base_url, upstream_model
-    )
-    .to_ascii_lowercase();
-    (key.contains("volc") || key.contains("ark.cn-") || key.contains("火山"))
-        && key.contains("deepseek")
+    !gateway::effective_provider_compatibility_profile(db, provider, upstream_model)
+        .direct_provider_safe
 }
 
 #[tauri::command]
 pub fn restore_claude_code_binding(st: State<'_, AppState>) -> Result<ClaudeCodeInfo, String> {
     let _ = st;
     claude_code_binding::restore(&dirs::home_dir().ok_or("no home")?)
+}
+
+#[tauri::command]
+pub async fn repair_claude_code_gateway_binding(
+    st: State<'_, AppState>,
+    model: String,
+) -> Result<ClaudeCodeRepairReport, String> {
+    let home = dirs::home_dir().ok_or("no home")?;
+    let before = claude_code_binding::inspect(&home)?;
+    let diagnostics = gateway::route_diagnostics(&st.db_path)?;
+    let selected = diagnostics
+        .iter()
+        .find(|d| d.claude_alias == model)
+        .or_else(|| {
+            diagnostics
+                .iter()
+                .find(|d| d.strategy.gateway_route_recommended)
+        })
+        .or_else(|| diagnostics.first())
+        .ok_or("No Claude route is configured for Claude Code repair")?;
+    let mut warnings = selected.warnings.clone();
+    if selected.strategy.direct_provider_safe {
+        warnings.push("Selected route is already Direct Provider safe; Gateway Route repair is still allowed.".into());
+    }
+    let profile = database::get_profile(&st.db_path)?;
+    let _ = gateway::start(&st);
+    let after = claude_code_binding::apply_gateway(
+        &home,
+        &desktop_binding::gateway_base_url(&profile.listen_host, profile.listen_port),
+        &profile.auth_token,
+        &selected.claude_alias,
+    )?;
+    Ok(ClaudeCodeRepairReport {
+        repaired: true,
+        before,
+        backup_path: after.backup_path.clone(),
+        after,
+        selected_model: selected.claude_alias.clone(),
+        warnings,
+    })
 }
 
 #[tauri::command]
@@ -887,5 +1158,27 @@ mod tests {
         );
         assert_eq!(report.severity, "warn");
         assert!(report.is_temp_volume);
+    }
+
+    #[test]
+    fn version_comparison_detects_newer_semver_tags() {
+        assert!(version_is_newer("v1.10.0", "1.9.0"));
+        assert!(version_is_newer("1.10.1", "1.10.0"));
+        assert!(!version_is_newer("v1.10.0", "1.10.0"));
+        assert!(!version_is_newer("1.9.9", "1.10.0"));
+    }
+
+    #[test]
+    fn safe_install_plan_warns_for_dmg_runtime() {
+        let plan = safe_install_plan_for_path(
+            "/Volumes/Gateway Switch/Gateway Switch.app/Contents/MacOS/gateway-switch".into(),
+        );
+        assert!(plan.is_dmg_volume);
+        assert!(!plan.is_applications);
+        assert!(plan.warning.unwrap_or_default().contains("/Applications"));
+        assert!(plan
+            .steps
+            .iter()
+            .any(|step| step.contains("Drag Gateway Switch.app")));
     }
 }

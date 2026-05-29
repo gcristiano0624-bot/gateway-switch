@@ -12,12 +12,13 @@ use axum::{
 use bytes::Bytes;
 use futures_util::StreamExt;
 use reqwest::Client;
+use serde::Serialize;
 use serde_json::{json, Value};
 use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle, time::Duration};
 use uuid::Uuid;
 
 use crate::{
-    compatibility, database,
+    compatibility, database, gateway,
     models::{GatewayProfile, Provider, RequestLog},
     state::{AppState, GatewayHandle, GatewayStatus},
 };
@@ -35,7 +36,22 @@ struct Route {
     upstream_model: String,
     tool_call_mode: String,
     base_url: String,
+    strategy: gateway::ProviderCompatibilityProfile,
     headers: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CodexRouteDiagnostic {
+    pub route_id: String,
+    pub codex_model: String,
+    pub display_name: String,
+    pub provider_id: String,
+    pub provider_name: String,
+    pub upstream_model: String,
+    pub tool_call_mode: String,
+    pub strategy: gateway::ProviderCompatibilityProfile,
+    pub warnings: Vec<String>,
+    pub recommendations: Vec<String>,
 }
 
 pub fn start(st: &AppState) -> Result<String, String> {
@@ -227,6 +243,7 @@ async fn responses_handler(
     let mut chat_req = convert_request(&body_ref, &route.upstream_model);
     apply_codex_tool_call_mode(&mut chat_req, &route);
     apply_xiaomi_mimo_codex_compat(&mut chat_req, &route);
+    apply_codex_provider_policy(&mut chat_req, &route);
     let request_tool_count = tool_count(&chat_req);
     let tool_choice = chat_req
         .get("tool_choice")
@@ -980,6 +997,17 @@ fn apply_codex_tool_call_mode(chat_req: &mut Value, route: &Route) {
         return;
     }
 
+    if route.strategy.codex_strict_tool_calls {
+        chat_req["tool_choice"] = json!("required");
+        if let Some(messages) = chat_req.get_mut("messages").and_then(|v| v.as_array_mut()) {
+            messages.insert(0, json!({
+                "role": "system",
+                "content": "Codex compatibility policy requires structured tool_calls whenever tools are available. Call tools instead of describing planned actions."
+            }));
+        }
+        return;
+    }
+
     match route.tool_call_mode.as_str() {
         "force_when_tools_present" | "strict_execution" => {
             chat_req["tool_choice"] = json!("required");
@@ -991,6 +1019,22 @@ fn apply_codex_tool_call_mode(chat_req: &mut Value, route: &Route) {
             }
         }
         _ => {}
+    }
+}
+
+fn apply_codex_provider_policy(chat_req: &mut Value, route: &Route) {
+    if route.strategy.codex_strip_reasoning || route.strategy.strip_unsupported_params {
+        if let Some(obj) = chat_req.as_object_mut() {
+            obj.remove("thinking");
+            obj.remove("reasoning");
+            obj.remove("reasoning_effort");
+        }
+    }
+    if route.strategy.disable_tools {
+        if let Some(obj) = chat_req.as_object_mut() {
+            obj.remove("tools");
+            obj.remove("tool_choice");
+        }
     }
 }
 
@@ -1430,14 +1474,65 @@ fn resolve(db: &PathBuf, model: &str) -> Result<Route, String> {
         .into_iter()
         .find(|p| p.enabled && p.id == route.provider_id)
         .ok_or_else(|| format!("Provider '{}' not found", route.provider_id))?;
+    let strategy =
+        gateway::effective_provider_compatibility_profile(db, &provider, &route.upstream_model);
     Ok(Route {
         display: route.codex_model,
         provider_id: provider.id.clone(),
         upstream_model: route.upstream_model.trim().to_string(),
-        tool_call_mode: normalize_tool_call_mode(&route.tool_call_mode).to_string(),
+        tool_call_mode: if strategy.codex_strict_tool_calls {
+            "strict_execution".to_string()
+        } else {
+            normalize_tool_call_mode(&route.tool_call_mode).to_string()
+        },
         base_url: provider.openai_base_url.trim_end_matches('/').to_string(),
+        strategy,
         headers: auth_headers(&provider),
     })
+}
+
+pub fn route_diagnostics(db: &PathBuf) -> Result<Vec<CodexRouteDiagnostic>, String> {
+    let routes = database::list_codex_routes(db)?;
+    let providers = database::list_providers(db)?;
+    Ok(routes
+        .into_iter()
+        .filter_map(|route| {
+            let provider = providers.iter().find(|p| p.id == route.provider_id)?;
+            let strategy =
+                gateway::effective_provider_compatibility_profile(db, provider, &route.upstream_model);
+            let effective_mode = if strategy.codex_strict_tool_calls {
+                "strict_execution".to_string()
+            } else {
+                normalize_tool_call_mode(&route.tool_call_mode).to_string()
+            };
+            let mut warnings = Vec::new();
+            let mut recommendations = Vec::new();
+            if strategy.codex_disable_responses {
+                warnings.push("Codex Responses API is converted through Chat Completions fallback for this provider.".into());
+            }
+            if strategy.codex_strip_reasoning {
+                warnings.push("Reasoning/thinking parameters are stripped for provider compatibility.".into());
+            }
+            if strategy.codex_strict_tool_calls {
+                warnings.push("Strict tool-call policy is enforced when tools are present.".into());
+            }
+            if strategy.gateway_route_recommended {
+                recommendations.push("Keep Codex Gateway running before using this route.".into());
+            }
+            Some(CodexRouteDiagnostic {
+                route_id: route.id,
+                codex_model: route.codex_model,
+                display_name: route.display_name,
+                provider_id: provider.id.clone(),
+                provider_name: provider.name.clone(),
+                upstream_model: route.upstream_model,
+                tool_call_mode: effective_mode,
+                strategy,
+                warnings,
+                recommendations,
+            })
+        })
+        .collect())
 }
 
 fn normalize_tool_call_mode(mode: &str) -> &'static str {
@@ -1556,6 +1651,85 @@ mod tests {
     use crate::{database, models::CreateProvider};
     use axum::{body::to_bytes, http};
     use tower::ServiceExt;
+
+    fn standard_strategy() -> gateway::ProviderCompatibilityProfile {
+        gateway::ProviderCompatibilityProfile {
+            strategy_id: "openai_chat_fallback".into(),
+            system_to_user: false,
+            tool_to_user: false,
+            disable_tools: false,
+            strip_unsupported_params: false,
+            direct_provider_safe: false,
+            gateway_route_recommended: true,
+            codex_disable_responses: true,
+            codex_strict_tool_calls: false,
+            codex_strip_reasoning: false,
+            summary: "test".into(),
+        }
+    }
+
+    #[test]
+    fn test_codex_route_diagnostics_use_effective_provider_policy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("t.db");
+        database::initialize(&db).unwrap();
+        database::create_provider(
+            &db,
+            &CreateProvider {
+                id: "openrouter".into(),
+                name: "OpenRouter".into(),
+                base_url: "https://openrouter.ai/api/v1".into(),
+                openai_base_url: Some("https://openrouter.ai/api/v1".into()),
+                anthropic_base_url: None,
+                auth_header: "Authorization".into(),
+                auth_scheme: Some("Bearer".into()),
+                api_key: Some("k".into()),
+            },
+        )
+        .unwrap();
+        database::create_codex_route(
+            &db,
+            &crate::models::CreateCodexRoute {
+                id: "r1".into(),
+                codex_model: "codex-openrouter".into(),
+                display_name: "Codex OpenRouter".into(),
+                provider_id: "openrouter".into(),
+                upstream_model: "anthropic/claude-sonnet".into(),
+                tool_call_mode: Some("auto".into()),
+            },
+        )
+        .unwrap();
+        database::upsert_provider_policy(
+            &db,
+            &crate::models::ProviderCompatibilityPolicy {
+                provider_id: "openrouter".into(),
+                system_to_user: None,
+                tool_to_user: None,
+                disable_tools: None,
+                strip_unsupported_params: None,
+                direct_provider_safe: None,
+                gateway_route_recommended: None,
+                codex_disable_responses: Some(true),
+                codex_strict_tool_calls: Some(true),
+                codex_strip_reasoning: Some(true),
+                notes: Some("codex policy test".into()),
+                updated_by: "test".into(),
+                updated_at: None,
+            },
+        )
+        .unwrap();
+
+        let diagnostics = route_diagnostics(&db).unwrap();
+        assert_eq!(diagnostics.len(), 1);
+        let diag = &diagnostics[0];
+        assert_eq!(diag.tool_call_mode, "strict_execution");
+        assert!(diag.strategy.codex_strict_tool_calls);
+        assert!(diag.strategy.codex_strip_reasoning);
+        assert!(diag
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("Strict tool-call policy")));
+    }
 
     #[tokio::test]
     async fn test_codex_models_auth() {
@@ -1832,6 +2006,7 @@ mod tests {
             upstream_model: "gpt-4o".into(),
             tool_call_mode: "force_when_tools_present".into(),
             base_url: "https://api.openai.com/v1".into(),
+            strategy: standard_strategy(),
             headers: vec![],
         };
 
@@ -1859,6 +2034,7 @@ mod tests {
             upstream_model: "mimo-v2.5".into(),
             tool_call_mode: "force_when_tools_present".into(),
             base_url: "https://token-plan-sgp.xiaomimimo.com/v1".into(),
+            strategy: standard_strategy(),
             headers: vec![],
         };
 
@@ -1878,6 +2054,7 @@ mod tests {
             upstream_model: "mimo-v2.5".into(),
             tool_call_mode: "force_when_tools_present".into(),
             base_url: "https://api.xiaomimimo.com/v1".into(),
+            strategy: standard_strategy(),
             headers: vec![],
         };
         let mut chat_req = json!({
@@ -1905,6 +2082,7 @@ mod tests {
             upstream_model: "gpt-4o".into(),
             tool_call_mode: "force_when_tools_present".into(),
             base_url: "https://api.openai.com/v1".into(),
+            strategy: standard_strategy(),
             headers: vec![],
         };
 

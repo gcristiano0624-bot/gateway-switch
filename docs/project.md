@@ -1,6 +1,6 @@
 # Gateway Switch Project Documentation
 
-Version: 1.9.0
+Version: 1.10.0
 
 This document is the single technical source of truth for Gateway Switch. It merges the former project architecture notes and the Codex Gateway notes into one maintained file.
 
@@ -9,7 +9,7 @@ This document is the single technical source of truth for Gateway Switch. It mer
 If another AI receives this repository, start here:
 
 - Product: macOS Tauri app that routes Claude Desktop, Claude Code, and Codex App to third-party model providers.
-- Current version: `1.9.0`.
+- Current version: `1.10.0`.
 - Main frontend: `src/App.tsx` and `src/App.css`.
 - Main backend: `src-tauri/src/*.rs`.
 - Claude gateway: `src-tauri/src/gateway.rs`, local Anthropic Messages surface on `127.0.0.1:3456`.
@@ -36,7 +36,33 @@ The app solves two related but different protocol problems:
 
 The shared design goal is simple: providers share identity, auth header, auth scheme, and API key, but they do not share one universal Base URL. Provider URLs are split by protocol: OpenAI Base URL for Codex and Chat Completions fallback, Anthropic Base URL for Claude and Claude Code direct requests.
 
-## 3. Version 1.8.8 Upstream Tweak Store Scope
+## 3. Version 1.10.0 Unified Compatibility Diagnostics Scope
+
+Version 1.10.0 completes the remaining compatibility roadmap by turning the v1.9.0 diagnostics layer into a configurable control plane shared by Claude, Claude Code, and Codex.
+
+Main changes:
+
+- Failed Claude gateway requests are stored as sanitized diagnostic snapshots with original payload JSON, converted upstream JSON, redaction summary, and likely-cause analysis.
+- Provider Compatibility Policies persist nullable manual overrides for Claude and Codex strategy flags while inheriting automatic profiles when fields are unset.
+- Claude Code can repair unsafe Direct Provider bindings by backing up settings and rebinding to Gateway Route.
+- Codex Gateway consumes the same effective Provider Compatibility Profile and exposes route diagnostics for Responses fallback, reasoning cleanup, and strict tool-call behavior.
+- Settings includes a GitHub Release update checker and a safe install plan that warns when the app runs from DMG or temporary paths.
+- Automatic profiles now cover OpenRouter, Xiaomi MiMo, DeepSeek official, Moonshot Kimi, Qwen DashScope, Volcengine Ark, standard Anthropic, and OpenAI Chat fallback providers.
+- Regression tests cover provider policy persistence, diagnostic snapshots, replay redaction, Codex diagnostics, version comparison, and safe install warnings.
+
+## 3. Version 1.9.0 Compatibility Diagnostics Scope
+
+Version 1.9.0 turns the Volcengine DeepSeek Gateway Route hotfix into a provider compatibility diagnostics layer.
+
+Main changes:
+
+- Claude routes expose Provider Compatibility Profiles such as `standard_anthropic`, `openai_chat_fallback`, and `volcengine_deepseek_coding`.
+- Claude Code shows Route Diagnostics that explain Direct Provider safety, Gateway Route recommendations, and system/tool role conversion behavior.
+- Payload Preview uses a fixed redacted sample request to show the converted upstream Chat payload without calling the upstream provider.
+- Runtime Source Report warns when the app runs from `/Volumes`, `/tmp`, or another non-standard location instead of `/Applications`.
+- Regression tests cover compatibility profile selection, route diagnostics, payload preview role conversion, and runtime source classification.
+
+## 4. Version 1.8.8 Upstream Tweak Store Scope
 
 Version 1.8.8 makes Gateway Switch a more faithful Codex++ upstream store console while keeping safe install boundaries.
 
@@ -48,7 +74,7 @@ Main changes:
 - Store validation requires schema version 1, safe `owner/repo` values, manifest repo consistency, and full 40-character approved commit SHAs before any install URL is derived.
 - Cold Start check/repair logic is split into `src-tauri/src/coldstart.rs`, with `commands.rs` retaining only the Tauri command bridge.
 
-## 4. Version 1.8.5 Recommended Scripts Scope
+## 5. Version 1.8.5 Recommended Scripts Scope
 
 Version 1.8.5 adds a safe Recommended Scripts layer for the Codex++ script-market items the user explicitly wanted restored.
 
@@ -1094,7 +1120,7 @@ macOS artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.9.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.10.0_aarch64.dmg
 ```
 
 ## 27. Release Checklist

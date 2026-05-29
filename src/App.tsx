@@ -111,6 +111,9 @@ type ProviderCompatibilityProfile = {
   strip_unsupported_params: boolean;
   direct_provider_safe: boolean;
   gateway_route_recommended: boolean;
+  codex_disable_responses: boolean;
+  codex_strict_tool_calls: boolean;
+  codex_strip_reasoning: boolean;
   summary: string;
 };
 
@@ -144,6 +147,81 @@ type RuntimeSourceReport = {
   severity: string;
   summary: string;
   recommendation: string;
+};
+
+type ProviderCompatibilityPolicy = {
+  provider_id: string;
+  system_to_user: boolean | null;
+  tool_to_user: boolean | null;
+  disable_tools: boolean | null;
+  strip_unsupported_params: boolean | null;
+  direct_provider_safe: boolean | null;
+  gateway_route_recommended: boolean | null;
+  codex_disable_responses: boolean | null;
+  codex_strict_tool_calls: boolean | null;
+  codex_strip_reasoning: boolean | null;
+  notes: string | null;
+  updated_by: string;
+  updated_at: string | null;
+};
+
+type FailedRequestDiagnosticCandidate = {
+  request_id: string;
+  surface: string;
+  claude_alias: string | null;
+  provider_id: string | null;
+  upstream_model: string | null;
+  status_code: number | null;
+  error_summary: string | null;
+  redaction_summary: string;
+  created_at: string | null;
+};
+
+type RequestReplayReport = {
+  request_id: string;
+  surface: string;
+  provider_id: string | null;
+  upstream_model: string | null;
+  strategy_id: string;
+  original_payload: unknown;
+  converted_payload: unknown | null;
+  redaction_summary: string;
+  likely_cause: string;
+  local_only: boolean;
+};
+
+type CodexRouteDiagnostic = {
+  route_id: string;
+  codex_model: string;
+  display_name: string;
+  provider_id: string;
+  provider_name: string;
+  upstream_model: string;
+  tool_call_mode: string;
+  strategy: ProviderCompatibilityProfile;
+  warnings: string[];
+  recommendations: string[];
+};
+
+type UpdateCheckReport = {
+  current_version: string;
+  latest_version: string | null;
+  update_available: boolean;
+  release_url: string | null;
+  asset_names: string[];
+  summary: string;
+  error: string | null;
+};
+
+type SafeInstallPlan = {
+  current_exe: string;
+  is_applications: boolean;
+  is_dmg_volume: boolean;
+  is_temp_volume: boolean;
+  applications_app_exists: boolean;
+  release_artifacts_dir: string | null;
+  steps: string[];
+  warning: string | null;
 };
 
 type Settings = {
@@ -880,6 +958,9 @@ const MOCK_ROUTE_DIAGNOSTICS: RouteCompatibilityDiagnostic[] = [
       strip_unsupported_params: false,
       direct_provider_safe: true,
       gateway_route_recommended: false,
+      codex_disable_responses: false,
+      codex_strict_tool_calls: false,
+      codex_strip_reasoning: false,
       summary: "Preview profile for an Anthropic-compatible provider.",
     },
     warnings: [],
@@ -905,6 +986,71 @@ const MOCK_RUNTIME_SOURCE: RuntimeSourceReport = {
   severity: "ok",
   summary: "Gateway Switch is running from /Applications.",
   recommendation: "Runtime source looks stable for launchd watchers and Codex++ repair actions.",
+};
+
+const MOCK_PROVIDER_POLICIES: ProviderCompatibilityPolicy[] = [];
+
+const MOCK_FAILED_DIAGNOSTICS: FailedRequestDiagnosticCandidate[] = [
+  {
+    request_id: "mock-502",
+    surface: "claude_chat_fallback",
+    claude_alias: "claude-sonnet-4-6",
+    provider_id: "xiaomimo",
+    upstream_model: "mimo-v2.5-pro",
+    status_code: 502,
+    error_summary: "502 Bad Gateway",
+    redaction_summary: "3 field(s) redacted or truncated; replay preview is local-only.",
+    created_at: null,
+  },
+];
+
+const MOCK_REPLAY_REPORT: RequestReplayReport = {
+  request_id: "mock-502",
+  surface: "claude_chat_fallback",
+  provider_id: "xiaomimo",
+  upstream_model: "mimo-v2.5-pro",
+  strategy_id: "xiaomi_mimo_chat",
+  original_payload: { model: "claude-sonnet-4-6", messages: [{ role: "user", content: "你好" }] },
+  converted_payload: { model: "mimo-v2.5-pro", messages: [{ role: "user", content: "你好" }] },
+  redaction_summary: "3 field(s) redacted or truncated; replay preview is local-only.",
+  likely_cause: "Upstream provider returned a server-side gateway error or timed out.",
+  local_only: true,
+};
+
+const MOCK_CODEX_ROUTE_DIAGNOSTICS: CodexRouteDiagnostic[] = [
+  {
+    route_id: "codex-mimo",
+    codex_model: "gpt-5.2",
+    display_name: "Codex via MiMo",
+    provider_id: "xiaomimo",
+    provider_name: "XiaoMiMo",
+    upstream_model: "mimo-v2.5-pro",
+    tool_call_mode: "strict_execution",
+    strategy: { ...MOCK_ROUTE_DIAGNOSTICS[0].strategy, strategy_id: "xiaomi_mimo_chat", codex_disable_responses: true, codex_strict_tool_calls: true, codex_strip_reasoning: true },
+    warnings: ["Codex Responses API is converted through Chat Completions fallback for this provider."],
+    recommendations: ["Keep Codex Gateway running before using this route."],
+  },
+];
+
+const MOCK_UPDATE_REPORT: UpdateCheckReport = {
+  current_version: "1.10.0",
+  latest_version: "1.10.0",
+  update_available: false,
+  release_url: "https://github.com/gcristiano0624-bot/gateway-switch/releases",
+  asset_names: ["Gateway.Switch_1.10.0_aarch64.dmg"],
+  summary: "Gateway Switch is up to date or no newer release was detected.",
+  error: null,
+};
+
+const MOCK_SAFE_INSTALL_PLAN: SafeInstallPlan = {
+  current_exe: "/Applications/Gateway Switch.app/Contents/MacOS/gateway-switch",
+  is_applications: true,
+  is_dmg_volume: false,
+  is_temp_volume: false,
+  applications_app_exists: true,
+  release_artifacts_dir: "release-artifacts/v1.10.0",
+  steps: ["Quit Gateway Switch before replacing the app bundle.", "Drag Gateway Switch.app into /Applications using Finder."],
+  warning: null,
 };
 
 const MOCK_CODEX_ROUTES: CodexRoute[] = [
@@ -1456,6 +1602,12 @@ function App() {
   const [routeDiagnostics, setRouteDiagnostics] = useState<RouteCompatibilityDiagnostic[]>([]);
   const [payloadPreview, setPayloadPreview] = useState<RoutePayloadPreview | null>(null);
   const [runtimeSource, setRuntimeSource] = useState<RuntimeSourceReport | null>(null);
+  const [providerPolicies, setProviderPolicies] = useState<ProviderCompatibilityPolicy[]>([]);
+  const [failedDiagnostics, setFailedDiagnostics] = useState<FailedRequestDiagnosticCandidate[]>([]);
+  const [replayReport, setReplayReport] = useState<RequestReplayReport | null>(null);
+  const [codexRouteDiagnostics, setCodexRouteDiagnostics] = useState<CodexRouteDiagnostic[]>([]);
+  const [updateReport, setUpdateReport] = useState<UpdateCheckReport | null>(null);
+  const [safeInstallPlan, setSafeInstallPlan] = useState<SafeInstallPlan | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
   const [codexHealth, setCodexHealth] = useState<Health | null>(null);
@@ -1540,6 +1692,12 @@ function App() {
       setRouteDiagnostics(MOCK_ROUTE_DIAGNOSTICS);
       setPayloadPreview(MOCK_PAYLOAD_PREVIEW);
       setRuntimeSource(MOCK_RUNTIME_SOURCE);
+      setProviderPolicies(MOCK_PROVIDER_POLICIES);
+      setFailedDiagnostics(MOCK_FAILED_DIAGNOSTICS);
+      setReplayReport(MOCK_REPLAY_REPORT);
+      setCodexRouteDiagnostics(MOCK_CODEX_ROUTE_DIAGNOSTICS);
+      setUpdateReport(MOCK_UPDATE_REPORT);
+      setSafeInstallPlan(MOCK_SAFE_INSTALL_PLAN);
       setSettings(MOCK_SETTINGS);
       setCodexStatus(MOCK_CODEX_STATUS);
       setCodexRoutes(MOCK_CODEX_ROUTES);
@@ -1558,7 +1716,7 @@ function App() {
     }
 
     try {
-      const [s, p, r, d, cc, l, rd, rs, cfg, cs, cr, cb, cold, mcp, ca, cma, cppInstall, cppTweaks, cppHealth, cppPreflight, cppScripts] = await Promise.all([
+      const [s, p, r, d, cc, l, rd, rs, policies, failed, codexDiag, installPlan, cfg, cs, cr, cb, cold, mcp, ca, cma, cppInstall, cppTweaks, cppHealth, cppPreflight, cppScripts] = await Promise.all([
         invoke<Status>("get_status"),
         invoke<Provider[]>("list_providers"),
         invoke<ModelRoute[]>("list_routes"),
@@ -1567,6 +1725,10 @@ function App() {
         invoke<RequestLog[]>("list_logs"),
         invoke<RouteCompatibilityDiagnostic[]>("get_route_diagnostics"),
         invoke<RuntimeSourceReport>("get_runtime_source_report"),
+        invoke<ProviderCompatibilityPolicy[]>("list_provider_policies"),
+        invoke<FailedRequestDiagnosticCandidate[]>("list_failed_request_diagnostics"),
+        invoke<CodexRouteDiagnostic[]>("get_codex_route_diagnostics"),
+        invoke<SafeInstallPlan>("get_safe_install_plan"),
         invoke<Settings>("get_settings"),
         invoke<CodexGatewayStatus>("get_codex_status"),
         invoke<CodexRoute[]>("list_codex_routes"),
@@ -1589,6 +1751,10 @@ function App() {
       setLogs(l);
       setRouteDiagnostics(rd);
       setRuntimeSource(rs);
+      setProviderPolicies(policies);
+      setFailedDiagnostics(failed);
+      setCodexRouteDiagnostics(codexDiag);
+      setSafeInstallPlan(installPlan);
       setSettings(cfg);
       setCodexStatus(cs);
       setCodexRoutes(cr);
@@ -1704,6 +1870,27 @@ function App() {
       flash(String(e), "error");
     }
   };
+  const loadReplayReport = async (requestId: string) => {
+    try {
+      const report = isTauriRuntime
+        ? await invoke<RequestReplayReport>("replay_request_diagnostic", { requestId })
+        : MOCK_REPLAY_REPORT;
+      setReplayReport(report);
+      flash("Replay preview generated");
+    } catch (e) {
+      flash(String(e), "error");
+    }
+  };
+  const repairClaudeCodeGateway = async () => {
+    try {
+      const report = await invoke<{ after: ClaudeCodeInfo; selected_model: string }>("repair_claude_code_gateway_binding", { model: ccModel });
+      setClaudeCode(report.after);
+      await loadAll();
+      flash(`Claude Code repaired to Gateway Route: ${report.selected_model}`);
+    } catch (e) {
+      flash(String(e), "error");
+    }
+  };
   const restoreClaudeCode = async () => {
     try {
       const info = await invoke<ClaudeCodeInfo>("restore_claude_code_binding");
@@ -1785,6 +1972,54 @@ function App() {
     setPForm({ id: p.id, name: p.name, base_url: p.openai_base_url, openai_base_url: p.openai_base_url, anthropic_base_url: p.anthropic_base_url ?? "", auth_header: p.auth_header, auth_scheme: p.auth_scheme ?? "", api_key: p.api_key ?? "" });
   };
 
+  const policyForProvider = (providerId: string) => providerPolicies.find(policy => policy.provider_id === providerId);
+  const autoStrategyForProvider = (providerId: string) =>
+    routeDiagnostics.find(d => d.provider_id === providerId)?.strategy ??
+    codexRouteDiagnostics.find(d => d.provider_id === providerId)?.strategy;
+
+  const saveProviderPolicyFlag = async (providerId: string, key: keyof ProviderCompatibilityPolicy, value: boolean | null) => {
+    const current = policyForProvider(providerId);
+    const payload: ProviderCompatibilityPolicy = {
+      provider_id: providerId,
+      system_to_user: current?.system_to_user ?? null,
+      tool_to_user: current?.tool_to_user ?? null,
+      disable_tools: current?.disable_tools ?? null,
+      strip_unsupported_params: current?.strip_unsupported_params ?? null,
+      direct_provider_safe: current?.direct_provider_safe ?? null,
+      gateway_route_recommended: current?.gateway_route_recommended ?? null,
+      codex_disable_responses: current?.codex_disable_responses ?? null,
+      codex_strict_tool_calls: current?.codex_strict_tool_calls ?? null,
+      codex_strip_reasoning: current?.codex_strip_reasoning ?? null,
+      notes: current?.notes ?? null,
+      updated_by: "user",
+      updated_at: current?.updated_at ?? null,
+      [key]: value,
+    };
+    try {
+      const policies = isTauriRuntime
+        ? await invoke<ProviderCompatibilityPolicy[]>("upsert_provider_policy", { payload })
+        : [payload];
+      setProviderPolicies(policies);
+      await loadAll();
+      flash("Provider strategy updated");
+    } catch (e) {
+      flash(String(e), "error");
+    }
+  };
+
+  const resetProviderPolicy = async (providerId: string) => {
+    try {
+      const policies = isTauriRuntime
+        ? await invoke<ProviderCompatibilityPolicy[]>("reset_provider_policy", { providerId })
+        : MOCK_PROVIDER_POLICIES;
+      setProviderPolicies(policies);
+      await loadAll();
+      flash("Provider strategy reset");
+    } catch (e) {
+      flash(String(e), "error");
+    }
+  };
+
   // Route CRUD
   const saveRoute = async () => {
     try {
@@ -1826,6 +2061,23 @@ function App() {
   };
   const doExport = async () => {
     try { const p = await invoke<string>("export_config"); flash(`Exported to ${p}`); } catch (e) { flash(String(e), "error"); }
+  };
+  const checkUpdate = async () => {
+    try {
+      const report = isTauriRuntime ? await invoke<UpdateCheckReport>("check_app_update") : MOCK_UPDATE_REPORT;
+      setUpdateReport(report);
+      flash(report.summary, report.error ? "error" : "success");
+    } catch (e) {
+      flash(String(e), "error");
+    }
+  };
+  const revealInstallLocations = async () => {
+    try {
+      if (isTauriRuntime) await invoke<string>("reveal_safe_install_locations");
+      flash("Install locations opened");
+    } catch (e) {
+      flash(String(e), "error");
+    }
   };
 
   // Codex actions
@@ -2109,7 +2361,7 @@ function App() {
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.9.0</div>
+          <div className="brand-sub">v1.10.0</div>
         </div>
       </div>
 
@@ -2178,7 +2430,7 @@ function App() {
         <span className="status-text">
           Claude <strong>{status?.gateway_running ? t("Running") : t("Stopped")}</strong> · Codex <strong>{codexStatus?.running ? t("Running") : t("Stopped")}</strong>
         </span>
-        <span className="sidebar-version">v1.9.0</span>
+        <span className="sidebar-version">v1.10.0</span>
       </div>
     </aside>
   );
@@ -2490,6 +2742,51 @@ function App() {
           </tbody>
         </table>
       </div>
+
+      <div className="card" style={{ marginTop: 20 }}>
+        <div className="card-title">Provider Strategy Overrides</div>
+        <p style={{ color: "var(--muted)", marginBottom: 14 }}>
+          Empty fields inherit the automatic profile. Manual overrides affect Claude, Claude Code, and Codex diagnostics.
+        </p>
+        <div className="route-list" style={{ marginBottom: 0 }}>
+          {providers.map(provider => {
+            const policy = policyForProvider(provider.id);
+            const auto = autoStrategyForProvider(provider.id);
+            const flagRows: Array<[keyof ProviderCompatibilityPolicy, string]> = [
+              ["system_to_user", "System → User"],
+              ["tool_to_user", "Tool → User"],
+              ["disable_tools", "Disable Tools"],
+              ["strip_unsupported_params", "Strip Params"],
+              ["direct_provider_safe", "Direct Safe"],
+              ["codex_strict_tool_calls", "Codex Strict Tools"],
+              ["codex_strip_reasoning", "Codex Strip Reasoning"],
+            ];
+            return (
+              <div key={provider.id} className="route-item" style={{ alignItems: "flex-start" }}>
+                <div className="route-info">
+                  <div className="route-name">{provider.name}</div>
+                  <div className="route-path">
+                    auto: {auto?.strategy_id ?? "not routed"} · override: {policy ? "active" : "inherit"}
+                  </div>
+                  <div className="qa-buttons" style={{ marginTop: 10 }}>
+                    {flagRows.map(([key, label]) => (
+                      <button
+                        key={key}
+                        className={`btn ${policy?.[key] === true ? "btn-primary" : ""}`}
+                        style={{ padding: "5px 8px", fontSize: 12 }}
+                        onClick={() => void saveProviderPolicyFlag(provider.id, key, policy?.[key] === true ? null : true)}
+                      >
+                        {label}: {policy?.[key] === true ? "on" : policy?.[key] === false ? "off" : "auto"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button className="btn" onClick={() => void resetProviderPolicy(provider.id)}>Reset</button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 
@@ -2775,6 +3072,51 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
           </tbody>
         </table>
       </div>
+
+      <div className="card" style={{ marginTop: 20 }}>
+        <div className="card-title">Failed Request Diagnostics</div>
+        <p style={{ color: "var(--muted)", marginBottom: 14 }}>
+          Pick a captured failed request to inspect the redacted original request and converted upstream payload. Preview is local-only and never calls the provider.
+        </p>
+        <div className="route-list" style={{ marginBottom: 0 }}>
+          {failedDiagnostics.map(item => (
+            <div key={item.request_id} className="route-item">
+              <div className="route-info">
+                <div className="route-name">{item.claude_alias ?? item.surface} → {item.upstream_model ?? "unknown"}</div>
+                <div className="route-path">
+                  {item.provider_id ?? "provider"} · HTTP {item.status_code ?? "network"} · {item.error_summary ?? item.redaction_summary}
+                </div>
+              </div>
+              <button className="btn" onClick={() => void loadReplayReport(item.request_id)}>
+                <IconSearch /> Replay Preview
+              </button>
+            </div>
+          ))}
+          {failedDiagnostics.length === 0 && (
+            <div className="empty-state" style={{ padding: 16 }}>
+              <p>No failed diagnostic snapshots yet.</p>
+            </div>
+          )}
+        </div>
+        {replayReport && (
+          <>
+            <div className="info-grid">
+              <span className="info-key">Request</span>
+              <span className="info-val">{replayReport.request_id}</span>
+              <span className="info-key">Strategy</span>
+              <span className="info-val">{replayReport.strategy_id}</span>
+              <span className="info-key">Likely Cause</span>
+              <span className="info-val">{replayReport.likely_cause}</span>
+              <span className="info-key">Redaction</span>
+              <span className="info-val">{replayReport.redaction_summary}</span>
+            </div>
+            <pre className="log-view" style={{ maxHeight: 320 }}>{JSON.stringify({
+              original_payload: replayReport.original_payload,
+              converted_payload: replayReport.converted_payload,
+            }, null, 2)}</pre>
+          </>
+        )}
+      </div>
     </div>
   );
 
@@ -2913,7 +3255,20 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
                 </span>
               </div>
             ))}
+            {routeDiagnostics.length === 0 && (
+              <div className="empty-state" style={{ padding: 16 }}>
+                <p>No Claude routes available for diagnostics.</p>
+              </div>
+            )}
           </div>
+          {selectedRouteDiagnostic && !selectedRouteDiagnostic.strategy.direct_provider_safe && (
+            <div className="qa-buttons" style={{ marginTop: 16 }}>
+              <button className="btn btn-primary" onClick={() => void repairClaudeCodeGateway()}>
+                <IconZap /> Repair Claude Code to Gateway Route
+              </button>
+              <span className="badge badge-amber">backs up settings.json first</span>
+            </div>
+          )}
         </div>
 
         <div className="card">
@@ -3076,6 +3431,38 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
               <p>{t("Binding preserves `~/.codex/config.toml` project entries. Existing Codex conversations may still be separated by Codex's own account/provider state, so switching providers can show a different conversation list even when local project trust remains intact.")}</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-title">Codex Route Diagnostics</div>
+        <p style={{ color: "var(--muted)", marginBottom: 14 }}>
+          Codex routes now use the same Provider Compatibility Profile as Claude routes, with Codex-specific flags for Responses fallback, strict tool calls, and reasoning cleanup.
+        </p>
+        <div className="route-list" style={{ marginBottom: 0 }}>
+          {codexRouteDiagnostics.map(diagnostic => (
+            <div key={diagnostic.route_id} className="route-item">
+              <div className="route-info">
+                <div className="route-name">{diagnostic.codex_model} → {diagnostic.upstream_model}</div>
+                <div className="route-path">
+                  {diagnostic.provider_name} · {diagnostic.strategy.strategy_id} · {diagnostic.tool_call_mode}
+                </div>
+                {diagnostic.warnings.length > 0 && (
+                  <div className="route-path" style={{ color: "var(--warning)" }}>
+                    {diagnostic.warnings.join(" · ")}
+                  </div>
+                )}
+              </div>
+              <span className={`badge ${diagnostic.strategy.codex_strict_tool_calls ? "badge-amber" : "badge-blue"}`}>
+                {diagnostic.strategy.codex_strict_tool_calls ? "strict tools" : "profiled"}
+              </span>
+            </div>
+          ))}
+          {codexRouteDiagnostics.length === 0 && (
+            <div className="empty-state" style={{ padding: 16 }}>
+              <p>No Codex route diagnostics yet.</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -4159,6 +4546,63 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
                   <code style={{ fontSize: 11.5, fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>~/Library/Application Support/Gateway Switch/</code>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="two-col" style={{ marginTop: 20 }}>
+          <div className="card">
+            <div className="card-title">Update Checker</div>
+            <p style={{ color: "var(--muted)", marginBottom: 14 }}>
+              Checks GitHub Releases only. Gateway Switch does not silently replace the running app.
+            </p>
+            <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+              <span className="info-key">Current</span>
+              <span className="info-val">{updateReport?.current_version ?? "1.10.0"}</span>
+              <span className="info-key">Latest</span>
+              <span className="info-val">{updateReport?.latest_version ?? "-"}</span>
+              <span className="info-key">Status</span>
+              <span className="info-val">
+                <span className={`badge ${updateReport?.update_available ? "badge-amber" : "badge-green"}`}>
+                  {updateReport?.update_available ? "update available" : "up to date"}
+                </span>
+              </span>
+              <span className="info-key">Release</span>
+              <span className="info-val">{updateReport?.release_url ?? "-"}</span>
+            </div>
+            {updateReport?.asset_names.length ? (
+              <p style={{ marginTop: 12, color: "var(--muted)", fontSize: 12 }}>{updateReport.asset_names.join(" · ")}</p>
+            ) : null}
+            <div className="qa-buttons" style={{ marginTop: 16 }}>
+              <button className="btn" onClick={() => void checkUpdate()}><IconRefresh /> Check Update</button>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-title">Safe Install Helper</div>
+            <p style={{ color: "var(--muted)", marginBottom: 14 }}>
+              Provides Finder-based install guidance. It never deletes or overwrites `/Applications/Gateway Switch.app` by itself.
+            </p>
+            <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+              <span className="info-key">Running From</span>
+              <span className="info-val">{safeInstallPlan?.current_exe ?? runtimeSource?.bundle_path ?? "-"}</span>
+              <span className="info-key">/Applications</span>
+              <span className="info-val">{safeInstallPlan?.applications_app_exists ? "Gateway Switch.app exists" : "Not found"}</span>
+              <span className="info-key">Artifacts</span>
+              <span className="info-val">{safeInstallPlan?.release_artifacts_dir ?? "Not detected"}</span>
+            </div>
+            {safeInstallPlan?.warning && <p style={{ color: "var(--warning)", marginTop: 12 }}>{safeInstallPlan.warning}</p>}
+            <div className="route-list" style={{ marginTop: 12, marginBottom: 0 }}>
+              {(safeInstallPlan?.steps ?? MOCK_SAFE_INSTALL_PLAN.steps).map(step => (
+                <div key={step} className="route-item">
+                  <div className="route-info">
+                    <div className="route-name">{step}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="qa-buttons" style={{ marginTop: 16 }}>
+              <button className="btn" onClick={() => void revealInstallLocations()}><IconDownload /> Open Install Locations</button>
             </div>
           </div>
         </div>

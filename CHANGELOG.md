@@ -2,6 +2,16 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.10.0 - 2026-05-29
+
+- Added real failed-request diagnostic snapshots with sanitized original payload, converted upstream payload, local replay preview, and likely-cause classification for 400/413/429/5xx/network failures.
+- Added editable Provider Compatibility Policies so users can override Claude and Codex strategy flags per provider while inheriting automatic profiles by default.
+- Added one-click Claude Code repair that backs up settings and switches unsafe Direct Provider bindings to Gateway Route.
+- Unified Codex Gateway with Provider Compatibility Profiles, including strict tool-call enforcement, reasoning parameter cleanup, and route diagnostics.
+- Added GitHub Release update checks, safe install planning, and Finder reveal helpers to avoid running from DMG or temporary paths.
+- Expanded provider profiles for OpenRouter, Xiaomi MiMo, DeepSeek official, Moonshot Kimi, Qwen DashScope, Volcengine Ark, standard Anthropic, and OpenAI Chat fallback providers.
+- Added regression tests for provider policy persistence, request snapshot persistence/redaction, diagnostic replay, Codex route diagnostics, version comparison, and safe install warnings.
+
 ## 1.9.0 - 2026-05-29
 
 - Added Provider Compatibility Profiles for Claude routes, including `standard_anthropic`, `openai_chat_fallback`, and `volcengine_deepseek_coding`.

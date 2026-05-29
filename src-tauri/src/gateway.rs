@@ -19,7 +19,10 @@ use uuid::Uuid;
 
 use crate::{
     compatibility, database,
-    models::{GatewayProfile, Provider, RequestLog},
+    models::{
+        GatewayProfile, Provider, ProviderCompatibilityPolicy, RequestDiagnosticSnapshot,
+        RequestLog,
+    },
     state::{AppState, GatewayHandle, GatewayStatus},
 };
 
@@ -57,6 +60,9 @@ pub struct ProviderCompatibilityProfile {
     pub strip_unsupported_params: bool,
     pub direct_provider_safe: bool,
     pub gateway_route_recommended: bool,
+    pub codex_disable_responses: bool,
+    pub codex_strict_tool_calls: bool,
+    pub codex_strip_reasoning: bool,
     pub summary: String,
 }
 
@@ -82,6 +88,20 @@ pub struct RoutePayloadPreview {
     pub strategy_id: String,
     pub roles: Vec<String>,
     pub payload: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RequestReplayReport {
+    pub request_id: String,
+    pub surface: String,
+    pub provider_id: Option<String>,
+    pub upstream_model: Option<String>,
+    pub strategy_id: String,
+    pub original_payload: Value,
+    pub converted_payload: Option<Value>,
+    pub redaction_summary: String,
+    pub likely_cause: String,
+    pub local_only: bool,
 }
 
 pub fn start(st: &AppState) -> Result<String, String> {
@@ -309,6 +329,16 @@ async fn messages(
         .send()
         .await
         .map_err(|e| {
+            record_failed_snapshot(
+                &ctx.db,
+                &req_id,
+                "claude_messages",
+                &route,
+                None,
+                Some(&e.to_string()),
+                &body,
+                Some(&upstream),
+            );
             let _ = database::insert_log(
                 &ctx.db,
                 &RequestLog {
@@ -352,6 +382,16 @@ async fn messages(
         }
         if !should_fallback_from_anthropic_status(status, &bytes) {
             let text = String::from_utf8_lossy(&bytes).to_string();
+            record_failed_snapshot(
+                &ctx.db,
+                &req_id,
+                "claude_messages",
+                &route,
+                Some(status.as_u16()),
+                Some(&body_preview(&bytes)),
+                &body,
+                Some(&upstream),
+            );
             let _ = database::insert_log(
                 &ctx.db,
                 &RequestLog {
@@ -390,6 +430,16 @@ async fn messages(
         let bytes = resp.bytes().await.map_err(upstream_err)?;
         if !should_fallback_from_anthropic_status(status, &bytes) {
             let text = String::from_utf8_lossy(&bytes).to_string();
+            record_failed_snapshot(
+                &ctx.db,
+                &req_id,
+                "claude_messages_stream",
+                &route,
+                Some(status.as_u16()),
+                Some(&body_preview(&bytes)),
+                &body,
+                Some(&upstream),
+            );
             let _ = database::insert_log(
                 &ctx.db,
                 &RequestLog {
@@ -494,6 +544,16 @@ async fn chat_completion_fallback(
             } else {
                 format!("{prior_message}; Chat fallback error: {e}")
             };
+            record_failed_snapshot(
+                &ctx.db,
+                &req_id,
+                "claude_chat_fallback",
+                &route,
+                None,
+                Some(&error),
+                &body,
+                Some(&chat_req),
+            );
             let _ = database::insert_log(
                 &ctx.db,
                 &RequestLog {
@@ -514,10 +574,20 @@ async fn chat_completion_fallback(
     let status = resp.status();
     if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();
+        record_failed_snapshot(
+            &ctx.db,
+            &req_id,
+            "claude_chat_fallback",
+            &route,
+            Some(status.as_u16()),
+            Some(&text),
+            &body,
+            Some(&chat_req),
+        );
         let _ = database::insert_log(
             &ctx.db,
             &RequestLog {
-                request_id: req_id,
+                request_id: req_id.clone(),
                 claude_alias: route.display.clone(),
                 provider_id: route.provider_id.clone(),
                 upstream_model: route.upstream_model.clone(),
@@ -676,6 +746,7 @@ fn resolve(db: &PathBuf, model: &str) -> Result<Route, String> {
         .into_iter()
         .find(|p| p.enabled && p.id == route.provider_id)
         .ok_or_else(|| format!("Provider '{}' not found", route.provider_id))?;
+    let strategy = effective_provider_compatibility_profile(db, &provider, &route.upstream_model);
     Ok(Route {
         display: route.claude_alias,
         provider_id: provider.id.clone(),
@@ -688,7 +759,7 @@ fn resolve(db: &PathBuf, model: &str) -> Result<Route, String> {
             .unwrap_or(&provider.openai_base_url)
             .trim_end_matches('/')
             .to_string(),
-        chat_role_mode: chat_role_mode_for(&provider, &route.upstream_model),
+        chat_role_mode: chat_role_mode_from_profile(&strategy),
         headers: auth_headers(&provider),
     })
 }
@@ -709,8 +780,14 @@ pub fn provider_compatibility_profile(
     provider: &Provider,
     upstream_model: &str,
 ) -> ProviderCompatibilityProfile {
-    match chat_role_mode_for(provider, upstream_model) {
-        ChatRoleMode::UserAssistantOnly => ProviderCompatibilityProfile {
+    let key = provider_profile_key(provider, upstream_model);
+    let has_anthropic = provider
+        .anthropic_base_url
+        .as_deref()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false);
+    if is_volcengine_deepseek_key(&key) {
+        ProviderCompatibilityProfile {
             strategy_id: "volcengine_deepseek_coding".into(),
             system_to_user: true,
             tool_to_user: true,
@@ -718,27 +795,172 @@ pub fn provider_compatibility_profile(
             strip_unsupported_params: false,
             direct_provider_safe: false,
             gateway_route_recommended: true,
+            codex_disable_responses: true,
+            codex_strict_tool_calls: true,
+            codex_strip_reasoning: true,
             summary: "Volcengine Ark DeepSeek coding endpoints reject system/tool roles; Gateway Route converts them to user messages.".into(),
-        },
-        ChatRoleMode::Standard => ProviderCompatibilityProfile {
-            strategy_id: if provider.anthropic_base_url.is_some() {
-                "standard_anthropic".into()
-            } else {
-                "openai_chat_fallback".into()
-            },
+        }
+    } else if key.contains("openrouter") {
+        ProviderCompatibilityProfile {
+            strategy_id: "openrouter_anthropic_or_chat".into(),
+            system_to_user: false,
+            tool_to_user: false,
+            disable_tools: false,
+            strip_unsupported_params: true,
+            direct_provider_safe: has_anthropic,
+            gateway_route_recommended: !has_anthropic,
+            codex_disable_responses: true,
+            codex_strict_tool_calls: false,
+            codex_strip_reasoning: true,
+            summary: "OpenRouter is safest through Gateway Route unless an Anthropic-compatible endpoint is explicitly configured.".into(),
+        }
+    } else if key.contains("xiaomi") || key.contains("mimo") || key.contains("xiaomimimo.com") {
+        ProviderCompatibilityProfile {
+            strategy_id: "xiaomi_mimo_chat".into(),
+            system_to_user: false,
+            tool_to_user: false,
+            disable_tools: false,
+            strip_unsupported_params: true,
+            direct_provider_safe: false,
+            gateway_route_recommended: true,
+            codex_disable_responses: true,
+            codex_strict_tool_calls: true,
+            codex_strip_reasoning: true,
+            summary: "Xiaomi MiMo is treated as an OpenAI Chat provider; Gateway Route and Codex Chat fallback are recommended.".into(),
+        }
+    } else if key.contains("deepseek") {
+        ProviderCompatibilityProfile {
+            strategy_id: "deepseek_official_chat".into(),
+            system_to_user: false,
+            tool_to_user: false,
+            disable_tools: false,
+            strip_unsupported_params: true,
+            direct_provider_safe: false,
+            gateway_route_recommended: true,
+            codex_disable_responses: true,
+            codex_strict_tool_calls: false,
+            codex_strip_reasoning: true,
+            summary: "DeepSeek official endpoints are treated as OpenAI Chat-compatible; Gateway Route is recommended for Claude clients.".into(),
+        }
+    } else if key.contains("moonshot") || key.contains("kimi") {
+        ProviderCompatibilityProfile {
+            strategy_id: "moonshot_kimi_chat".into(),
+            system_to_user: false,
+            tool_to_user: false,
+            disable_tools: false,
+            strip_unsupported_params: true,
+            direct_provider_safe: false,
+            gateway_route_recommended: true,
+            codex_disable_responses: true,
+            codex_strict_tool_calls: false,
+            codex_strip_reasoning: false,
+            summary: "Moonshot/Kimi is treated as OpenAI Chat-compatible; Gateway Route is recommended for Claude clients.".into(),
+        }
+    } else if key.contains("qwen") || key.contains("dashscope") || key.contains("aliyun") {
+        ProviderCompatibilityProfile {
+            strategy_id: "qwen_dashscope_chat".into(),
+            system_to_user: false,
+            tool_to_user: false,
+            disable_tools: false,
+            strip_unsupported_params: true,
+            direct_provider_safe: false,
+            gateway_route_recommended: true,
+            codex_disable_responses: true,
+            codex_strict_tool_calls: false,
+            codex_strip_reasoning: true,
+            summary: "Qwen/DashScope routes use OpenAI Chat compatibility; Gateway Route is recommended for Claude clients.".into(),
+        }
+    } else if has_anthropic {
+        ProviderCompatibilityProfile {
+            strategy_id: "standard_anthropic".into(),
             system_to_user: false,
             tool_to_user: false,
             disable_tools: false,
             strip_unsupported_params: false,
-            direct_provider_safe: provider.anthropic_base_url.is_some(),
-            gateway_route_recommended: provider.anthropic_base_url.is_none(),
-            summary: if provider.anthropic_base_url.is_some() {
-                "Standard Anthropic-compatible route; Direct Provider may be used when the endpoint is truly Anthropic-compatible.".into()
-            } else {
-                "OpenAI Chat fallback route; use Gateway Route for Claude and Claude Code.".into()
-            },
-        },
+            direct_provider_safe: true,
+            gateway_route_recommended: false,
+            codex_disable_responses: false,
+            codex_strict_tool_calls: false,
+            codex_strip_reasoning: false,
+            summary: "Standard Anthropic-compatible route; Direct Provider may be used when the endpoint is truly Anthropic-compatible.".into(),
+        }
+    } else {
+        ProviderCompatibilityProfile {
+            strategy_id: "openai_chat_fallback".into(),
+            system_to_user: false,
+            tool_to_user: false,
+            disable_tools: false,
+            strip_unsupported_params: false,
+            direct_provider_safe: false,
+            gateway_route_recommended: true,
+            codex_disable_responses: true,
+            codex_strict_tool_calls: false,
+            codex_strip_reasoning: false,
+            summary: "OpenAI Chat fallback route; use Gateway Route for Claude and Claude Code."
+                .into(),
+        }
     }
+}
+
+pub fn effective_provider_compatibility_profile(
+    db: &PathBuf,
+    provider: &Provider,
+    upstream_model: &str,
+) -> ProviderCompatibilityProfile {
+    let base = provider_compatibility_profile(provider, upstream_model);
+    match database::get_provider_policy(db, &provider.id) {
+        Ok(Some(policy)) => apply_provider_policy(base, &policy),
+        _ => base,
+    }
+}
+
+pub fn apply_provider_policy(
+    mut base: ProviderCompatibilityProfile,
+    policy: &ProviderCompatibilityPolicy,
+) -> ProviderCompatibilityProfile {
+    if let Some(v) = policy.system_to_user {
+        base.system_to_user = v;
+    }
+    if let Some(v) = policy.tool_to_user {
+        base.tool_to_user = v;
+    }
+    if let Some(v) = policy.disable_tools {
+        base.disable_tools = v;
+    }
+    if let Some(v) = policy.strip_unsupported_params {
+        base.strip_unsupported_params = v;
+    }
+    if let Some(v) = policy.direct_provider_safe {
+        base.direct_provider_safe = v;
+    }
+    if let Some(v) = policy.gateway_route_recommended {
+        base.gateway_route_recommended = v;
+    }
+    if let Some(v) = policy.codex_disable_responses {
+        base.codex_disable_responses = v;
+    }
+    if let Some(v) = policy.codex_strict_tool_calls {
+        base.codex_strict_tool_calls = v;
+    }
+    if let Some(v) = policy.codex_strip_reasoning {
+        base.codex_strip_reasoning = v;
+    }
+    if policy.system_to_user.is_some()
+        || policy.tool_to_user.is_some()
+        || policy.disable_tools.is_some()
+        || policy.strip_unsupported_params.is_some()
+        || policy.direct_provider_safe.is_some()
+        || policy.gateway_route_recommended.is_some()
+        || policy.codex_disable_responses.is_some()
+        || policy.codex_strict_tool_calls.is_some()
+        || policy.codex_strip_reasoning.is_some()
+    {
+        base.summary = format!(
+            "{} Manual provider policy overrides are active.",
+            base.summary
+        );
+    }
+    base
 }
 
 pub fn route_diagnostics(db: &PathBuf) -> Result<Vec<RouteCompatibilityDiagnostic>, String> {
@@ -748,7 +970,8 @@ pub fn route_diagnostics(db: &PathBuf) -> Result<Vec<RouteCompatibilityDiagnosti
         .into_iter()
         .filter_map(|route| {
             let provider = providers.iter().find(|p| p.id == route.provider_id)?;
-            let strategy = provider_compatibility_profile(provider, &route.upstream_model);
+            let strategy =
+                effective_provider_compatibility_profile(db, provider, &route.upstream_model);
             let mut warnings = Vec::new();
             let mut recommendations = Vec::new();
             if !strategy.direct_provider_safe {
@@ -843,6 +1066,56 @@ pub fn preview_route_payload(
     })
 }
 
+pub fn replay_request_diagnostic(
+    db: &PathBuf,
+    request_id: String,
+) -> Result<RequestReplayReport, String> {
+    let snapshot = database::get_request_snapshot(db, &request_id)?
+        .ok_or_else(|| format!("No diagnostic snapshot for request {request_id}"))?;
+    let original_payload = serde_json::from_str::<Value>(&snapshot.original_payload_json)
+        .map_err(|e| format!("Invalid stored original payload: {e}"))?;
+    let stored_converted = snapshot
+        .converted_payload_json
+        .as_deref()
+        .and_then(|json| serde_json::from_str::<Value>(json).ok());
+    let (strategy_id, converted_payload) = if snapshot.surface.starts_with("claude") {
+        match snapshot.claude_alias.as_deref() {
+            Some(alias) => match resolve(db, alias) {
+                Ok(route) => {
+                    let payload = anthropic_to_chat_request(
+                        &original_payload,
+                        &route.upstream_model,
+                        original_payload
+                            .get("stream")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false),
+                        route.chat_role_mode,
+                    );
+                    let strategy = provider_compatibility_profile_for_route(db, alias)?;
+                    (strategy.strategy_id, Some(payload))
+                }
+                Err(_) => ("snapshot_only".into(), stored_converted),
+            },
+            None => ("snapshot_only".into(), stored_converted),
+        }
+    } else {
+        ("snapshot_only".into(), stored_converted)
+    };
+
+    Ok(RequestReplayReport {
+        request_id: snapshot.request_id,
+        surface: snapshot.surface,
+        provider_id: snapshot.provider_id,
+        upstream_model: snapshot.upstream_model,
+        strategy_id,
+        original_payload,
+        converted_payload,
+        redaction_summary: snapshot.redaction_summary,
+        likely_cause: likely_failure_cause(snapshot.status_code, snapshot.error_summary.as_deref()),
+        local_only: true,
+    })
+}
+
 fn provider_compatibility_profile_for_route(
     db: &PathBuf,
     claude_alias: &str,
@@ -857,24 +1130,185 @@ fn provider_compatibility_profile_for_route(
         .iter()
         .find(|provider| provider.enabled && provider.id == route.provider_id)
         .ok_or_else(|| format!("Provider '{}' not found", route.provider_id))?;
-    Ok(provider_compatibility_profile(
+    Ok(effective_provider_compatibility_profile(
+        db,
         provider,
         &route.upstream_model,
     ))
 }
 
+#[cfg(test)]
 fn chat_role_mode_for(provider: &Provider, upstream_model: &str) -> ChatRoleMode {
-    let key = format!(
-        "{} {} {} {} {}",
-        provider.id, provider.name, provider.base_url, provider.openai_base_url, upstream_model
-    )
-    .to_ascii_lowercase();
-    if (key.contains("volc") || key.contains("ark.cn-") || key.contains("火山"))
-        && key.contains("deepseek")
-    {
+    let key = provider_profile_key(provider, upstream_model);
+    if is_volcengine_deepseek_key(&key) {
         ChatRoleMode::UserAssistantOnly
     } else {
         ChatRoleMode::Standard
+    }
+}
+
+fn chat_role_mode_from_profile(profile: &ProviderCompatibilityProfile) -> ChatRoleMode {
+    if profile.system_to_user || profile.tool_to_user {
+        ChatRoleMode::UserAssistantOnly
+    } else {
+        ChatRoleMode::Standard
+    }
+}
+
+fn provider_profile_key(provider: &Provider, upstream_model: &str) -> String {
+    format!(
+        "{} {} {} {} {} {}",
+        provider.id,
+        provider.name,
+        provider.base_url,
+        provider.openai_base_url,
+        provider.anthropic_base_url.as_deref().unwrap_or_default(),
+        upstream_model
+    )
+    .to_ascii_lowercase()
+}
+
+fn is_volcengine_deepseek_key(key: &str) -> bool {
+    (key.contains("volc") || key.contains("ark.cn-") || key.contains("火山"))
+        && key.contains("deepseek")
+}
+
+fn record_failed_snapshot(
+    db: &PathBuf,
+    request_id: &str,
+    surface: &str,
+    route: &Route,
+    status_code: Option<u16>,
+    error_summary: Option<&str>,
+    original_payload: &Value,
+    converted_payload: Option<&Value>,
+) {
+    if !should_capture_diagnostic(status_code, error_summary) {
+        return;
+    }
+    let (sanitized_original, original_count) = sanitize_payload_for_diagnostics(original_payload);
+    let (sanitized_converted, converted_count) = converted_payload
+        .map(sanitize_payload_for_diagnostics)
+        .unwrap_or((Value::Null, 0));
+    let redactions = original_count + converted_count;
+    let snapshot = RequestDiagnosticSnapshot {
+        request_id: request_id.to_string(),
+        surface: surface.to_string(),
+        claude_alias: Some(route.display.clone()),
+        provider_id: Some(route.provider_id.clone()),
+        upstream_model: Some(route.upstream_model.clone()),
+        status_code,
+        error_summary: error_summary.map(compatibility::redact_log_summary),
+        original_payload_json: serde_json::to_string(&sanitized_original)
+            .unwrap_or_else(|_| "{}".into()),
+        converted_payload_json: (sanitized_converted != Value::Null)
+            .then(|| serde_json::to_string(&sanitized_converted).unwrap_or_else(|_| "{}".into())),
+        redaction_summary: format!(
+            "{redactions} field(s) redacted or truncated; replay preview is local-only."
+        ),
+        created_at: None,
+    };
+    let _ = database::insert_request_snapshot(db, &snapshot);
+}
+
+fn should_capture_diagnostic(status_code: Option<u16>, error_summary: Option<&str>) -> bool {
+    matches!(status_code, Some(400 | 413 | 429 | 500 | 502 | 503 | 504))
+        || status_code.is_none()
+        || error_summary
+            .map(|s| {
+                let lower = s.to_ascii_lowercase();
+                lower.contains("timeout")
+                    || lower.contains("too large")
+                    || lower.contains("messages.role")
+                    || lower.contains("bad gateway")
+            })
+            .unwrap_or(false)
+}
+
+fn sanitize_payload_for_diagnostics(value: &Value) -> (Value, usize) {
+    match value {
+        Value::Object(map) => {
+            let mut redactions = 0;
+            let mut output = serde_json::Map::new();
+            for (key, item) in map {
+                let lower = key.to_ascii_lowercase();
+                if [
+                    "authorization",
+                    "api_key",
+                    "apikey",
+                    "token",
+                    "auth_token",
+                    "x-api-key",
+                    "key",
+                    "image",
+                    "source",
+                    "data",
+                    "attachment",
+                ]
+                .iter()
+                .any(|needle| lower.contains(needle))
+                {
+                    output.insert(key.clone(), json!("[redacted]"));
+                    redactions += 1;
+                    continue;
+                }
+                let (clean, count) = sanitize_payload_for_diagnostics(item);
+                output.insert(key.clone(), clean);
+                redactions += count;
+            }
+            (Value::Object(output), redactions)
+        }
+        Value::Array(items) => {
+            let mut redactions = 0;
+            let cleaned = items
+                .iter()
+                .take(20)
+                .map(|item| {
+                    let (clean, count) = sanitize_payload_for_diagnostics(item);
+                    redactions += count;
+                    clean
+                })
+                .collect::<Vec<_>>();
+            if items.len() > 20 {
+                redactions += 1;
+            }
+            (Value::Array(cleaned), redactions)
+        }
+        Value::String(text) => {
+            let redacted = compatibility::redact_secrets(text);
+            if redacted.chars().count() > 1200 {
+                (
+                    Value::String(format!(
+                        "{}...[truncated {} chars]",
+                        redacted.chars().take(1200).collect::<String>(),
+                        redacted.chars().count().saturating_sub(1200)
+                    )),
+                    1,
+                )
+            } else if redacted != *text {
+                (Value::String(redacted), 1)
+            } else {
+                (Value::String(text.clone()), 0)
+            }
+        }
+        _ => (value.clone(), 0),
+    }
+}
+
+fn likely_failure_cause(status_code: Option<u16>, error_summary: Option<&str>) -> String {
+    let lower = error_summary.unwrap_or("").to_ascii_lowercase();
+    if status_code == Some(413) || lower.contains("too large") {
+        "Request or attachment exceeded provider/body limits.".into()
+    } else if status_code == Some(400) && lower.contains("messages.role") {
+        "Provider rejected Anthropic-style roles; enable Gateway Route and user/assistant-only conversion.".into()
+    } else if matches!(status_code, Some(502 | 503 | 504)) || lower.contains("bad gateway") {
+        "Upstream provider returned a server-side gateway error or timed out.".into()
+    } else if status_code == Some(429) {
+        "Provider rate limit or quota was reached.".into()
+    } else if status_code.is_none() || lower.contains("timeout") {
+        "Network timeout or connection failure before an HTTP status was returned.".into()
+    } else {
+        "Provider rejected the request; inspect the converted payload and selected compatibility strategy.".into()
     }
 }
 
@@ -1498,7 +1932,7 @@ mod tests {
     use super::*;
     use crate::{
         database,
-        models::{CreateModelRoute, CreateProvider},
+        models::{CreateModelRoute, CreateProvider, ProviderCompatibilityPolicy},
     };
     use axum::{body::to_bytes, http, routing::post, Router};
     use std::sync::{
@@ -1594,6 +2028,114 @@ mod tests {
             .roles
             .iter()
             .all(|role| role == "user" || role == "assistant"));
+    }
+
+    #[test]
+    fn test_provider_policy_override_changes_effective_profile() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("t.db");
+        database::initialize(&db).unwrap();
+        let provider = Provider {
+            id: "openrouter".into(),
+            name: "OpenRouter".into(),
+            base_url: "https://openrouter.ai/api/v1".into(),
+            openai_base_url: "https://openrouter.ai/api/v1".into(),
+            anthropic_base_url: None,
+            auth_header: "Authorization".into(),
+            auth_scheme: Some("Bearer".into()),
+            api_key: Some("k".into()),
+            enabled: true,
+        };
+        database::upsert_provider_policy(
+            &db,
+            &ProviderCompatibilityPolicy {
+                provider_id: "openrouter".into(),
+                system_to_user: Some(true),
+                tool_to_user: None,
+                disable_tools: None,
+                strip_unsupported_params: None,
+                direct_provider_safe: Some(false),
+                gateway_route_recommended: Some(true),
+                codex_disable_responses: Some(true),
+                codex_strict_tool_calls: Some(true),
+                codex_strip_reasoning: None,
+                notes: Some("test".into()),
+                updated_by: "test".into(),
+                updated_at: None,
+            },
+        )
+        .unwrap();
+
+        let profile = effective_provider_compatibility_profile(&db, &provider, "anthropic/claude");
+
+        assert_eq!(profile.strategy_id, "openrouter_anthropic_or_chat");
+        assert!(profile.system_to_user);
+        assert!(profile.codex_strict_tool_calls);
+        assert!(!profile.direct_provider_safe);
+    }
+
+    #[test]
+    fn test_replay_report_redacts_secrets_and_explains_role_failure() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("t.db");
+        database::initialize(&db).unwrap();
+        database::create_provider(
+            &db,
+            &CreateProvider {
+                id: "volcengine".into(),
+                name: "火山方舟".into(),
+                base_url: "https://ark.cn-beijing.volces.com/api/coding/v3".into(),
+                openai_base_url: Some("https://ark.cn-beijing.volces.com/api/coding/v3".into()),
+                anthropic_base_url: Some("https://ark.cn-beijing.volces.com/api/coding".into()),
+                auth_header: "Authorization".into(),
+                auth_scheme: Some("Bearer".into()),
+                api_key: Some("k".into()),
+            },
+        )
+        .unwrap();
+        database::create_route(
+            &db,
+            &CreateModelRoute {
+                id: "deepseek-v4-pro".into(),
+                claude_alias: "claude-sonnet-4-6".into(),
+                display_name: "DeepSeek V4 Pro".into(),
+                provider_id: "volcengine".into(),
+                upstream_model: "DeepSeek-V4-Pro".into(),
+            },
+        )
+        .unwrap();
+        let route = resolve(&db, "claude-sonnet-4-6").unwrap();
+        let original = json!({
+            "model": "claude-sonnet-4-6",
+            "system": "secret sk-ant-123456789",
+            "messages": [{"role":"user","content":"hello"}],
+            "api_key": "sk-test-123456"
+        });
+        let converted = anthropic_to_chat_request(
+            &original,
+            &route.upstream_model,
+            false,
+            route.chat_role_mode,
+        );
+        record_failed_snapshot(
+            &db,
+            "req-1",
+            "claude_chat_fallback",
+            &route,
+            Some(400),
+            Some("invalid messages.role system"),
+            &original,
+            Some(&converted),
+        );
+
+        let report = replay_request_diagnostic(&db, "req-1".into()).unwrap();
+        let serialized = serde_json::to_string(&report).unwrap();
+
+        assert!(report.local_only);
+        assert_eq!(report.strategy_id, "volcengine_deepseek_coding");
+        assert!(report.likely_cause.contains("roles"));
+        assert!(!serialized.contains("sk-ant-123456789"));
+        assert!(!serialized.contains("sk-test-123456"));
     }
 
     #[tokio::test]

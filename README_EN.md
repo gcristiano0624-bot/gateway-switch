@@ -6,7 +6,7 @@
 
 > Gateway Switch is not just a model router. It is a **runtime compatibility layer** that sits between AI-native desktop applications and third-party model providers, bridging protocol gaps, repairing malformed tool calls, enforcing safety boundaries, and degrading gracefully when upstream providers misbehave.
 
-[![Version](https://img.shields.io/badge/Version-1.9.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.10.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -141,6 +141,23 @@ For long-running agent workflows:
 `export_diagnostics` generates a comprehensive JSON bundle containing: runtime feature status, all provider capability profiles, benchmark results, provider configurations, route configurations, Codex route configurations, and recent request logs — everything needed to reproduce and debug an issue remotely.
 
 ---
+
+## Version 1.10.0 Unified Compatibility Diagnostics Highlights
+
+- **Real failed request diagnostics.** Gateway now stores sanitized failed-request snapshots and lets the Logs page show the original Claude request, converted upstream payload, and local cause analysis without replaying traffic upstream.
+- **Editable provider strategies.** The Providers page can override `system_to_user`, `tool_to_user`, `disable_tools`, `strip_unsupported_params`, and Codex strict tool-call compatibility flags per provider.
+- **One-click Claude Code repair.** Unsafe Direct Provider bindings can be backed up and switched to Gateway Route, preventing endpoints such as Volcengine DeepSeek from receiving unsupported `system` roles.
+- **Unified Codex compatibility.** Codex Gateway now uses the same Provider Compatibility Profile and surfaces route diagnostics, Responses fallback, reasoning cleanup, and strict tool-call policy in the Codex page.
+- **Update checks and safe install guidance.** Settings now includes GitHub Release checks and a safe install plan that warns against running from DMG or temporary paths and guides Finder-based replacement in `/Applications`.
+- **Expanded provider matrix.** Compatibility profiles now cover OpenRouter, Xiaomi MiMo, DeepSeek official, Moonshot Kimi, Qwen DashScope, Volcengine Ark, and standard Anthropic/OpenAI-style providers.
+
+## Version 1.9.0 Compatibility Diagnostics Highlights
+
+- **Provider Compatibility Profiles.** Claude routes now expose strategies such as `standard_anthropic`, `openai_chat_fallback`, and `volcengine_deepseek_coding`, including whether system prompts or tool results are converted.
+- **Claude Code Route Diagnostics.** The Claude Code page explains whether Direct Provider is safe and why endpoints such as Volcengine DeepSeek should use Gateway Route.
+- **Redacted Payload Preview.** Users can preview the converted upstream Chat payload from a fixed sample request without calling the provider or consuming tokens.
+- **Runtime source checks.** Gateway Switch warns when it is launched from a DMG or temporary path instead of `/Applications`, preventing launchd watcher and Codex++ repair path pollution.
+- **Expanded regression coverage.** Tests now cover route diagnostics, payload role conversion, and runtime source classification.
 
 ## Version 1.8.8 Claude Code Volcengine DeepSeek Fix
 
@@ -511,7 +528,7 @@ Artifacts:
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.9.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.10.0_aarch64.dmg
 ```
 
 ---

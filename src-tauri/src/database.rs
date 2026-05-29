@@ -50,6 +50,34 @@ pub fn initialize(db: &Path) -> Result<(), String> {
             error_summary TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS provider_compatibility_policies (
+            provider_id TEXT PRIMARY KEY,
+            system_to_user INTEGER,
+            tool_to_user INTEGER,
+            disable_tools INTEGER,
+            strip_unsupported_params INTEGER,
+            direct_provider_safe INTEGER,
+            gateway_route_recommended INTEGER,
+            codex_disable_responses INTEGER,
+            codex_strict_tool_calls INTEGER,
+            codex_strip_reasoning INTEGER,
+            notes TEXT,
+            updated_by TEXT NOT NULL DEFAULT 'user',
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS request_diagnostic_snapshots (
+            request_id TEXT PRIMARY KEY,
+            surface TEXT NOT NULL,
+            claude_alias TEXT,
+            provider_id TEXT,
+            upstream_model TEXT,
+            status_code INTEGER,
+            error_summary TEXT,
+            original_payload_json TEXT NOT NULL,
+            converted_payload_json TEXT,
+            redaction_summary TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
         INSERT INTO gateway_profile (id, listen_host, listen_port, auth_token)
         VALUES ('default', '127.0.0.1', 3456, 'gateway-switch-token')
         ON CONFLICT(id) DO NOTHING;
@@ -171,6 +199,14 @@ fn normalize_empty(value: Option<&str>) -> Option<String> {
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(String::from)
+}
+
+fn bool_to_i64(value: Option<bool>) -> Option<i64> {
+    value.map(|v| if v { 1 } else { 0 })
+}
+
+fn i64_to_bool(value: Option<i64>) -> Option<bool> {
+    value.map(|v| v == 1)
 }
 
 // ---- Providers ----
@@ -375,6 +411,205 @@ pub fn list_logs(db: &Path, limit: usize) -> Result<Vec<RequestLog>, String> {
         .map_err(|e| e.to_string())
 }
 
+// ---- Compatibility Policies ----
+
+pub fn list_provider_policies(db: &Path) -> Result<Vec<ProviderCompatibilityPolicy>, String> {
+    let conn = open(db)?;
+    let mut stmt = conn.prepare(
+        "SELECT provider_id, system_to_user, tool_to_user, disable_tools, strip_unsupported_params, direct_provider_safe, gateway_route_recommended, codex_disable_responses, codex_strict_tool_calls, codex_strip_reasoning, notes, updated_by, updated_at FROM provider_compatibility_policies ORDER BY updated_at DESC"
+    ).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(ProviderCompatibilityPolicy {
+                provider_id: r.get(0)?,
+                system_to_user: i64_to_bool(r.get(1)?),
+                tool_to_user: i64_to_bool(r.get(2)?),
+                disable_tools: i64_to_bool(r.get(3)?),
+                strip_unsupported_params: i64_to_bool(r.get(4)?),
+                direct_provider_safe: i64_to_bool(r.get(5)?),
+                gateway_route_recommended: i64_to_bool(r.get(6)?),
+                codex_disable_responses: i64_to_bool(r.get(7)?),
+                codex_strict_tool_calls: i64_to_bool(r.get(8)?),
+                codex_strip_reasoning: i64_to_bool(r.get(9)?),
+                notes: r.get(10)?,
+                updated_by: r.get(11)?,
+                updated_at: r.get(12)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+pub fn get_provider_policy(
+    db: &Path,
+    provider_id: &str,
+) -> Result<Option<ProviderCompatibilityPolicy>, String> {
+    let conn = open(db)?;
+    let mut stmt = conn.prepare(
+        "SELECT provider_id, system_to_user, tool_to_user, disable_tools, strip_unsupported_params, direct_provider_safe, gateway_route_recommended, codex_disable_responses, codex_strict_tool_calls, codex_strip_reasoning, notes, updated_by, updated_at FROM provider_compatibility_policies WHERE provider_id = ?1"
+    ).map_err(|e| e.to_string())?;
+    let mut rows = stmt
+        .query(params![provider_id])
+        .map_err(|e| e.to_string())?;
+    if let Some(r) = rows.next().map_err(|e| e.to_string())? {
+        Ok(Some(ProviderCompatibilityPolicy {
+            provider_id: r.get(0).map_err(|e| e.to_string())?,
+            system_to_user: i64_to_bool(r.get(1).map_err(|e| e.to_string())?),
+            tool_to_user: i64_to_bool(r.get(2).map_err(|e| e.to_string())?),
+            disable_tools: i64_to_bool(r.get(3).map_err(|e| e.to_string())?),
+            strip_unsupported_params: i64_to_bool(r.get(4).map_err(|e| e.to_string())?),
+            direct_provider_safe: i64_to_bool(r.get(5).map_err(|e| e.to_string())?),
+            gateway_route_recommended: i64_to_bool(r.get(6).map_err(|e| e.to_string())?),
+            codex_disable_responses: i64_to_bool(r.get(7).map_err(|e| e.to_string())?),
+            codex_strict_tool_calls: i64_to_bool(r.get(8).map_err(|e| e.to_string())?),
+            codex_strip_reasoning: i64_to_bool(r.get(9).map_err(|e| e.to_string())?),
+            notes: r.get(10).map_err(|e| e.to_string())?,
+            updated_by: r.get(11).map_err(|e| e.to_string())?,
+            updated_at: r.get(12).map_err(|e| e.to_string())?,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn upsert_provider_policy(
+    db: &Path,
+    policy: &ProviderCompatibilityPolicy,
+) -> Result<(), String> {
+    let conn = open(db)?;
+    conn.execute(
+        "INSERT INTO provider_compatibility_policies (provider_id, system_to_user, tool_to_user, disable_tools, strip_unsupported_params, direct_provider_safe, gateway_route_recommended, codex_disable_responses, codex_strict_tool_calls, codex_strip_reasoning, notes, updated_by, updated_at)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)
+         ON CONFLICT(provider_id) DO UPDATE SET
+            system_to_user=excluded.system_to_user,
+            tool_to_user=excluded.tool_to_user,
+            disable_tools=excluded.disable_tools,
+            strip_unsupported_params=excluded.strip_unsupported_params,
+            direct_provider_safe=excluded.direct_provider_safe,
+            gateway_route_recommended=excluded.gateway_route_recommended,
+            codex_disable_responses=excluded.codex_disable_responses,
+            codex_strict_tool_calls=excluded.codex_strict_tool_calls,
+            codex_strip_reasoning=excluded.codex_strip_reasoning,
+            notes=excluded.notes,
+            updated_by=excluded.updated_by,
+            updated_at=excluded.updated_at",
+        params![
+            policy.provider_id.trim(),
+            bool_to_i64(policy.system_to_user),
+            bool_to_i64(policy.tool_to_user),
+            bool_to_i64(policy.disable_tools),
+            bool_to_i64(policy.strip_unsupported_params),
+            bool_to_i64(policy.direct_provider_safe),
+            bool_to_i64(policy.gateway_route_recommended),
+            bool_to_i64(policy.codex_disable_responses),
+            bool_to_i64(policy.codex_strict_tool_calls),
+            bool_to_i64(policy.codex_strip_reasoning),
+            policy.notes,
+            policy.updated_by,
+            Utc::now().to_rfc3339(),
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn reset_provider_policy(db: &Path, provider_id: &str) -> Result<(), String> {
+    let conn = open(db)?;
+    conn.execute(
+        "DELETE FROM provider_compatibility_policies WHERE provider_id = ?1",
+        params![provider_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ---- Request Diagnostic Snapshots ----
+
+pub fn insert_request_snapshot(
+    db: &Path,
+    snapshot: &RequestDiagnosticSnapshot,
+) -> Result<(), String> {
+    let conn = open(db)?;
+    conn.execute(
+        "INSERT OR REPLACE INTO request_diagnostic_snapshots (request_id, surface, claude_alias, provider_id, upstream_model, status_code, error_summary, original_payload_json, converted_payload_json, redaction_summary, created_at)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
+        params![
+            snapshot.request_id,
+            snapshot.surface,
+            snapshot.claude_alias,
+            snapshot.provider_id,
+            snapshot.upstream_model,
+            snapshot.status_code.map(|v| v as i64),
+            snapshot.error_summary.as_deref().map(compatibility::redact_log_summary),
+            snapshot.original_payload_json,
+            snapshot.converted_payload_json,
+            snapshot.redaction_summary,
+            Utc::now().to_rfc3339(),
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn list_failed_request_snapshots(
+    db: &Path,
+    limit: usize,
+) -> Result<Vec<FailedRequestDiagnosticCandidate>, String> {
+    let conn = open(db)?;
+    let mut stmt = conn.prepare(
+        "SELECT request_id, surface, claude_alias, provider_id, upstream_model, status_code, error_summary, redaction_summary, created_at FROM request_diagnostic_snapshots ORDER BY created_at DESC LIMIT ?1"
+    ).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![limit as i64], |r| {
+            Ok(FailedRequestDiagnosticCandidate {
+                request_id: r.get(0)?,
+                surface: r.get(1)?,
+                claude_alias: r.get(2)?,
+                provider_id: r.get(3)?,
+                upstream_model: r.get(4)?,
+                status_code: r.get::<_, Option<i64>>(5)?.map(|v| v as u16),
+                error_summary: r.get(6)?,
+                redaction_summary: r.get(7)?,
+                created_at: r.get(8)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+pub fn get_request_snapshot(
+    db: &Path,
+    request_id: &str,
+) -> Result<Option<RequestDiagnosticSnapshot>, String> {
+    let conn = open(db)?;
+    let mut stmt = conn.prepare(
+        "SELECT request_id, surface, claude_alias, provider_id, upstream_model, status_code, error_summary, original_payload_json, converted_payload_json, redaction_summary, created_at FROM request_diagnostic_snapshots WHERE request_id = ?1"
+    ).map_err(|e| e.to_string())?;
+    let mut rows = stmt.query(params![request_id]).map_err(|e| e.to_string())?;
+    if let Some(r) = rows.next().map_err(|e| e.to_string())? {
+        Ok(Some(RequestDiagnosticSnapshot {
+            request_id: r.get(0).map_err(|e| e.to_string())?,
+            surface: r.get(1).map_err(|e| e.to_string())?,
+            claude_alias: r.get(2).map_err(|e| e.to_string())?,
+            provider_id: r.get(3).map_err(|e| e.to_string())?,
+            upstream_model: r.get(4).map_err(|e| e.to_string())?,
+            status_code: r
+                .get::<_, Option<i64>>(5)
+                .map_err(|e| e.to_string())?
+                .map(|v| v as u16),
+            error_summary: r.get(6).map_err(|e| e.to_string())?,
+            original_payload_json: r.get(7).map_err(|e| e.to_string())?,
+            converted_payload_json: r.get(8).map_err(|e| e.to_string())?,
+            redaction_summary: r.get(9).map_err(|e| e.to_string())?,
+            created_at: r.get(10).map_err(|e| e.to_string())?,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
 #[allow(dead_code)]
 pub fn count_rows(db: &Path, table: &str) -> Result<i64, String> {
     let conn = open(db)?;
@@ -516,4 +751,86 @@ pub fn delete_model_alias(db: &Path, id: &str) -> Result<(), String> {
     conn.execute("DELETE FROM model_aliases WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn provider_policy_round_trip_preserves_nullable_overrides() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("gateway.db");
+        initialize(&db).unwrap();
+
+        upsert_provider_policy(
+            &db,
+            &ProviderCompatibilityPolicy {
+                provider_id: "openrouter".into(),
+                system_to_user: Some(true),
+                tool_to_user: None,
+                disable_tools: Some(false),
+                strip_unsupported_params: None,
+                direct_provider_safe: Some(false),
+                gateway_route_recommended: Some(true),
+                codex_disable_responses: Some(true),
+                codex_strict_tool_calls: None,
+                codex_strip_reasoning: Some(true),
+                notes: Some("manual override".into()),
+                updated_by: "test".into(),
+                updated_at: None,
+            },
+        )
+        .unwrap();
+
+        let policy = get_provider_policy(&db, "openrouter").unwrap().unwrap();
+        assert_eq!(policy.system_to_user, Some(true));
+        assert_eq!(policy.tool_to_user, None);
+        assert_eq!(policy.disable_tools, Some(false));
+        assert_eq!(policy.codex_strip_reasoning, Some(true));
+
+        reset_provider_policy(&db, "openrouter").unwrap();
+        assert!(get_provider_policy(&db, "openrouter").unwrap().is_none());
+    }
+
+    #[test]
+    fn request_snapshot_round_trip_redacts_error_summary() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("gateway.db");
+        initialize(&db).unwrap();
+
+        insert_request_snapshot(
+            &db,
+            &RequestDiagnosticSnapshot {
+                request_id: "req-1".into(),
+                surface: "claude_messages".into(),
+                claude_alias: Some("claude-sonnet".into()),
+                provider_id: Some("volcengine".into()),
+                upstream_model: Some("deepseek-v4-pro".into()),
+                status_code: Some(400),
+                error_summary: Some("bad api_key sk-test-token".into()),
+                original_payload_json: r#"{"api_key":"redacted by caller"}"#.into(),
+                converted_payload_json: Some(r#"{"messages":[]}"#.into()),
+                redaction_summary: "redacted 1 sensitive field".into(),
+                created_at: None,
+            },
+        )
+        .unwrap();
+
+        let list = list_failed_request_snapshots(&db, 10).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].request_id, "req-1");
+        assert!(!list[0]
+            .error_summary
+            .as_deref()
+            .unwrap_or_default()
+            .contains("sk-test-token"));
+
+        let snapshot = get_request_snapshot(&db, "req-1").unwrap().unwrap();
+        assert_eq!(snapshot.status_code, Some(400));
+        assert_eq!(
+            snapshot.converted_payload_json.as_deref(),
+            Some(r#"{"messages":[]}"#)
+        );
+    }
 }

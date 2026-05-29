@@ -6,7 +6,7 @@
 
 > Gateway Switch 不仅仅是一个模型路由器。它是一个**运行时兼容性层**，驻留在 AI 原生桌面应用与第三方模型服务之间，弥合协议鸿沟、修复畸形工具调用、强制安全边界，并在上游 Provider 异常时优雅降级。
 
-[![Version](https://img.shields.io/badge/Version-1.9.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.10.0-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -141,6 +141,23 @@ Claude 和 Codex 的 `/health` 端点会暴露这些画像，外部工具无需�
 `export_diagnostics` 生成全面的 JSON 包，包含：运行时特性状态、所有 Provider 能力画像、基准测试结果、Provider 配置、路由配置、Codex 路由配置、和近期请求日志 — 远程复现和调试问题所需的一切。
 
 ---
+
+## 1.10.0 统一兼容诊断更新重点
+
+- **真实失败请求诊断。** Gateway 会保存脱敏后的失败请求快照，可在日志页查看原始 Claude 请求、转换后的上游 payload 和本地原因分析，不会重新请求服务商。
+- **Provider 策略可编辑。** 模型服务商页支持手动覆盖 `system_to_user`、`tool_to_user`、`disable_tools`、`strip_unsupported_params`、Codex strict tool-call 等兼容开关。
+- **Claude Code 一键修复。** 当 Direct Provider 对当前服务商不安全时，可一键备份并切换到 Gateway Route，避免火山 DeepSeek 等接口再次收到不支持的 `system` role。
+- **Codex 统一兼容策略。** Codex Gateway 现在复用同一套 Provider Compatibility Profile，并在 Codex 页面展示路由诊断、Responses fallback、reasoning 参数清理和 strict tool-call 策略。
+- **更新检查与安全安装辅助。** 设置页新增 GitHub Release 检查和安全安装计划，提示不要从 DMG/临时目录运行，并引导用 Finder 覆盖 `/Applications` 中的正式 App。
+- **Provider 矩阵扩展。** 增加 OpenRouter、Xiaomi MiMo、DeepSeek 官方、Moonshot Kimi、Qwen DashScope、Volcengine Ark 等更细兼容策略。
+
+## 1.9.0 兼容性诊断更新重点
+
+- **Provider 兼容策略中心。** Claude 路由现在会展示 `standard_anthropic`、`openai_chat_fallback`、`volcengine_deepseek_coding` 等策略，说明是否需要合并 system prompt、转换 tool result、或强制走 Gateway Route。
+- **Claude Code 路由诊断。** Claude Code 页面新增 Route Diagnostics，明确标记 Direct Provider 是否安全，以及为什么火山 DeepSeek 这类 endpoint 应使用 Gateway Route。
+- **脱敏 Payload Preview。** 可以用固定样例预览 Gateway 转换后的上游 Chat payload，不会请求服务商，也不会消耗 token。
+- **运行来源检查。** App 会识别是否从 DMG、临时目录或 `/Applications` 运行，避免 launchd watcher 和 Codex++ 修复流程再次写入临时卷路径。
+- **测试覆盖增强。** 新增路由诊断、payload role 转换和运行来源分类的回归测试。
 
 ## 1.8.8 Claude Code 火山 DeepSeek 修复重点
 
@@ -511,7 +528,7 @@ pnpm tauri build
 
 ```text
 src-tauri/target/release/bundle/macos/Gateway Switch.app
-src-tauri/target/release/bundle/dmg/Gateway Switch_1.9.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Gateway Switch_1.10.0_aarch64.dmg
 ```
 
 ---

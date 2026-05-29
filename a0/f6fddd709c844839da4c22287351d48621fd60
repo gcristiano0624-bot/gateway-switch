@@ -1,0 +1,548 @@
+src-tauri/src/lib.rs
+  2ac44fed2b7842f2 11 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19c1797b40d159d25e99a9","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":11}]}]}
+docs/project.md
+  2ac44fed2b7842f2 3,12,39,41,45-50 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19c1797b40d159d25e99a9","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":3},{"Single":12},{"Single":39},{"Single":41},{"Range":[45,50]}]}]}
+README_EN.md
+  2ac44fed2b7842f2 9,20,22-26 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19c1797b40d159d25e99a9","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":9},{"Single":20},{"Range":[22,26]}]}]}
+package.json
+  2ac44fed2b7842f2 4 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19c1797b40d159d25e99a9","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":4}]}]}
+README.md
+  2ac44fed2b7842f2 9,20,22-26 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19c1797b40d159d25e99a9","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":9},{"Single":20},{"Range":[22,26]}]}]}
+src-tauri/src/loop_guard.rs
+  2ac44fed2b7842f2 1-212 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19c1797b40d159d25e99a9","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,212]}]}]}
+docs/release-1.13.0-unified-loop-guard.md
+  2ac44fed2b7842f2 1-25 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19c1797b40d159d25e99a9","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,25]}]}]}
+src-tauri/Cargo.toml
+  2ac44fed2b7842f2 3 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19c1797b40d159d25e99a9","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":3}]}]}
+CHANGELOG.md
+  2ac44fed2b7842f2 5-12 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19c1797b40d159d25e99a9","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[5,12]}]}]}
+src-tauri/src/codex_gateway.rs
+  2ac44fed2b7842f2 22,483,498-501,648,760,768-773,1491-1492,1497,1513-1514,1553-1568,1694-1710 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19c1797b40d159d25e99a9","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":22},{"Single":483},{"Range":[498,501]},{"Single":648},{"Single":760},{"Range":[768,773]},{"Range":[1491,1492]},{"Single":1497},{"Range":[1513,1514]},{"Range":[1553,1568]},{"Range":[1694,1710]}]}]}
+src-tauri/tauri.conf.json
+  2ac44fed2b7842f2 4 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19c1797b40d159d25e99a9","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":4}]}]}
+src-tauri/src/gateway.rs
+  2ac44fed2b7842f2 22,644,684-687,733,852,854 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a19c1797b40d159d25e99a9","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":22},{"Single":644},{"Range":[684,687]},{"Single":733},{"Single":852},{"Single":854}]}]}
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "a0f6fddd709c844839da4c22287351d48621fd60",
+  "prompts": {
+    "2ac44fed2b7842f2": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a169b45c08b9f09c4f2a210",
+        "model": "gpt-5.5__dev"
+      },
+      "human_author": "hugo0624 <gcristiano0624@gmail.com>",
+      "messages": [],
+      "total_additions": 369,
+      "total_deletions": 179,
+      "accepted_lines": 6064,
+      "overriden_lines": 0
+    }
+  },
+  "attestation_metadata": {
+    "CHANGELOG.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Range": [
+              5,
+              12
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19c1797b40d159d25e99a9",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  5,
+                  12
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "README.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 9
+          },
+          {
+            "Single": 20
+          },
+          {
+            "Range": [
+              22,
+              26
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19c1797b40d159d25e99a9",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 9
+              },
+              {
+                "Single": 20
+              },
+              {
+                "Range": [
+                  22,
+                  26
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "README_EN.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 9
+          },
+          {
+            "Single": 20
+          },
+          {
+            "Range": [
+              22,
+              26
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19c1797b40d159d25e99a9",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 9
+              },
+              {
+                "Single": 20
+              },
+              {
+                "Range": [
+                  22,
+                  26
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "docs/project.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 3
+          },
+          {
+            "Single": 12
+          },
+          {
+            "Single": 39
+          },
+          {
+            "Single": 41
+          },
+          {
+            "Range": [
+              45,
+              50
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19c1797b40d159d25e99a9",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 3
+              },
+              {
+                "Single": 12
+              },
+              {
+                "Single": 39
+              },
+              {
+                "Single": 41
+              },
+              {
+                "Range": [
+                  45,
+                  50
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "docs/release-1.13.0-unified-loop-guard.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              25
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19c1797b40d159d25e99a9",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  25
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "package.json": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 4
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19c1797b40d159d25e99a9",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 4
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/Cargo.toml": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 3
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19c1797b40d159d25e99a9",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 3
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/src/codex_gateway.rs": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 22
+          },
+          {
+            "Single": 483
+          },
+          {
+            "Range": [
+              498,
+              501
+            ]
+          },
+          {
+            "Single": 648
+          },
+          {
+            "Single": 760
+          },
+          {
+            "Range": [
+              768,
+              773
+            ]
+          },
+          {
+            "Range": [
+              1491,
+              1492
+            ]
+          },
+          {
+            "Single": 1497
+          },
+          {
+            "Range": [
+              1513,
+              1514
+            ]
+          },
+          {
+            "Range": [
+              1553,
+              1568
+            ]
+          },
+          {
+            "Range": [
+              1694,
+              1710
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19c1797b40d159d25e99a9",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 22
+              },
+              {
+                "Single": 483
+              },
+              {
+                "Range": [
+                  498,
+                  501
+                ]
+              },
+              {
+                "Single": 648
+              },
+              {
+                "Single": 760
+              },
+              {
+                "Range": [
+                  768,
+                  773
+                ]
+              },
+              {
+                "Range": [
+                  1491,
+                  1492
+                ]
+              },
+              {
+                "Single": 1497
+              },
+              {
+                "Range": [
+                  1513,
+                  1514
+                ]
+              },
+              {
+                "Range": [
+                  1553,
+                  1568
+                ]
+              },
+              {
+                "Range": [
+                  1694,
+                  1710
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/src/gateway.rs": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 22
+          },
+          {
+            "Single": 644
+          },
+          {
+            "Range": [
+              684,
+              687
+            ]
+          },
+          {
+            "Single": 733
+          },
+          {
+            "Single": 852
+          },
+          {
+            "Single": 854
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19c1797b40d159d25e99a9",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 22
+              },
+              {
+                "Single": 644
+              },
+              {
+                "Range": [
+                  684,
+                  687
+                ]
+              },
+              {
+                "Single": 733
+              },
+              {
+                "Single": 852
+              },
+              {
+                "Single": 854
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/src/lib.rs": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 11
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19c1797b40d159d25e99a9",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 11
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/src/loop_guard.rs": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              212
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19c1797b40d159d25e99a9",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  212
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/tauri.conf.json": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Single": 4
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a19c1797b40d159d25e99a9",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 4
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "remote_transcripts": {
+    "2ac44fed2b7842f2": {
+      "tool": "trae",
+      "conversation_id": "6a169b45c08b9f09c4f2a210",
+      "session_id": "6a169b45c08b9f09c4f2a210",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    }
+  }
+}

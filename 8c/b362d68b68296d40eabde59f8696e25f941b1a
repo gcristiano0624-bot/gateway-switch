@@ -1,0 +1,63 @@
+docs/superpowers/specs/2026-05-29-v1.10.0-unified-compatibility-diagnostics-updater-design.md
+  2ac44fed2b7842f2 1-259 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a195218cc0c4b078d426143","tool_type":"agent","tool_id":"apply_patch","line_ranges":[{"Range":[1,259]}]}]}
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "8cb362d68b68296d40eabde59f8696e25f941b1a",
+  "prompts": {
+    "2ac44fed2b7842f2": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a169b45c08b9f09c4f2a210",
+        "model": "gpt-5.5__dev"
+      },
+      "human_author": "hugo0624 <gcristiano0624@gmail.com>",
+      "messages": [],
+      "total_additions": 259,
+      "total_deletions": 0,
+      "accepted_lines": 4966,
+      "overriden_lines": 0
+    }
+  },
+  "attestation_metadata": {
+    "docs/superpowers/specs/2026-05-29-v1.10.0-unified-compatibility-diagnostics-updater-design.md": [
+      {
+        "hash": "2ac44fed2b7842f2",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              259
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a195218cc0c4b078d426143",
+            "tool_type": "agent",
+            "tool_id": "apply_patch",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  259
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "remote_transcripts": {
+    "2ac44fed2b7842f2": {
+      "tool": "trae",
+      "conversation_id": "6a169b45c08b9f09c4f2a210",
+      "session_id": "6a169b45c08b9f09c4f2a210",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    }
+  }
+}

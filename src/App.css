@@ -1035,7 +1035,8 @@ code, pre, .mono {
 }
 
 .check-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
   align-items: flex-start;
   gap: 8px;
   color: var(--fg-secondary);
@@ -1046,16 +1047,19 @@ code, pre, .mono {
 }
 
 .check-row input {
-  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  padding: 0;
   margin-top: 2px;
 }
 
 .check-row span {
-  flex: 1 1 auto;
+  display: block;
   min-width: 0;
   white-space: normal;
   word-break: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .risk-confirm-card {
@@ -1067,6 +1071,20 @@ code, pre, .mono {
   border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--border));
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+}
+
+.risk-confirm-card .check-row {
+  width: 100%;
+}
+
+.risk-confirm-card .check-row input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  padding: 0;
+  margin: 1px 0 0;
+  border-radius: 3px;
+  font-family: inherit;
 }
 
 .risk-confirm-card p {

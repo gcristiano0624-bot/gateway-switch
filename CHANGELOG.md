@@ -8,6 +8,7 @@ This file tracks user-visible Gateway Switch changes so future AI agents can qui
 - Reworked the risky Direct Provider warning into a compact confirmation card with stable wrapping and clearer visual hierarchy.
 - Added scoped CSS for `.check-row` text wrapping and checkbox sizing to avoid regressions from global word-break rules.
 - Changed the sidebar UI version label to use the build-time app version instead of a hardcoded stale string.
+- Fixed a follow-up checkbox layout conflict where `.binding-actions input { width: 100%; }` made the risk confirmation text collapse into a vertical column.
 
 ## 1.13.0 - 2026-05-30
 

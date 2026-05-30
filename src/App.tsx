@@ -3515,19 +3515,20 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
                 <input value={ccUpstreamModel} onChange={e => setCcUpstreamModel(e.target.value)} placeholder="e.g. claude-sonnet-4-5" />
                 <p>{t("Direct Provider writes the provider's Anthropic Base URL and API key into Claude Code. Use Gateway Route when a provider only supports OpenAI Chat Completions.")}</p>
                 {directProviderBlocked && (
-                  <p style={{ color: "var(--danger)", fontSize: 12, marginTop: -4 }}>
-                    This provider/model is risky for Claude Code Direct Provider because system/tool roles may be rejected. Gateway Route is recommended.
-                  </p>
-                )}
-                {directProviderBlocked && (
-                  <label className="check-row" style={{ marginTop: 8 }}>
-                    <input
-                      type="checkbox"
-                      checked={ccForceDirectProvider}
-                      onChange={e => setCcForceDirectProvider(e.target.checked)}
-                    />
-                    <span>I understand the risk and still want to bind Direct Provider.</span>
-                  </label>
+                  <div className="risk-confirm-card">
+                    <div className="risk-confirm-title">Direct Provider compatibility risk</div>
+                    <p>
+                      This provider/model is risky for Claude Code Direct Provider because system/tool roles may be rejected. Gateway Route is recommended.
+                    </p>
+                    <label className="check-row">
+                      <input
+                        type="checkbox"
+                        checked={ccForceDirectProvider}
+                        onChange={e => setCcForceDirectProvider(e.target.checked)}
+                      />
+                      <span>I understand the risk and still want to bind Direct Provider.</span>
+                    </label>
+                  </div>
                 )}
                 {selectedProvider && (
                   <div className="route-flow">

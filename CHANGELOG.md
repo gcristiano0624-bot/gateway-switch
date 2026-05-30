@@ -2,6 +2,12 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.13.1 - 2026-05-30
+
+- Fixed the Claude Code Direct Provider risk confirmation layout so the checkbox and English confirmation text no longer collapse into a vertical column.
+- Reworked the risky Direct Provider warning into a compact confirmation card with stable wrapping and clearer visual hierarchy.
+- Added scoped CSS for `.check-row` text wrapping and checkbox sizing to avoid regressions from global word-break rules.
+
 ## 1.13.0 - 2026-05-30
 
 - Added shared `LoopGuard` for Claude Desktop, Claude Code, and Codex Gateway streaming paths to suppress repeated upstream text chunks without truncating valid long-form output.

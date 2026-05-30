@@ -5,6 +5,7 @@
 - Fixed the Claude Code Direct Provider risk confirmation layout.
 - Replaced the loose red warning text and checkbox with a compact risk confirmation card.
 - Added scoped wrapping rules so the confirmation sentence stays readable instead of collapsing into vertical letters.
+- Fixed the sidebar version label so it follows the build-time package version instead of a hardcoded stale value.
 
 ## Validation
 

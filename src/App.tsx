@@ -8,6 +8,7 @@ type Page = "dashboard" | "claude" | "claudeCode" | "codex" | "mcpSync" | "colds
 type CodexTab = "routes" | "enhance" | "market" | "sessions" | "diagnostics";
 type ThemeMode = "system" | "light" | "dark";
 type StrategyFlagKey = keyof Omit<ProviderCompatibilityPolicy, "provider_id" | "notes" | "updated_by" | "updated_at">;
+const APP_VERSION = `v${__APP_VERSION__}`;
 
 type CodexRoute = {
   id: string;
@@ -2603,7 +2604,7 @@ function App() {
         </div>
         <div className="brand-text">
           <div className="brand-name">Gateway Switch</div>
-          <div className="brand-sub">v1.12.2</div>
+          <div className="brand-sub">{APP_VERSION}</div>
         </div>
       </div>
 
@@ -2677,7 +2678,7 @@ function App() {
         <span className="status-text">
           Claude <strong>{status?.gateway_running ? t("Running") : t("Stopped")}</strong> · Codex <strong>{codexStatus?.running ? t("Running") : t("Stopped")}</strong>
         </span>
-        <span className="sidebar-version">v1.12.2</span>
+        <span className="sidebar-version">{APP_VERSION}</span>
       </div>
     </aside>
   );

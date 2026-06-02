@@ -2,288 +2,62 @@ import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import "./App.css";
+import {
+  applyProviderWizard as applyProviderWizardApi,
+  applyRouteBuilder as applyRouteBuilderApi,
+  getAppWorkbench,
+  getProviderConsole,
+  getRuntimeDashboard,
+  getUsageInsights,
+} from "./shared/api/runtime-console";
+import { AppWorkbenchOverview } from "./features/app-workbench/AppWorkbenchOverview";
+import { AppWorkbenchGrid } from "./features/dashboard/AppWorkbenchGrid";
+import { HealthCenterPanel } from "./features/health-center/HealthCenterPanel";
+import { ProviderHealthGrid } from "./features/provider-console/ProviderHealthGrid";
+import { ProviderPresetStrategyList } from "./features/provider-console/ProviderPresetStrategyList";
+import { ProviderSetupWizard } from "./features/provider-console/ProviderSetupWizard";
+import { ProviderStrategyOverrides } from "./features/provider-console/ProviderStrategyOverrides";
+import { CompatibilityPreview } from "./features/route-builder/CompatibilityPreview";
+import { RouteDraftForm } from "./features/route-builder/RouteDraftForm";
+import { RouteTargetSelector } from "./features/route-builder/RouteTargetSelector";
+import { UsageInsightsPanel } from "./features/usage-insights/UsageInsightsPanel";
+import type {
+  AppWorkbenchReport,
+  AppWorkbenchSummary,
+  BackendProviderPreset,
+  ClaudeCodeInfo,
+  CodexBindingInfo,
+  CodexGatewayStatus,
+  CodexRoute,
+  CodexRouteDiagnostic,
+  DesktopInfo,
+  FailedRequestDiagnosticCandidate,
+  Health,
+  ModelAlias,
+  ModelRoute,
+  Provider,
+  ProviderCompatibilityPolicy,
+  ProviderConsoleReport,
+  RequestLog,
+  RequestReplayReport,
+  RouteBuilderPayload,
+  RouteBuilderTarget,
+  RouteCompatibilityDiagnostic,
+  RoutePayloadPreview,
+  RuntimeDashboardReport,
+  RuntimeSourceReport,
+  SafeInstallPlan,
+  Status,
+  UnifiedDiagnosticsReport,
+  UpdateCheckReport,
+  UsageInsightsReport,
+} from "./shared/types/runtime-console";
 
 // ── Types ──
-type Page = "dashboard" | "claude" | "claudeCode" | "codex" | "mcpSync" | "coldstart" | "providers" | "diagnostics" | "logs" | "settings";
+type Page = "dashboard" | "claude" | "claudeCode" | "codex" | "routeBuilder" | "mcpSync" | "coldstart" | "providers" | "healthCenter" | "diagnostics" | "logs" | "usageInsights" | "settings";
 type CodexTab = "routes" | "enhance" | "market" | "sessions" | "diagnostics";
 type ThemeMode = "system" | "light" | "dark";
-type StrategyFlagKey = keyof Omit<ProviderCompatibilityPolicy, "provider_id" | "notes" | "updated_by" | "updated_at">;
 const APP_VERSION = `v${__APP_VERSION__}`;
-
-type CodexRoute = {
-  id: string;
-  codex_model: string;
-  display_name: string;
-  provider_id: string;
-  upstream_model: string;
-  tool_call_mode: string;
-  enabled: boolean;
-};
-
-type CodexGatewayStatus = {
-  running: boolean;
-  status: string;
-  error: string | null;
-};
-
-type CodexBindingInfo = {
-  config_path: string;
-  config_exists: boolean;
-  managed: boolean;
-  model_provider: string | null;
-  model: string | null;
-  base_url: string | null;
-  backup_path: string | null;
-};
-
-type ModelAlias = {
-  id: string;
-  alias: string;
-  alias_type: "claude" | "codex";
-  created_at: string | null;
-};
-
-type Status = {
-  gateway_running: boolean;
-  gateway_port: number;
-  gateway_error?: string | null;
-  binding_active: boolean;
-  provider_count: number;
-  route_count: number;
-};
-
-type Provider = {
-  id: string;
-  name: string;
-  base_url: string;
-  openai_base_url: string;
-  anthropic_base_url: string | null;
-  auth_header: string;
-  auth_scheme: string | null;
-  api_key: string | null;
-  enabled: boolean;
-};
-
-type ModelRoute = {
-  id: string;
-  claude_alias: string;
-  display_name: string;
-  provider_id: string;
-  upstream_model: string;
-  enabled: boolean;
-};
-
-type DesktopInfo = {
-  config_path: string;
-  config_exists: boolean;
-  managed: boolean;
-  base_url: string | null;
-  auth_scheme: string | null;
-  models: string[];
-  backup_path: string | null;
-};
-
-type ClaudeCodeInfo = {
-  config_path: string;
-  config_exists: boolean;
-  managed: boolean;
-  base_url: string | null;
-  model: string | null;
-  auth_env: string | null;
-  backup_path: string | null;
-};
-
-type RequestLog = {
-  request_id: string;
-  claude_alias: string;
-  provider_id: string;
-  upstream_model: string;
-  status_code: number | null;
-  duration_ms: number | null;
-  is_stream: boolean;
-  error_summary: string | null;
-  created_at: string;
-};
-
-type ProviderCompatibilityProfile = {
-  strategy_id: string;
-  system_to_user: boolean;
-  tool_to_user: boolean;
-  disable_tools: boolean;
-  strip_unsupported_params: boolean;
-  direct_provider_safe: boolean;
-  gateway_route_recommended: boolean;
-  codex_disable_responses: boolean;
-  codex_strict_tool_calls: boolean;
-  codex_strip_reasoning: boolean;
-  summary: string;
-};
-
-type RouteCompatibilityDiagnostic = {
-  route_id: string;
-  claude_alias: string;
-  display_name: string;
-  provider_id: string;
-  provider_name: string;
-  upstream_model: string;
-  strategy: ProviderCompatibilityProfile;
-  warnings: string[];
-  recommendations: string[];
-};
-
-type RoutePayloadPreview = {
-  route_id: string;
-  claude_alias: string;
-  provider_id: string;
-  upstream_model: string;
-  strategy_id: string;
-  roles: string[];
-  payload: unknown;
-};
-
-type RuntimeSourceReport = {
-  bundle_path: string;
-  is_applications: boolean;
-  is_dmg_volume: boolean;
-  is_temp_volume: boolean;
-  severity: string;
-  summary: string;
-  recommendation: string;
-};
-
-type ProviderCompatibilityPolicy = {
-  provider_id: string;
-  system_to_user: boolean | null;
-  tool_to_user: boolean | null;
-  disable_tools: boolean | null;
-  strip_unsupported_params: boolean | null;
-  direct_provider_safe: boolean | null;
-  gateway_route_recommended: boolean | null;
-  codex_disable_responses: boolean | null;
-  codex_strict_tool_calls: boolean | null;
-  codex_strip_reasoning: boolean | null;
-  notes: string | null;
-  updated_by: string;
-  updated_at: string | null;
-};
-
-type FailedRequestDiagnosticCandidate = {
-  request_id: string;
-  surface: string;
-  claude_alias: string | null;
-  provider_id: string | null;
-  upstream_model: string | null;
-  status_code: number | null;
-  error_summary: string | null;
-  redaction_summary: string;
-  created_at: string | null;
-};
-
-type RequestReplayReport = {
-  request_id: string;
-  surface: string;
-  provider_id: string | null;
-  upstream_model: string | null;
-  strategy_id: string;
-  original_payload: unknown;
-  converted_payload: unknown | null;
-  redaction_summary: string;
-  likely_cause: string;
-  local_only: boolean;
-};
-
-type CodexRouteDiagnostic = {
-  route_id: string;
-  codex_model: string;
-  display_name: string;
-  provider_id: string;
-  provider_name: string;
-  upstream_model: string;
-  tool_call_mode: string;
-  strategy: ProviderCompatibilityProfile;
-  warnings: string[];
-  recommendations: string[];
-};
-
-type UpdateCheckReport = {
-  current_version: string;
-  latest_version: string | null;
-  update_available: boolean;
-  release_url: string | null;
-  asset_names: string[];
-  summary: string;
-  error: string | null;
-};
-
-type SafeInstallPlan = {
-  current_exe: string;
-  is_applications: boolean;
-  is_dmg_volume: boolean;
-  is_temp_volume: boolean;
-  applications_app_exists: boolean;
-  release_artifacts_dir: string | null;
-  steps: string[];
-  warning: string | null;
-};
-
-type DiagnosticsMetric = {
-  label: string;
-  value: string;
-  status: string;
-};
-
-type DiagnosticsAction = {
-  id: string;
-  label: string;
-  target: string;
-  severity: string;
-  detail: string;
-};
-
-type FailureCluster = {
-  key: string;
-  provider_id: string | null;
-  surface: string;
-  status_code: number | null;
-  count: number;
-  sample_error: string | null;
-  recommendation: string;
-};
-
-type DiagnosticsSection = {
-  id: string;
-  title: string;
-  status: string;
-  score: number;
-  summary: string;
-  metrics: DiagnosticsMetric[];
-  actions: DiagnosticsAction[];
-};
-
-type UnifiedDiagnosticsReport = {
-  generated_at: string;
-  status: string;
-  score: number;
-  summary: string;
-  sections: DiagnosticsSection[];
-  failure_clusters: FailureCluster[];
-};
-
-type BackendProviderPreset = {
-  id: string;
-  name: string;
-  description: string;
-  base_url: string;
-  openai_base_url: string;
-  anthropic_base_url: string | null;
-  auth_header: string;
-  auth_scheme: string | null;
-  recommended_claude_alias: string;
-  recommended_codex_model: string;
-  upstream_model_example: string;
-  recommended_policy: ProviderCompatibilityPolicy;
-  warnings: string[];
-};
 
 type Settings = {
   auto_start_gateway: boolean;
@@ -439,13 +213,6 @@ type CodexPpLogEvent = {
   line: string;
 };
 
-type Health = {
-  target: string;
-  ok: boolean;
-  message: string;
-  latency_ms: number | null;
-};
-
 type ColdStartStep = {
   id: string;
   label: string;
@@ -556,66 +323,6 @@ const PROVIDER_PRESETS = [
   { id: "siliconflow", name: "SiliconFlow", openai_base_url: "https://api.siliconflow.cn/v1", anthropic_base_url: "", auth_header: "Authorization", auth_scheme: "Bearer", logo: "SF", color: "#8b5cf6", colorBg: "rgba(139,92,246,0.1)", shortUrl: "api.siliconflow.cn" },
   { id: "custom", name: "Custom", openai_base_url: "", anthropic_base_url: "", auth_header: "x-api-key", auth_scheme: "", logo: "+", color: "#64748b", colorBg: "rgba(100,116,139,0.1)", shortUrl: "Add your own provider" },
 ];
-
-const STRATEGY_FLAG_HELP: Record<StrategyFlagKey, { title: string; effect: string; when: string; defaultAdvice: string; risk?: string }> = {
-  system_to_user: {
-    title: "System -> User",
-    effect: "把 Anthropic 的 system prompt 合并进第一条 user 消息，避免上游看到 system role。",
-    when: "火山 DeepSeek 等只接受 user/assistant 的服务商，或报 messages.role system invalid 时开启。",
-    defaultAdvice: "不确定时保持 auto；Provider Preset 会自动给高风险服务商开启。",
-  },
-  tool_to_user: {
-    title: "Tool -> User",
-    effect: "把 tool result 转成普通 user 文本，避免上游看到 tool role。",
-    when: "服务商报 tool role invalid、tool message unsupported 或工具结果无法继续对话时开启。",
-    defaultAdvice: "Chat 兼容但非 Anthropic 兼容的服务商通常建议开启。",
-  },
-  disable_tools: {
-    title: "Disable Tools",
-    effect: "完全移除 tools 和 tool_choice，模型只会文本回复。",
-    when: "仅在服务商完全不支持工具调用，或频繁因为 tools 参数报错时开启。",
-    defaultAdvice: "默认不要开；优先尝试 tool_to_user 或 codex_strict_tool_calls。",
-    risk: "高风险：开启后 Claude/Codex 可能无法调用工具。",
-  },
-  strip_unsupported_params: {
-    title: "Strip Params",
-    effect: "移除 thinking、reasoning、reasoning_effort 等兼容性差的参数。",
-    when: "OpenAI Chat 兼容服务商报 unknown parameter、reasoning unsupported 时开启。",
-    defaultAdvice: "大多数第三方 Chat provider 建议开启。",
-  },
-  direct_provider_safe: {
-    title: "Direct Safe",
-    effect: "标记 Claude Code 是否可以绕过 Gateway，直接使用该 Provider 的 Anthropic endpoint。",
-    when: "只有服务商真实完整支持 Anthropic Messages API 时才设为 true。",
-    defaultAdvice: "不确定就保持 false/auto，并使用 Gateway Route。",
-    risk: "误开会让 Claude Code 继续发送 system/tool role，可能再次 400。",
-  },
-  gateway_route_recommended: {
-    title: "Gateway Route",
-    effect: "提示 Claude Code 优先走 Gateway Route，让 Gateway Switch 负责协议转换。",
-    when: "绝大多数第三方 Chat provider、DeepSeek、Moonshot、Qwen、小米、火山都建议开启。",
-    defaultAdvice: "第三方服务商默认建议 true；标准 Anthropic 兼容服务商可为 false。",
-  },
-  codex_disable_responses: {
-    title: "Codex Chat Fallback",
-    effect: "Codex 不直接走上游 Responses API，而是通过 Gateway 转成 Chat Completions。",
-    when: "非 OpenAI 官方 Responses 兼容服务商通常需要开启。",
-    defaultAdvice: "OpenAI 官方可关闭；其他 Provider 建议开启。",
-  },
-  codex_strict_tool_calls: {
-    title: "Codex Strict Tools",
-    effect: "Codex 有 tools 时强制模型输出结构化 tool_calls，而不是只描述计划。",
-    when: "模型经常说“我来查看/我会调用工具”但没有真实 tool_calls 时开启。",
-    defaultAdvice: "工具执行不稳定时开启；如果模型不支持工具则不要开。",
-    risk: "可能让弱工具模型更容易失败，但能显著减少假执行。",
-  },
-  codex_strip_reasoning: {
-    title: "Codex Strip Reasoning",
-    effect: "移除 Codex 请求里的 reasoning/thinking 参数。",
-    when: "服务商不支持 reasoning 参数，或报 thinking/reasoning unsupported 时开启。",
-    defaultAdvice: "大多数第三方 Chat provider 建议开启。",
-  },
-};
 
 const POLL_INTERVAL_MS = 12_000;
 const isTauriRuntime = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -774,6 +481,10 @@ const ZH_TEXT: Record<string, string> = {
   "Active": "启用中",
   "No routes configured": "暂无路由配置",
   "Add a route above to start mapping models.": "请先在上方添加路由来映射模型。",
+  "Use Route Builder to create model routes.": "请在 Route Builder 中创建模型路由。",
+  "Manage in Route Builder": "在 Route Builder 中管理",
+  "Claude Routes": "Claude 路由",
+  "Codex Routes": "Codex 路由",
   "Claude Gateway Status": "Claude Gateway 状态",
   "Configure Claude model routes and Claude Desktop binding": "配置 Claude 模型路由和 Claude Desktop 绑定",
   "Edit Route": "编辑路由",
@@ -848,12 +559,41 @@ const ZH_TEXT: Record<string, string> = {
   "Not bound": "未绑定",
   "Disabled": "已禁用",
   "Managed by Gateway Switch": "由 Gateway Switch 接管",
+  "App Workbench": "应用工作台",
+  "managed": "已接管",
+  "setup needed": "需要配置",
+  "stopped": "已停止",
+  "not set": "未设置",
+  "Recent": "最近请求",
+  "Configure Provider": "配置服务商",
+  "Run Check": "运行检查",
   "Select provider...": "请选择服务商...",
   "Default aliases will be used until you add a custom one.": "未添加自定义别名前会使用默认别名。",
   "Claude Gateway health check passed": "Claude Gateway 健康检查通过",
   "Claude Gateway health check failed": "Claude Gateway 健康检查失败",
+  "Claude Gateway is not running. Start it before checking health.": "Claude Gateway 未运行，请先启动后再检查健康状态。",
   "Codex Gateway health check passed": "Codex Gateway 健康检查通过",
   "Codex Gateway health check failed": "Codex Gateway 健康检查失败",
+  "Use Route Builder to create Codex routes.": "请在 Route Builder 中创建 Codex 路由。",
+  "Target App": "目标应用",
+  "Alias route for Claude Desktop model validation": "用于 Claude Desktop 模型验证的别名路由",
+  "Gateway route for safer coding agent runs": "用于更安全编码代理运行的 Gateway 路由",
+  "Responses gateway route for Codex App": "用于 Codex App 的 Responses Gateway 路由",
+  "Compatibility Preview": "兼容性预览",
+  "Conflict": "冲突",
+  "Policy": "策略",
+  "Not selected": "未选择",
+  "Existing Codex route/model": "已有 Codex 路由或模型",
+  "Existing Claude route/alias": "已有 Claude 路由或别名",
+  "No obvious conflict": "未发现明显冲突",
+  "Auto profile will be inferred": "将自动推断兼容性配置",
+  "Open Workbench": "打开工作台",
+  "Quick Check": "快速检查",
+  "Route Draft": "路由草稿",
+  "Create a Claude Desktop alias route for the local /v1/messages gateway.": "为本地 /v1/messages Gateway 创建 Claude Desktop 别名路由。",
+  "Create a Claude Code Gateway Route. Risky Direct Provider binding stays explicit on the Claude Code workbench.": "创建 Claude Code Gateway 路由；有风险的直连服务商绑定仍保留在 Claude Code 工作台显式操作。",
+  "Create a Codex Responses route that can fall back to OpenAI Chat Completions.": "创建可 fallback 到 OpenAI Chat Completions 的 Codex Responses 路由。",
+  "Start from the target client and turn providers into model entries for Claude Desktop, Claude Code, or Codex.": "从目标客户端出发，把服务商转换成 Claude Desktop、Claude Code 或 Codex 可用的模型入口。",
   "MCP Configuration Sync": "MCP 配置同步",
   "Synchronize MCP Servers across Claude Desktop, Claude Code, and Codex.": "在 Claude Desktop、Claude Code 与 Codex 之间同步 MCP Servers 配置。",
   "Refresh Status": "刷新状态",
@@ -967,7 +707,7 @@ const ZH_TEXT: Record<string, string> = {
   "warn": "警告",
   "error": "错误",
   "fixed": "已修复",
-  "running": "执行中",
+  "running": "运行中",
 };
 
 function tx(text: string, language: Language): string {
@@ -1808,6 +1548,10 @@ function App() {
   const [updateReport, setUpdateReport] = useState<UpdateCheckReport | null>(null);
   const [safeInstallPlan, setSafeInstallPlan] = useState<SafeInstallPlan | null>(null);
   const [unifiedDiagnostics, setUnifiedDiagnostics] = useState<UnifiedDiagnosticsReport | null>(null);
+  const [usageInsights, setUsageInsights] = useState<UsageInsightsReport | null>(null);
+  const [providerConsole, setProviderConsole] = useState<ProviderConsoleReport | null>(null);
+  const [runtimeDashboard, setRuntimeDashboard] = useState<RuntimeDashboardReport | null>(null);
+  const [appWorkbenches, setAppWorkbenches] = useState<Partial<Record<RouteBuilderTarget, AppWorkbenchReport>>>({});
   const [providerPresets, setProviderPresets] = useState<BackendProviderPreset[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
@@ -1854,10 +1598,15 @@ function App() {
   const emptyProviderForm = { id: "", name: "", base_url: "", openai_base_url: "", anthropic_base_url: "", auth_header: "x-api-key", auth_scheme: "", api_key: "" };
   const [pForm, setPForm] = useState(emptyProviderForm);
   const [editingP, setEditingP] = useState<string | null>(null);
+  const [wizardPresetId, setWizardPresetId] = useState("openrouter");
+  const [wizardApiKey, setWizardApiKey] = useState("");
+  const [wizardTargetApp, setWizardTargetApp] = useState<RouteBuilderTarget>("claude_desktop");
+  const [wizardApplyRoute, setWizardApplyRoute] = useState(true);
 
   // Route form
   const [rForm, setRForm] = useState({ id: "", claude_alias: "claude-sonnet-4-6", display_name: "", provider_id: "", upstream_model: "" });
   const [editingR, setEditingR] = useState<string | null>(null);
+  const [routeBuilderTarget, setRouteBuilderTarget] = useState<RouteBuilderTarget>("claude_desktop");
 
   // Settings
   const [importPath, setImportPath] = useState("");
@@ -1901,6 +1650,10 @@ function App() {
       setUpdateReport(MOCK_UPDATE_REPORT);
       setSafeInstallPlan(MOCK_SAFE_INSTALL_PLAN);
       setUnifiedDiagnostics(MOCK_UNIFIED_DIAGNOSTICS);
+      setUsageInsights(null);
+      setProviderConsole(null);
+      setRuntimeDashboard(null);
+      setAppWorkbenches({});
       setProviderPresets(MOCK_PROVIDER_PRESETS);
       setSettings(MOCK_SETTINGS);
       setCodexStatus(MOCK_CODEX_STATUS);
@@ -1920,7 +1673,7 @@ function App() {
     }
 
     try {
-      const [s, p, r, d, cc, l, rd, rs, policies, failed, codexDiag, installPlan, unified, presets, cfg, cs, cr, cb, cold, mcp, ca, cma, cppInstall, cppTweaks, cppHealth, cppPreflight, cppScripts] = await Promise.all([
+      const [s, p, r, d, cc, l, rd, rs, policies, failed, codexDiag, installPlan, unified, usage, providerConsoleData, dashboardData, claudeWorkbench, claudeCodeWorkbench, codexWorkbench, presets, cfg, cs, cr, cb, cold, mcp, ca, cma, cppInstall, cppTweaks, cppHealth, cppPreflight, cppScripts] = await Promise.all([
         invoke<Status>("get_status"),
         invoke<Provider[]>("list_providers"),
         invoke<ModelRoute[]>("list_routes"),
@@ -1934,6 +1687,12 @@ function App() {
         invoke<CodexRouteDiagnostic[]>("get_codex_route_diagnostics"),
         invoke<SafeInstallPlan>("get_safe_install_plan"),
         invoke<UnifiedDiagnosticsReport>("get_unified_diagnostics"),
+        getUsageInsights(),
+        getProviderConsole(),
+        getRuntimeDashboard(),
+        getAppWorkbench("claude_desktop"),
+        getAppWorkbench("claude_code"),
+        getAppWorkbench("codex"),
         invoke<BackendProviderPreset[]>("list_provider_presets"),
         invoke<Settings>("get_settings"),
         invoke<CodexGatewayStatus>("get_codex_status"),
@@ -1962,6 +1721,14 @@ function App() {
       setCodexRouteDiagnostics(codexDiag);
       setSafeInstallPlan(installPlan);
       setUnifiedDiagnostics(unified);
+      setUsageInsights(usage);
+      setProviderConsole(providerConsoleData);
+      setRuntimeDashboard(dashboardData);
+      setAppWorkbenches({
+        claude_desktop: claudeWorkbench,
+        claude_code: claudeCodeWorkbench,
+        codex: codexWorkbench,
+      });
       setProviderPresets(presets);
       setSettings(cfg);
       setCodexStatus(cs);
@@ -2019,7 +1786,12 @@ function App() {
     try {
       const h = await invoke<Health>("check_gateway_health");
       setHealth(h);
-      flash(h.ok ? "Claude Gateway health check passed" : `Claude Gateway health check failed: ${h.message}`, h.ok ? "success" : "error");
+      const friendlyMessage = h.ok
+        ? "Claude Gateway health check passed"
+        : (status?.gateway_running
+            ? `Claude Gateway health check failed: ${h.message}`
+            : "Claude Gateway is not running. Start it before checking health.");
+      flash(friendlyMessage, h.ok ? "success" : "error");
     } catch (e) { flash(String(e), "error"); }
   };
   const checkCodexHealth = async () => {
@@ -2185,6 +1957,62 @@ function App() {
     routeDiagnostics.find(d => d.provider_id === providerId)?.strategy ??
     codexRouteDiagnostics.find(d => d.provider_id === providerId)?.strategy;
 
+  const applyRouteBuilderPayload = async (payload: RouteBuilderPayload) => {
+    if (!isTauriRuntime) {
+      if (payload.target_app === "codex") {
+        setCodexRoutes(prev => {
+          const existing = prev.find(route => route.id === payload.route_id || route.codex_model === payload.visible_model);
+          if (existing) {
+            return prev.map(route => route.id === existing.id ? {
+              ...route,
+              codex_model: payload.visible_model,
+              display_name: payload.display_name,
+              provider_id: payload.provider_id,
+              upstream_model: payload.upstream_model,
+              tool_call_mode: payload.tool_call_mode ?? "force_when_tools_present",
+              enabled: true,
+            } : route);
+          }
+          return [{
+            id: payload.route_id,
+            codex_model: payload.visible_model,
+            display_name: payload.display_name,
+            provider_id: payload.provider_id,
+            upstream_model: payload.upstream_model,
+            tool_call_mode: payload.tool_call_mode ?? "force_when_tools_present",
+            enabled: true,
+          }, ...prev];
+        });
+      } else {
+        setRoutes(prev => {
+          const existing = prev.find(route => route.id === payload.route_id || route.claude_alias === payload.visible_model);
+          if (existing) {
+            return prev.map(route => route.id === existing.id ? {
+              ...route,
+              claude_alias: payload.visible_model,
+              display_name: payload.display_name,
+              provider_id: payload.provider_id,
+              upstream_model: payload.upstream_model,
+              enabled: true,
+            } : route);
+          }
+          return [{
+            id: payload.route_id,
+            claude_alias: payload.visible_model,
+            display_name: payload.display_name,
+            provider_id: payload.provider_id,
+            upstream_model: payload.upstream_model,
+            enabled: true,
+          }, ...prev];
+        });
+      }
+      return;
+    }
+    const report = await applyRouteBuilderApi(payload);
+    setRoutes(report.claude_routes);
+    setCodexRoutes(report.codex_routes);
+  };
+
   const saveProviderPolicyFlag = async (providerId: string, key: keyof ProviderCompatibilityPolicy, value: boolean | null) => {
     const current = policyForProvider(providerId);
     const payload: ProviderCompatibilityPolicy = {
@@ -2253,16 +2081,74 @@ function App() {
     }
   };
 
+  const applyProviderWizard = async () => {
+    const preset = providerPresets.find(item => item.id === wizardPresetId);
+    if (!preset) {
+      flash("Choose a provider preset first", "error");
+      return;
+    }
+    try {
+      if (isTauriRuntime) {
+        const report = await applyProviderWizardApi({
+          preset_id: preset.id,
+          api_key: wizardApiKey || null,
+          target_app: wizardTargetApp,
+          apply_route: wizardApplyRoute,
+        });
+        setProviders(report.providers);
+        setProviderPolicies(report.policies);
+        if (report.route_report) {
+          setRoutes(report.route_report.claude_routes);
+          setCodexRoutes(report.route_report.codex_routes);
+        }
+      } else {
+        const nextProvider: Provider = {
+          id: preset.id,
+          name: preset.name,
+          base_url: preset.base_url,
+          openai_base_url: preset.openai_base_url,
+          anthropic_base_url: preset.anthropic_base_url,
+          auth_header: preset.auth_header,
+          auth_scheme: preset.auth_scheme,
+          api_key: wizardApiKey || null,
+          enabled: true,
+        };
+        setProviders(current => current.some(provider => provider.id === preset.id)
+          ? current.map(provider => provider.id === preset.id ? nextProvider : provider)
+          : [nextProvider, ...current]);
+        if (wizardApplyRoute) {
+          await applyRouteBuilderPayload({
+            target_app: wizardTargetApp,
+            route_id: `${wizardTargetApp.replace(/_/g, "-")}-${preset.id}`,
+            visible_model: wizardTargetApp === "codex" ? preset.recommended_codex_model : preset.recommended_claude_alias,
+            display_name: `${wizardTargetApp.replace(/_/g, " ")} via ${preset.name}`,
+            provider_id: preset.id,
+            upstream_model: preset.upstream_model_example,
+            conflict_strategy: "update",
+          });
+        }
+      }
+      setWizardApiKey("");
+      await loadAll();
+      flash(`Provider Wizard completed: ${preset.name}`);
+    } catch (e) {
+      flash(String(e), "error");
+    }
+  };
+
   // Route CRUD
   const saveRoute = async () => {
     try {
-      if (editingR) {
-        await invoke("update_route", { payload: { ...rForm, enabled: true } });
-        flash("Route updated");
-      } else {
-        await invoke("create_route", { payload: rForm });
-        flash("Route created");
-      }
+      await applyRouteBuilderPayload({
+        target_app: routeBuilderTarget === "codex" ? "claude_desktop" : routeBuilderTarget,
+        route_id: rForm.id,
+        visible_model: rForm.claude_alias,
+        display_name: rForm.display_name,
+        provider_id: rForm.provider_id,
+        upstream_model: rForm.upstream_model,
+        conflict_strategy: editingR ? "update" : "create",
+      });
+      flash(editingR ? "Route updated" : "Route created");
       setEditingR(null);
       setRForm({ id: "", claude_alias: "claude-sonnet-4-6", display_name: "", provider_id: "", upstream_model: "" });
       await syncDesktopBindingIfManaged();
@@ -2280,6 +2166,8 @@ function App() {
   const editRoute = (r: ModelRoute) => {
     setEditingR(r.id);
     setRForm({ id: r.id, claude_alias: r.claude_alias, display_name: r.display_name, provider_id: r.provider_id, upstream_model: r.upstream_model });
+    setRouteBuilderTarget("claude_desktop");
+    setPage("routeBuilder");
   };
 
   // Settings
@@ -2533,13 +2421,17 @@ function App() {
 
   const saveCodexRoute = async () => {
     try {
-      if (editingC) {
-        await invoke("update_codex_route", { payload: { ...cForm, enabled: true } });
-        flash("Codex route updated");
-      } else {
-        await invoke("create_codex_route", { payload: cForm });
-        flash("Codex route created");
-      }
+      await applyRouteBuilderPayload({
+        target_app: "codex",
+        route_id: cForm.id,
+        visible_model: cForm.codex_model,
+        display_name: cForm.display_name,
+        provider_id: cForm.provider_id,
+        upstream_model: cForm.upstream_model,
+        tool_call_mode: cForm.tool_call_mode,
+        conflict_strategy: editingC ? "update" : "create",
+      });
+      flash(editingC ? "Codex route updated" : "Codex route created");
       setEditingC(null);
       setCForm({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "", tool_call_mode: "force_when_tools_present" });
       await loadAll();
@@ -2551,6 +2443,8 @@ function App() {
   const editCodexRoute = (r: CodexRoute) => {
     setEditingC(r.id);
     setCForm({ id: r.id, codex_model: r.codex_model, display_name: r.display_name, provider_id: r.provider_id, upstream_model: r.upstream_model, tool_call_mode: r.tool_call_mode || "force_when_tools_present" });
+    setRouteBuilderTarget("codex");
+    setPage("routeBuilder");
   };
 
   const addModelAlias = async (aliasType: "claude" | "codex") => {
@@ -2592,6 +2486,14 @@ function App() {
   // =====================================================
   //  SIDEBAR
   // =====================================================
+  const NavButton = ({ target, label, icon, badge }: { target: Page; label: string; icon: React.ReactNode; badge?: number | string | null }) => (
+    <button className={`nav-item ${page === target ? "active" : ""}`} aria-label={label} title={label} onClick={() => setPage(target)}>
+      {icon}
+      <span className="nav-label">{label}</span>
+      {badge ? <span className="nav-badge">{badge}</span> : null}
+    </button>
+  );
+
   const Sidebar = () => (
     <aside className="sidebar">
       <div className="sidebar-brand">
@@ -2609,68 +2511,40 @@ function App() {
       </div>
 
       <div className="nav-group">
-        <div className="nav-group-label">{t("Dashboard")}</div>
-        <button className={`nav-item ${page === "dashboard" ? "active" : ""}`} aria-label={t("Dashboard")} title={t("Dashboard")} onClick={() => setPage("dashboard")}>
-          <IconGrid />
-          <span className="nav-label">{t("Dashboard")}</span>
-        </button>
+        <div className="nav-group-label">Overview</div>
+        <NavButton target="dashboard" label="Runtime Dashboard" icon={<IconGrid />} />
       </div>
 
       <div className="nav-group">
-        <div className="nav-group-label">{t("Products")}</div>
-        <button className={`nav-item ${page === "claude" ? "active" : ""}`} aria-label={t("Claude")} title={t("Claude")} onClick={() => setPage("claude")}>
-          <IconShuffle />
-          <span className="nav-label">{t("Claude")}</span>
-          {routes.length > 0 && <span className="nav-badge">{routes.length}</span>}
-        </button>
-        <button className={`nav-item ${page === "claudeCode" ? "active" : ""}`} aria-label={t("Claude Code")} title={t("Claude Code")} onClick={() => setPage("claudeCode")}>
-          <IconTerminal />
-          <span className="nav-label">{t("Claude Code")}</span>
-        </button>
-        <button className={`nav-item ${page === "codex" ? "active" : ""}`} aria-label={t("Codex")} title={t("Codex")} onClick={() => setPage("codex")}>
-          <IconTerminal />
-          <span className="nav-label">{t("Codex")}</span>
-          {codexRoutes.length > 0 && <span className="nav-badge">{codexRoutes.length}</span>}
-        </button>
+        <div className="nav-group-label">Apps</div>
+        <NavButton target="claude" label="Claude Desktop" icon={<IconShuffle />} badge={routes.length || null} />
+        <NavButton target="claudeCode" label="Claude Code" icon={<IconTerminal />} />
+        <NavButton target="codex" label="Codex" icon={<IconTerminal />} badge={codexRoutes.length || null} />
       </div>
 
       <div className="nav-group">
-        <div className="nav-group-label">{t("Features")}</div>
-        <button className={`nav-item ${page === "mcpSync" ? "active" : ""}`} aria-label={t("MCP Sync")} title={t("MCP Sync")} onClick={() => setPage("mcpSync")}>
-          <IconShuffle />
-          <span className="nav-label">{t("MCP Sync")}</span>
-          {mcpPreview?.merged_count ? <span className="nav-badge">{mcpPreview.merged_count}</span> : null}
-        </button>
-        <button className={`nav-item ${page === "coldstart" ? "active" : ""}`} aria-label={t("Cold Start")} title={t("Cold Start")} onClick={() => setPage("coldstart")}>
-          <IconZap />
-          <span className="nav-label">{t("Cold Start")}</span>
-        </button>
+        <div className="nav-group-label">Setup</div>
+        <NavButton target="providers" label="Provider Console" icon={<IconSun />} badge={providers.length || null} />
+        <NavButton target="routeBuilder" label="Route Builder" icon={<IconLink />} badge={(routes.length + codexRoutes.length) || null} />
       </div>
 
       <div className="nav-group">
-        <div className="nav-group-label">{t("General")}</div>
-        <button className={`nav-item ${page === "providers" ? "active" : ""}`} aria-label={t("Providers")} title={t("Providers")} onClick={() => setPage("providers")}>
-          <IconSun />
-          <span className="nav-label">{t("Providers")}</span>
-          {providers.length > 0 && <span className="nav-badge">{providers.length}</span>}
-        </button>
+        <div className="nav-group-label">Operations</div>
+        <NavButton target="healthCenter" label="Health Center" icon={<IconPulse />} badge={unifiedDiagnostics && unifiedDiagnostics.status !== "healthy" ? unifiedDiagnostics.score : null} />
+        <NavButton target="usageInsights" label="Usage Insights" icon={<IconMonitor />} badge={logs.length || null} />
+        <NavButton target="logs" label={t("Request Logs")} icon={<IconSearch />} />
       </div>
 
       <div className="nav-group">
-        <div className="nav-group-label">{t("System")}</div>
-        <button className={`nav-item ${page === "diagnostics" ? "active" : ""}`} aria-label="Diagnostics" title="Diagnostics" onClick={() => setPage("diagnostics")}>
-          <IconPulse />
-          <span className="nav-label">Diagnostics</span>
-          {unifiedDiagnostics && unifiedDiagnostics.status !== "healthy" && <span className="nav-badge">{unifiedDiagnostics.score}</span>}
-        </button>
-        <button className={`nav-item ${page === "logs" ? "active" : ""}`} aria-label={t("Logs")} title={t("Logs")} onClick={() => setPage("logs")}>
-          <IconTerminal />
-          <span className="nav-label">{t("Logs")}</span>
-        </button>
-        <button className={`nav-item ${page === "settings" ? "active" : ""}`} aria-label={t("Settings")} title={t("Settings")} onClick={() => setPage("settings")}>
-          <IconSettings />
-          <span className="nav-label">{t("Settings")}</span>
-        </button>
+        <div className="nav-group-label">Assets</div>
+        <NavButton target="mcpSync" label="MCP Sync" icon={<IconShuffle />} badge={mcpPreview?.merged_count || null} />
+      </div>
+
+      <div className="nav-group">
+        <div className="nav-group-label">System</div>
+        <NavButton target="coldstart" label="Install Doctor" icon={<IconZap />} />
+        <NavButton target="diagnostics" label="Diagnostics Export" icon={<IconDownload />} />
+        <NavButton target="settings" label={t("Settings")} icon={<IconSettings />} />
       </div>
 
       <div className="sidebar-footer">
@@ -2683,15 +2557,87 @@ function App() {
     </aside>
   );
 
-  // =====================================================
+  const runtimeAppSummaries: AppWorkbenchSummary[] = runtimeDashboard?.apps ?? [
+    {
+      app_id: "claude_desktop",
+      label: "Claude Desktop",
+      managed: Boolean(desktop?.managed),
+      gateway_running: Boolean(status?.gateway_running),
+      route_count: routes.length,
+      provider_count: providers.length,
+      active_model: desktop?.models?.[0] ?? null,
+      recent_request_count: latestClaudeLog ? 1 : 0,
+      recent_failure_count: latestClaudeLog?.status_code && latestClaudeLog.status_code >= 400 ? 1 : 0,
+      next_action: desktop?.managed ? "Monitor recent Claude requests" : "Bind Claude Desktop to Gateway Switch",
+    },
+    {
+      app_id: "claude_code",
+      label: "Claude Code",
+      managed: Boolean(claudeCode?.managed),
+      gateway_running: Boolean(status?.gateway_running),
+      route_count: routes.length,
+      provider_count: providers.length,
+      active_model: claudeCode?.model ?? null,
+      recent_request_count: latestClaudeLog ? 1 : 0,
+      recent_failure_count: latestClaudeLog?.status_code && latestClaudeLog.status_code >= 400 ? 1 : 0,
+      next_action: claudeCode?.managed ? "Review Claude Code route diagnostics" : "Bind Claude Code to a Gateway Route",
+    },
+    {
+      app_id: "codex",
+      label: "Codex",
+      managed: Boolean(codexBinding?.managed),
+      gateway_running: Boolean(codexStatus?.running),
+      route_count: codexRoutes.length,
+      provider_count: providers.length,
+      active_model: codexBinding?.model ?? null,
+      recent_request_count: latestCodexLog ? 1 : 0,
+      recent_failure_count: latestCodexLog?.status_code && latestCodexLog.status_code >= 400 ? 1 : 0,
+      next_action: codexBinding?.managed ? "Monitor Codex usage and reliability" : "Bind Codex to the local Responses gateway",
+    },
+  ];
+
+  const appPageFor = (appId: RouteBuilderTarget): Page =>
+    appId === "codex" ? "codex" : appId === "claude_code" ? "claudeCode" : "claude";
+
+  const renderAppWorkbenchOverview = (appId: RouteBuilderTarget) => (
+    <AppWorkbenchOverview
+      appId={appId}
+      report={appWorkbenches[appId]}
+      summaries={runtimeAppSummaries}
+      logs={logs}
+      routes={routes}
+      codexRoutes={codexRoutes}
+      t={t}
+      onConfigureProvider={() => setPage("providers")}
+      onRunCheck={() => setPage("healthCenter")}
+    />
+  );
+
+
+
   //  DASHBOARD PAGE
   // =====================================================
   const DashboardPage = () => (
     <div>
       <div className="page-header">
-        <h1>{t("Dashboard")}</h1>
-        <p>{t("Read-only product gateway overview")}</p>
+        <h1>Runtime Dashboard</h1>
+        <p>Claude Desktop、Claude Code 与 Codex 的本地运行时控制台。先看是否可用，再按建议完成配置、检查和绑定。</p>
       </div>
+
+      <div className="runtime-hero">
+        <div>
+          <div className="runtime-eyebrow">Runtime Console</div>
+          <h2>让三个客户端稳定接入第三方模型</h2>
+          <p>Gateway Switch 会把 Provider、Route、Binding、Health 和 Logs 串成一条连续路径，而不是让你在多个技术页面里来回排查。</p>
+        </div>
+        <div className="runtime-actions">
+          <button className="btn btn-primary" onClick={() => setPage("providers")}><IconPlus /> Configure Provider</button>
+          <button className="btn" onClick={() => setPage("routeBuilder")}><IconLink /> Build Route</button>
+          <button className="btn" onClick={() => setPage("healthCenter")}><IconPulse /> Run Check</button>
+        </div>
+      </div>
+
+      <AppWorkbenchGrid apps={runtimeAppSummaries} onOpenWorkbench={(appId) => setPage(appPageFor(appId))} />
 
       {/* KPI Row */}
       <div className="kpi-row">
@@ -2863,10 +2809,30 @@ function App() {
   // =====================================================
   const ProvidersPage = () => (
     <div>
-      <div className="page-header">
-        <h1>{t("Providers")}</h1>
-        <p>{t("Share credentials across products, with protocol-specific base URLs for OpenAI and Anthropic clients")}</p>
+      <div className="page-header page-header-row">
+        <div>
+          <h1>Provider Console</h1>
+          <p>统一管理 Claude Desktop、Claude Code 与 Codex 共享的上游 Provider、协议端点和兼容策略。</p>
+        </div>
+        <div className="qa-buttons" style={{ margin: 0 }}>
+          <button className="btn btn-primary" onClick={() => setPage("routeBuilder")}><IconLink /> Build Route</button>
+          <button className="btn" onClick={() => setPage("healthCenter")}><IconPulse /> Check All</button>
+        </div>
       </div>
+
+      <ProviderSetupWizard
+        presets={providerPresets}
+        presetId={wizardPresetId}
+        targetApp={wizardTargetApp}
+        apiKey={wizardApiKey}
+        applyRoute={wizardApplyRoute}
+        onPresetChange={setWizardPresetId}
+        onTargetAppChange={setWizardTargetApp}
+        onApiKeyChange={setWizardApiKey}
+        onApplyRouteChange={setWizardApplyRoute}
+        onRunWizard={() => void applyProviderWizard()}
+        onAdvancedRouteBuilder={() => setPage("routeBuilder")}
+      />
 
       {/* Preset grid */}
       <div className="section-label">{t("Quick Add")}</div>
@@ -2895,43 +2861,16 @@ function App() {
         })}
       </div>
 
-      <div className="card" style={{ marginTop: 20, marginBottom: 20 }}>
-        <div className="card-title">Provider Presets & Strategy Templates</div>
-        <p style={{ color: "var(--muted)", marginBottom: 14 }}>
-          Built-in presets create or update provider URLs and apply the recommended compatibility strategy without overwriting existing API keys.
-        </p>
-        <div className="route-list" style={{ marginBottom: 0 }}>
-          {providerPresets.map(preset => {
-            const connected = providers.some(p => p.id === preset.id);
-            const policy = preset.recommended_policy;
-            const enabledFlags = [
-              policy.system_to_user ? "system_to_user" : null,
-              policy.tool_to_user ? "tool_to_user" : null,
-              policy.strip_unsupported_params ? "strip_params" : null,
-              policy.gateway_route_recommended ? "gateway_route" : null,
-              policy.codex_disable_responses ? "codex_chat_fallback" : null,
-              policy.codex_strict_tool_calls ? "strict_tools" : null,
-              policy.codex_strip_reasoning ? "strip_reasoning" : null,
-            ].filter(Boolean);
-            return (
-              <div key={preset.id} className="route-item" style={{ alignItems: "flex-start" }}>
-                <div className="route-info">
-                  <div className="route-name">{preset.name}</div>
-                  <div className="route-path">{preset.description}</div>
-                  <div className="route-path">model: {preset.upstream_model_example} · Claude alias: {preset.recommended_claude_alias} · Codex: {preset.recommended_codex_model}</div>
-                  <div className="qa-buttons" style={{ marginTop: 8 }}>
-                    {enabledFlags.map(flag => <span key={flag} className="badge badge-blue">{flag}</span>)}
-                    {preset.warnings.map(warning => <span key={warning} className="badge badge-amber">{warning}</span>)}
-                  </div>
-                </div>
-                <button className={`btn ${connected ? "" : "btn-primary"}`} onClick={() => void applyProviderPreset(preset)}>
-                  {connected ? "Reapply" : "Apply"}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <ProviderHealthGrid
+        providers={providers}
+        providerConsole={providerConsole}
+        routes={routes}
+        codexRoutes={codexRoutes}
+        logs={logs}
+        policyNotesForProvider={(providerId) => policyForProvider(providerId)?.notes ?? null}
+      />
+
+      <ProviderPresetStrategyList presets={providerPresets} providers={providers} onApplyPreset={(preset) => void applyProviderPreset(preset)} />
 
       {/* Add/Edit form */}
       <div className="card" style={{ marginBottom: 20 }}>
@@ -3029,70 +2968,13 @@ function App() {
         </table>
       </div>
 
-      <div className="card" style={{ marginTop: 20 }}>
-        <div className="card-title">Provider Strategy Overrides</div>
-        <p style={{ color: "var(--muted)", marginBottom: 14 }}>
-          Empty fields inherit the automatic profile. Manual overrides affect Claude, Claude Code, and Codex diagnostics.
-        </p>
-        <div className="route-list" style={{ marginBottom: 0 }}>
-          {providers.map(provider => {
-            const policy = policyForProvider(provider.id);
-            const auto = autoStrategyForProvider(provider.id);
-            const flagRows: Array<[StrategyFlagKey, string]> = [
-              ["system_to_user", "System → User"],
-              ["tool_to_user", "Tool → User"],
-              ["disable_tools", "Disable Tools"],
-              ["strip_unsupported_params", "Strip Params"],
-              ["direct_provider_safe", "Direct Safe"],
-              ["gateway_route_recommended", "Gateway Route"],
-              ["codex_disable_responses", "Codex Chat Fallback"],
-              ["codex_strict_tool_calls", "Codex Strict Tools"],
-              ["codex_strip_reasoning", "Codex Strip Reasoning"],
-            ];
-            return (
-              <div key={provider.id} className="route-item" style={{ alignItems: "flex-start" }}>
-                <div className="route-info">
-                  <div className="route-name">{provider.name}</div>
-                  <div className="route-path">
-                    auto: {auto?.strategy_id ?? "not routed"} · override: {policy ? "active" : "inherit"}
-                  </div>
-                  <div className="qa-buttons" style={{ marginTop: 10 }}>
-                    {flagRows.map(([key, label]) => {
-                      const help = STRATEGY_FLAG_HELP[key];
-                      return (
-                        <span key={key} className="strategy-flag-wrap">
-                          <button
-                            className={`btn strategy-flag-btn ${policy?.[key] === true ? "btn-primary" : ""}`}
-                            onClick={() => void saveProviderPolicyFlag(provider.id, key, policy?.[key] === true ? null : true)}
-                          >
-                            {label}: {policy?.[key] === true ? "on" : policy?.[key] === false ? "off" : "auto"}
-                          </button>
-                          <button
-                            type="button"
-                            className={`strategy-help-trigger ${help.risk ? "risk" : ""}`}
-                            aria-label={`${help.title} help`}
-                            title={`${help.effect} ${help.when}`}
-                          >
-                            ?
-                          </button>
-                          <span className="strategy-help-popover" role="tooltip">
-                            <strong>{help.title}</strong>
-                            <span><b>作用：</b>{help.effect}</span>
-                            <span><b>什么时候开启：</b>{help.when}</span>
-                            <span><b>默认建议：</b>{help.defaultAdvice}</span>
-                            {help.risk && <span className="strategy-risk"><b>风险：</b>{help.risk}</span>}
-                          </span>
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-                <button className="btn" onClick={() => void resetProviderPolicy(provider.id)}>Reset</button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <ProviderStrategyOverrides
+        providers={providers}
+        policyForProvider={policyForProvider}
+        autoStrategyForProvider={autoStrategyForProvider}
+        onSaveFlag={(providerId, key, value) => void saveProviderPolicyFlag(providerId, key, value)}
+        onResetPolicy={(providerId) => void resetProviderPolicy(providerId)}
+      />
     </div>
   );
 
@@ -3215,6 +3097,8 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
         <p>{t("Configure Claude model routes and Claude Desktop binding")}</p>
       </div>
 
+      {renderAppWorkbenchOverview("claude_desktop")}
+
       <div className="two-col">
         <div className="card">
           <div className="card-title">{t("Claude Gateway Status")}</div>
@@ -3255,50 +3139,6 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
         {DesktopBindingCard()}
       </div>
 
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-title">{editingR ? t("Edit Route") : t("Add Route")}</div>
-        <div className="form-row">
-          <div className="form-field">
-            <label>{t("Route ID")}</label>
-            <input value={rForm.id} disabled={!!editingR} onChange={e => setRForm({ ...rForm, id: e.target.value })} placeholder="e.g. sonnet-ark" />
-          </div>
-          <div className="form-field">
-            <label>{t("Claude Alias")}</label>
-            <select value={rForm.claude_alias} onChange={e => setRForm({ ...rForm, claude_alias: e.target.value })}>
-              {claudeAliasOptions.map(a => <option key={a} value={a}>{a}</option>)}
-            </select>
-          </div>
-          <div className="form-field">
-            <label>{t("Display Name")}</label>
-            <input value={rForm.display_name} onChange={e => setRForm({ ...rForm, display_name: e.target.value })} placeholder="e.g. DeepSeek V3" />
-          </div>
-          <div className="form-field">
-            <label>{t("Provider")}</label>
-            <select value={rForm.provider_id} onChange={e => setRForm({ ...rForm, provider_id: e.target.value })}>
-              <option value="">{t("Select provider...")}</option>
-              {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
-          <div className="form-field">
-            <label>{t("Upstream Model")}</label>
-            <input value={rForm.upstream_model} onChange={e => setRForm({ ...rForm, upstream_model: e.target.value })} placeholder="e.g. deepseek-v3" />
-          </div>
-        </div>
-        <div className="qa-buttons" style={{ marginTop: 16 }}>
-          <button className="btn btn-primary" onClick={saveRoute}>
-            {editingR ? <><IconEdit /> {t("Save")}</> : <><IconPlus /> {t("Add Route")}</>}
-          </button>
-          {editingR && (
-            <button className="btn" onClick={() => {
-              setEditingR(null);
-              setRForm({ id: "", claude_alias: "claude-sonnet-4-6", display_name: "", provider_id: "", upstream_model: "" });
-            }}>{t("Cancel")}</button>
-          )}
-        </div>
-      </div>
-
-      {AliasManager("claude")}
-
       <div className="two-col">
         <div className="card">
           <div className="card-title">{t("Route Cards")}</div>
@@ -3316,19 +3156,21 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
                   <span className={`route-status ${r.enabled ? "active" : "disabled"}`}>
                     {r.enabled ? t("Active") : t("Disabled")}
                   </span>
-                  <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
-                    <button className="btn" style={{ padding: "5px 8px" }} onClick={() => editRoute(r)}><IconEdit /></button>
-                    <button className="btn btn-danger" style={{ padding: "5px 8px" }} onClick={() => delRoute(r.id)}><IconTrash /></button>
-                  </div>
                 </div>
               ))
             ) : (
               <div className="empty-state">
                 <div className="empty-icon">--</div>
                 <h3>{t("No routes configured")}</h3>
-                <p>{t("Add a route above to start mapping models.")}</p>
+                <p>{t("Use Route Builder to create model routes.")}</p>
               </div>
             )}
+          </div>
+          <div className="qa-buttons" style={{ marginTop: 16 }}>
+            <button className="btn btn-primary" onClick={() => {
+              setRouteBuilderTarget("claude_desktop");
+              setPage("routeBuilder");
+            }}><IconLink /> {t("Manage in Route Builder")}</button>
           </div>
         </div>
 
@@ -3345,7 +3187,6 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
               <th>{t("Provider")}</th>
               <th>{t("Upstream Model")}</th>
               <th>{t("Status")}</th>
-              <th>{t("Actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -3356,21 +3197,15 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
                 <td><span className="badge badge-blue">{r.provider_id}</span></td>
                 <td style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{r.upstream_model}</td>
                 <td><span className={`badge ${r.enabled ? "badge-green" : "badge-gray"}`}>{r.enabled ? t("Active") : t("Disabled")}</span></td>
-                <td>
-                  <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
-                    <button className="btn" style={{ padding: "5px 8px" }} onClick={() => editRoute(r)}><IconEdit /></button>
-                    <button className="btn btn-danger" style={{ padding: "5px 8px" }} onClick={() => delRoute(r.id)}><IconTrash /></button>
-                  </div>
-                </td>
               </tr>
             ))}
             {routes.length === 0 && (
               <tr>
-                <td colSpan={6}>
+                <td colSpan={5}>
                   <div className="empty-state">
                     <div className="empty-icon">--</div>
                     <h3>{t("No routes configured")}</h3>
-                    <p>{t("Add a route above to start mapping models.")}</p>
+                    <p>{t("Use Route Builder to create model routes.")}</p>
                   </div>
                 </td>
               </tr>
@@ -3440,6 +3275,8 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
           <h1>{t("Claude Code")}</h1>
           <p>{t("Bind Claude Code independently from Claude Desktop")}</p>
         </div>
+
+        {renderAppWorkbenchOverview("claude_code")}
 
         <div className="two-col">
           <div className="card">
@@ -3732,7 +3569,7 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
               <p>{t("Bind writes Gateway Switch into `~/.codex/config.toml` and forces API-key mode for the local gateway. Restart Codex App after binding.")}</p>
               <div className="qa-buttons compact-actions" style={{ margin: 0 }}>
                 <button className="btn btn-primary" onClick={bindCodexApp}><IconLink /> {t("Start & Bind Codex App")}</button>
-                <button className="btn" onClick={restoreCodexApp} disabled={!codexBinding?.managed && !codexBinding?.backup_path}><IconUnlink /> {t("Restore OpenAI Login")}</button>
+                <button className="btn" onClick={restoreCodexApp} disabled={!codexBinding?.managed && !codexBinding?.model_provider && !codexBinding?.model}><IconUnlink /> {t("Restore OpenAI Login")}</button>
               </div>
             </div>
           </div>
@@ -3785,79 +3622,6 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
         </div>
       </div>
 
-      {/* Add/Edit route form */}
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-title">{editingC ? t("Edit Codex Route") : t("Add Codex Route")}</div>
-        <div className="route-explainer">
-          <div className="route-explainer-copy">
-            <strong>{t("Codex Model must match the model used by Codex CLI.")}</strong>
-            <span>{t("If you do not need a disguised name, set Codex Model and Upstream Model to the same third-party model name.")}</span>
-          </div>
-          <div className="route-flow">
-            <span>codex -m <b>{cForm.codex_model || "model-name"}</b></span>
-            <IconArrowRight />
-            <span>{providers.find(p => p.id === cForm.provider_id)?.name || t("Provider")}</span>
-            <IconArrowRight />
-            <span><b>{cForm.upstream_model || "upstream-model"}</b></span>
-          </div>
-        </div>
-        <div className="form-row">
-          <div className="form-field">
-            <label>{t("Route ID")}</label>
-            <input value={cForm.id} disabled={!!editingC} onChange={e => setCForm({ ...cForm, id: e.target.value })} placeholder="e.g. gpt4o-deepseek" />
-          </div>
-          <div className="form-field">
-            <label>{t("Codex Model (requested by Codex)")}</label>
-            <select value={cForm.codex_model} onChange={e => setCForm({ ...cForm, codex_model: e.target.value })}>
-              {codexModelOptions.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-            <span className="field-hint">{t("This is the model name used in `codex -m ...`.")}</span>
-          </div>
-          <div className="form-field">
-            <label>{t("Display Name")}</label>
-            <input value={cForm.display_name} onChange={e => setCForm({ ...cForm, display_name: e.target.value })} placeholder="e.g. DeepSeek V3" />
-          </div>
-          <div className="form-field">
-            <label>{t("Provider")}</label>
-            <select value={cForm.provider_id} onChange={e => setCForm({ ...cForm, provider_id: e.target.value })}>
-              <option value="">{t("Select provider...")}</option>
-              {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
-          <div className="form-field">
-            <label>{t("Upstream Model (real provider model)")}</label>
-            <input value={cForm.upstream_model} onChange={e => setCForm({ ...cForm, upstream_model: e.target.value })} placeholder="e.g. deepseek-chat" />
-            <span className="field-hint">{t("This is the actual model name sent to the third-party API.")}</span>
-          </div>
-          <div className="form-field">
-            <label>{t("Tool Call Mode")}</label>
-            <select value={cForm.tool_call_mode} onChange={e => setCForm({ ...cForm, tool_call_mode: e.target.value })}>
-              <option value="auto">{t("Auto")}</option>
-              <option value="force_when_tools_present">{t("Force When Tools Present")}</option>
-              <option value="strict_execution">{t("Strict Execution")}</option>
-            </select>
-            <span className="field-hint">
-              {cForm.tool_call_mode === "auto" && t("Keeps the model's default behavior. Best compatibility, but weak tool models may only talk.")}
-              {cForm.tool_call_mode === "force_when_tools_present" && t("Default. When Codex sends tools, Gateway asks the upstream model to emit tool_calls first.")}
-              {cForm.tool_call_mode === "strict_execution" && t("If tools are present but no tool_calls are emitted, Gateway marks the response as failed.")}
-            </span>
-          </div>
-        </div>
-        <div className="qa-buttons" style={{ marginTop: 16 }}>
-          <button className="btn btn-primary" onClick={saveCodexRoute}>
-            {editingC ? <><IconEdit /> {t("Save")}</> : <><IconPlus /> {t("Add Route")}</>}
-          </button>
-          {editingC && (
-            <button className="btn" onClick={() => {
-              setEditingC(null);
-              setCForm({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "", tool_call_mode: "force_when_tools_present" });
-            }}>{t("Cancel")}</button>
-          )}
-        </div>
-      </div>
-
-      {AliasManager("codex")}
-
       {/* Route cards */}
       <div className="section-label">{t("Active Codex Routes")}</div>
       <div className="route-list" style={{ marginBottom: 20 }}>
@@ -3874,19 +3638,21 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
               <span className={`route-status ${r.enabled ? "active" : "disabled"}`}>
                 {r.enabled ? t("Active") : t("Disabled")}
               </span>
-              <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
-                <button className="btn" style={{ padding: "5px 8px" }} onClick={() => editCodexRoute(r)}><IconEdit /></button>
-                <button className="btn btn-danger" style={{ padding: "5px 8px" }} onClick={() => delCodexRoute(r.id)}><IconTrash /></button>
-              </div>
             </div>
           ))
         ) : (
           <div className="empty-state">
             <div className="empty-icon">--</div>
             <h3>{t("No Codex routes configured")}</h3>
-            <p>{t("Add a route above to start mapping Codex models.")}</p>
+            <p>{t("Use Route Builder to create Codex routes.")}</p>
           </div>
         )}
+      </div>
+      <div className="qa-buttons" style={{ marginTop: -8, marginBottom: 20 }}>
+        <button className="btn btn-primary" onClick={() => {
+          setRouteBuilderTarget("codex");
+          setPage("routeBuilder");
+        }}><IconLink /> {t("Manage in Route Builder")}</button>
       </div>
     </div>
   );
@@ -4312,6 +4078,7 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
 
   const CodexPage = () => (
     <div>
+      {renderAppWorkbenchOverview("codex")}
       <div className="codex-tabs">
         {[
           ["routes", "路由"],
@@ -4539,6 +4306,152 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
   };
 
   // =====================================================
+  //  ROUTE BUILDER PAGE
+  // =====================================================
+  const RouteBuilderPage = () => {
+    const isCodexTarget = routeBuilderTarget === "codex";
+    const routeProvider = providers.find(p => p.id === (isCodexTarget ? cForm.provider_id : rForm.provider_id));
+    const routePolicy = routeProvider ? (policyForProvider(routeProvider.id) ?? null) : null;
+    const claudeConflict = routes.some(route => route.id === rForm.id || route.claude_alias === rForm.claude_alias);
+    const codexConflict = codexRoutes.some(route => route.id === cForm.id || route.codex_model === cForm.codex_model);
+    const conflictText = isCodexTarget
+      ? (codexConflict ? "Existing Codex route/model" : "No obvious conflict")
+      : (claudeConflict ? "Existing Claude route/alias" : "No obvious conflict");
+    const targetCopy = routeBuilderTarget === "claude_desktop"
+      ? t("Create a Claude Desktop alias route for the local /v1/messages gateway.")
+      : routeBuilderTarget === "claude_code"
+        ? t("Create a Claude Code Gateway Route. Risky Direct Provider binding stays explicit on the Claude Code workbench.")
+        : t("Create a Codex Responses route that can fall back to OpenAI Chat Completions.");
+
+    return (
+      <div>
+        <div className="page-header page-header-row">
+          <div>
+            <h1>{t("Route Builder")}</h1>
+            <p>{t("Start from the target client and turn providers into model entries for Claude Desktop, Claude Code, or Codex.")}</p>
+          </div>
+          <div className="qa-buttons" style={{ margin: 0 }}>
+            <button className="btn" onClick={() => setPage("providers")}><IconSun /> {t("Provider Console")}</button>
+            <button className="btn" onClick={() => setPage("healthCenter")}><IconPulse /> {t("Health Center")}</button>
+          </div>
+        </div>
+
+        <div className="route-builder-layout">
+          <RouteTargetSelector target={routeBuilderTarget} t={t} onTargetChange={setRouteBuilderTarget} />
+
+          <RouteDraftForm
+            isCodexTarget={isCodexTarget}
+            targetCopy={targetCopy}
+            providers={providers}
+            claudeAliasOptions={claudeAliasOptions}
+            codexModelOptions={codexModelOptions}
+            claudeForm={rForm}
+            codexForm={cForm}
+            editingClaude={Boolean(editingR)}
+            editingCodex={Boolean(editingC)}
+            t={t}
+            onClaudeFormChange={setRForm}
+            onCodexFormChange={setCForm}
+            onSaveClaude={saveRoute}
+            onSaveCodex={saveCodexRoute}
+            onCancelClaude={() => {
+              setEditingR(null);
+              setRForm({ id: "", claude_alias: "claude-sonnet-4-6", display_name: "", provider_id: "", upstream_model: "" });
+            }}
+            onCancelCodex={() => {
+              setEditingC(null);
+              setCForm({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "", tool_call_mode: "force_when_tools_present" });
+            }}
+          />
+
+          <CompatibilityPreview
+            provider={routeProvider}
+            conflictText={conflictText}
+            policy={routePolicy}
+            autoSummary={autoStrategyForProvider(routeProvider?.id ?? "")?.summary ?? null}
+            t={t}
+            onOpenWorkbench={() => setPage(isCodexTarget ? "codex" : routeBuilderTarget === "claude_code" ? "claudeCode" : "claude")}
+            onQuickCheck={isCodexTarget ? checkCodexHealth : checkHealth}
+          />
+        </div>
+
+        <div className="two-col" style={{ marginTop: 20 }}>
+          <div className="card">
+            <div className="card-title">{t("Claude Routes")}</div>
+            <div className="route-list" style={{ marginBottom: 0 }}>
+              {routes.map(route => (
+                <div key={route.id} className="route-item">
+                  <div className={`route-icon ${getModelFamily(route.claude_alias)}`}>
+                    {getModelAbbrev(route.claude_alias)}
+                  </div>
+                  <div className="route-info">
+                    <div className="route-name">{route.claude_alias}</div>
+                    <div className="route-path">{route.display_name || route.upstream_model} via {route.provider_id}</div>
+                  </div>
+                  <span className={`route-status ${route.enabled ? "active" : "disabled"}`}>{route.enabled ? t("Active") : t("Disabled")}</span>
+                  <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
+                    <button className="btn" style={{ padding: "5px 8px" }} onClick={() => editRoute(route)}><IconEdit /></button>
+                    <button className="btn btn-danger" style={{ padding: "5px 8px" }} onClick={() => delRoute(route.id)}><IconTrash /></button>
+                  </div>
+                </div>
+              ))}
+              {routes.length === 0 && (
+                <div className="empty-state">
+                  <div className="empty-icon">--</div>
+                  <h3>{t("No routes configured")}</h3>
+                  <p>{t("Use Route Builder to create model routes.")}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-title">{t("Codex Routes")}</div>
+            <div className="route-list" style={{ marginBottom: 0 }}>
+              {codexRoutes.map(route => (
+                <div key={route.id} className="route-item">
+                  <div className="route-icon" style={{ background: "rgba(217,119,6,0.08)", color: "var(--amber)" }}>
+                    {route.codex_model.slice(0, 3)}
+                  </div>
+                  <div className="route-info">
+                    <div className="route-name">{route.codex_model}</div>
+                    <div className="route-path">{route.display_name || route.upstream_model} via {route.provider_id} · {t(toolCallModeLabel(route.tool_call_mode))}</div>
+                  </div>
+                  <span className={`route-status ${route.enabled ? "active" : "disabled"}`}>{route.enabled ? t("Active") : t("Disabled")}</span>
+                  <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
+                    <button className="btn" style={{ padding: "5px 8px" }} onClick={() => editCodexRoute(route)}><IconEdit /></button>
+                    <button className="btn btn-danger" style={{ padding: "5px 8px" }} onClick={() => delCodexRoute(route.id)}><IconTrash /></button>
+                  </div>
+                </div>
+              ))}
+              {codexRoutes.length === 0 && (
+                <div className="empty-state">
+                  <div className="empty-icon">--</div>
+                  <h3>{t("No Codex routes configured")}</h3>
+                  <p>{t("Use Route Builder to create Codex routes.")}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="two-col" style={{ marginTop: 20 }}>
+          {AliasManager("claude")}
+          {AliasManager("codex")}
+        </div>
+      </div>
+    );
+  };
+
+  // =====================================================
+  //  HEALTH CENTER PAGE
+  // =====================================================
+  const HealthCenterPage = () => {
+    const report = unifiedDiagnostics ?? MOCK_UNIFIED_DIAGNOSTICS;
+    return <HealthCenterPanel report={report} onRefresh={() => void loadAll()} onExport={() => void exportUnifiedDiagnostics()} onClaudeGatewayCheck={checkHealth} onCodexGatewayCheck={checkCodexHealth} onNavigate={(target) => setPage(target as Page)} />;
+  };
+
+  // =====================================================
   //  DIAGNOSTICS PAGE
   // =====================================================
   const DiagnosticsPage = () => {
@@ -4658,6 +4571,19 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
       </div>
     );
   };
+
+  // =====================================================
+  //  USAGE INSIGHTS PAGE
+  // =====================================================
+  const UsageInsightsPage = () => (
+    <UsageInsightsPanel
+      usageInsights={usageInsights}
+      logs={logs}
+      providers={providers}
+      onRefresh={() => void loadAll()}
+      onOpenLogs={() => setPage("logs")}
+    />
+  );
 
   // =====================================================
   //  LOGS PAGE
@@ -5059,11 +4985,14 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
       case "claude": return ClaudePage();
       case "claudeCode": return ClaudeCodePage();
       case "codex": return CodexPage();
+      case "routeBuilder": return RouteBuilderPage();
       case "mcpSync": return McpSyncPage();
       case "coldstart": return ColdStartPage();
       case "providers": return ProvidersPage();
+      case "healthCenter": return HealthCenterPage();
       case "diagnostics": return DiagnosticsPage();
       case "logs": return LogsPage();
+      case "usageInsights": return UsageInsightsPage();
       case "settings": return SettingsPage();
     }
   };

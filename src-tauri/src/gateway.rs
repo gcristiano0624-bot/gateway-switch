@@ -19,7 +19,7 @@ use uuid::Uuid;
 
 use crate::{
     compatibility, database,
-    loop_guard::{LoopGuard, TextGuardAction},
+    loop_guard::{LoopGuard, LoopGuardSummary, TextGuardAction, ToolLoopHint},
     models::{
         GatewayProfile, Provider, ProviderCompatibilityPolicy, RequestDiagnosticSnapshot,
         RequestLog,
@@ -43,6 +43,11 @@ struct Route {
     force_chat_fallback: bool,
     chat_role_mode: ChatRoleMode,
     headers: Vec<(String, String)>,
+}
+
+struct ChatConversion {
+    payload: Value,
+    loop_summary: LoopGuardSummary,
 }
 
 const CLAUDE_REQUEST_BODY_LIMIT_BYTES: usize = 64 * 1024 * 1024;
@@ -324,7 +329,9 @@ async fn messages(
         return chat_completion_fallback(ctx, route, body, req_id, started, is_stream, None).await;
     }
 
-    let mut upstream = body.clone();
+    let guarded = guard_anthropic_request_payload(&body);
+    let mut upstream = guarded.payload;
+    let request_loop_summary = guarded.loop_summary;
     upstream["model"] = json!(route.upstream_model);
 
     let resp = ctx
@@ -379,7 +386,7 @@ async fn messages(
                         status_code: Some(status.as_u16()),
                         duration_ms: Some(started.elapsed().as_millis() as u64),
                         is_stream: false,
-                        error_summary: None,
+                        error_summary: request_loop_summary.to_log_summary(),
                         created_at: String::new(),
                     },
                 );
@@ -479,6 +486,7 @@ async fn messages(
     let upstream_model = route.upstream_model.clone();
     let log_req_id = req_id.clone();
     let db = ctx.db.clone();
+    let request_loop_summary = request_loop_summary.clone();
     let body_stream = resp.bytes_stream();
     let sse = stream! {
         let mut buf = String::new();
@@ -503,7 +511,7 @@ async fn messages(
             request_id: log_req_id, claude_alias: display,
             provider_id, upstream_model, status_code: Some(status.as_u16()),
             duration_ms: Some(started.elapsed().as_millis() as u64),
-            is_stream: true, error_summary: None, created_at: String::new(),
+            is_stream: true, error_summary: request_loop_summary.to_log_summary(), created_at: String::new(),
         });
     };
 
@@ -521,12 +529,14 @@ async fn chat_completion_fallback(
     is_stream: bool,
     prior: Option<(reqwest::StatusCode, Bytes)>,
 ) -> Result<Response, Response> {
-    let chat_req = anthropic_to_chat_request(
+    let conversion = anthropic_to_chat_conversion(
         &body,
         &route.upstream_model,
         is_stream,
         route.chat_role_mode,
     );
+    let chat_req = conversion.payload;
+    let request_loop_summary = conversion.loop_summary;
     let resp = ctx
         .client
         .post(upstream_url(&route.openai_base_url, "chat/completions"))
@@ -620,7 +630,7 @@ async fn chat_completion_fallback(
                 status_code: Some(status.as_u16()),
                 duration_ms: Some(started.elapsed().as_millis() as u64),
                 is_stream: false,
-                error_summary: None,
+                error_summary: request_loop_summary.to_log_summary(),
                 created_at: String::new(),
             },
         );
@@ -632,6 +642,7 @@ async fn chat_completion_fallback(
     let upstream_model = route.upstream_model.clone();
     let log_req_id = req_id.clone();
     let db = ctx.db.clone();
+    let request_loop_summary = request_loop_summary.clone();
     let body_stream = resp.bytes_stream();
     let sse = stream! {
         let message_id = format!("msg_{}", Uuid::new_v4());
@@ -730,7 +741,9 @@ async fn chat_completion_fallback(
         let message_stop = json!({"type":"message_stop"});
         yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!("event: message_stop\ndata: {}\n\n", serde_json::to_string(&message_stop).unwrap())));
 
-        let loop_warning = loop_guard.summary().to_log_summary();
+        let mut combined_loop_summary = request_loop_summary.clone();
+        combined_loop_summary.merge(&loop_guard.summary());
+        let loop_warning = combined_loop_summary.to_log_summary();
         let _ = database::insert_log(&db, &RequestLog {
             request_id: log_req_id, claude_alias: display,
             provider_id, upstream_model, status_code: Some(status.as_u16()),
@@ -1343,7 +1356,51 @@ fn anthropic_to_chat_request(
     stream: bool,
     role_mode: ChatRoleMode,
 ) -> Value {
+    anthropic_to_chat_conversion(body, upstream_model, stream, role_mode).payload
+}
+
+fn guard_anthropic_request_payload(body: &Value) -> ChatConversion {
+    let mut payload = body.clone();
+    let mut loop_guard = LoopGuard::default();
+    let mut tool_loop_hints: Vec<ToolLoopHint> = Vec::new();
+
+    if let Some(messages) = payload.get_mut("messages").and_then(|v| v.as_array_mut()) {
+        for item in messages.iter_mut() {
+            let is_assistant = item.get("role").and_then(|v| v.as_str()) == Some("assistant");
+            let Some(content_value) = item.get_mut("content") else {
+                continue;
+            };
+
+            if is_assistant {
+                observe_anthropic_tool_uses(content_value, &mut loop_guard, &mut tool_loop_hints);
+            } else {
+                compress_anthropic_tool_results(content_value, &mut loop_guard);
+            }
+        }
+
+        if let Some(hint) = loop_guard_context_hint(&tool_loop_hints) {
+            messages.push(json!({
+                "role": "user",
+                "content": [{"type": "text", "text": hint}]
+            }));
+        }
+    }
+
+    ChatConversion {
+        payload,
+        loop_summary: loop_guard.summary(),
+    }
+}
+
+fn anthropic_to_chat_conversion(
+    body: &Value,
+    upstream_model: &str,
+    stream: bool,
+    role_mode: ChatRoleMode,
+) -> ChatConversion {
     let mut messages: Vec<Value> = Vec::new();
+    let mut loop_guard = LoopGuard::default();
+    let mut tool_loop_hints: Vec<ToolLoopHint> = Vec::new();
     let mut pending_system = body
         .get("system")
         .map(anthropic_content_to_text)
@@ -1364,7 +1421,11 @@ fn anthropic_to_chat_request(
 
             if role == "assistant" {
                 let text = anthropic_content_to_text(content_value);
-                let tool_calls = anthropic_tool_uses_to_chat(content_value);
+                let tool_calls = anthropic_tool_uses_to_chat_guarded(
+                    content_value,
+                    &mut loop_guard,
+                    &mut tool_loop_hints,
+                );
                 if !tool_calls.is_empty() {
                     messages.push(
                         json!({"role": "assistant", "content": text, "tool_calls": tool_calls}),
@@ -1375,7 +1436,8 @@ fn anthropic_to_chat_request(
                 continue;
             }
 
-            let tool_results = anthropic_tool_results_to_chat(content_value);
+            let tool_results =
+                anthropic_tool_results_to_chat_guarded(content_value, &mut loop_guard);
             let mut content = anthropic_content_to_text(content_value);
             if let Some(system) = pending_system.take() {
                 content = merge_system_into_user_content(&system, &content);
@@ -1415,6 +1477,10 @@ fn anthropic_to_chat_request(
         messages.push(json!({"role":"user","content":""}));
     }
 
+    if let Some(hint) = loop_guard_context_hint(&tool_loop_hints) {
+        messages.push(json!({"role":"user","content":hint}));
+    }
+
     let mut req = json!({
         "model": upstream_model,
         "messages": messages,
@@ -1450,7 +1516,55 @@ fn anthropic_to_chat_request(
         }
     }
 
-    req
+    ChatConversion {
+        payload: req,
+        loop_summary: loop_guard.summary(),
+    }
+}
+
+fn observe_anthropic_tool_uses(
+    value: &Value,
+    loop_guard: &mut LoopGuard,
+    tool_loop_hints: &mut Vec<ToolLoopHint>,
+) {
+    if let Some(parts) = value.as_array() {
+        for part in parts {
+            if part.get("type").and_then(|v| v.as_str()) != Some("tool_use") {
+                continue;
+            }
+            let Some(name) = part.get("name").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let input = part.get("input").cloned().unwrap_or_else(|| json!({}));
+            let arguments = serde_json::to_string(&input).unwrap_or_else(|_| "{}".into());
+            if let Some(hint) = loop_guard.observe_tool_call_pattern(name, &arguments) {
+                tool_loop_hints.push(hint);
+            }
+        }
+    }
+}
+
+fn compress_anthropic_tool_results(value: &mut Value, loop_guard: &mut LoopGuard) {
+    if let Some(parts) = value.as_array_mut() {
+        for part in parts {
+            if part.get("type").and_then(|v| v.as_str()) != Some("tool_result") {
+                continue;
+            }
+            let id = part
+                .get("tool_use_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let content = part
+                .get("content")
+                .map(anthropic_content_to_text)
+                .unwrap_or_default();
+            let compressed = loop_guard.compress_tool_result(&id, &content);
+            if compressed != content {
+                part["content"] = json!(compressed);
+            }
+        }
+    }
 }
 
 fn merge_system_into_user_content(system: &str, user: &str) -> String {
@@ -1461,31 +1575,45 @@ fn merge_system_into_user_content(system: &str, user: &str) -> String {
     }
 }
 
-fn anthropic_tool_uses_to_chat(value: &Value) -> Vec<Value> {
+fn anthropic_tool_uses_to_chat_guarded(
+    value: &Value,
+    loop_guard: &mut LoopGuard,
+    tool_loop_hints: &mut Vec<ToolLoopHint>,
+) -> Vec<Value> {
     value
         .as_array()
         .map(|parts| {
-            parts.iter().filter_map(|part| {
-                if part.get("type").and_then(|v| v.as_str()) != Some("tool_use") {
-                    return None;
-                }
-                let id = part.get("id").and_then(|v| v.as_str()).unwrap_or_else(|| "toolu_unknown");
-                let name = part.get("name").and_then(|v| v.as_str())?;
-                let input = part.get("input").cloned().unwrap_or_else(|| json!({}));
-                Some(json!({
-                    "id": id,
-                    "type": "function",
-                    "function": {
-                        "name": name,
-                        "arguments": serde_json::to_string(&input).unwrap_or_else(|_| "{}".into())
+            parts
+                .iter()
+                .filter_map(|part| {
+                    if part.get("type").and_then(|v| v.as_str()) != Some("tool_use") {
+                        return None;
                     }
-                }))
-            }).collect()
+                    let id = part
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_else(|| "toolu_unknown");
+                    let name = part.get("name").and_then(|v| v.as_str())?;
+                    let input = part.get("input").cloned().unwrap_or_else(|| json!({}));
+                    let arguments = serde_json::to_string(&input).unwrap_or_else(|_| "{}".into());
+                    if let Some(hint) = loop_guard.observe_tool_call_pattern(name, &arguments) {
+                        tool_loop_hints.push(hint);
+                    }
+                    Some(json!({
+                        "id": id,
+                        "type": "function",
+                        "function": {
+                            "name": name,
+                            "arguments": arguments
+                        }
+                    }))
+                })
+                .collect()
         })
         .unwrap_or_default()
 }
 
-fn anthropic_tool_results_to_chat(value: &Value) -> Vec<Value> {
+fn anthropic_tool_results_to_chat_guarded(value: &Value, loop_guard: &mut LoopGuard) -> Vec<Value> {
     value
         .as_array()
         .map(|parts| {
@@ -1503,11 +1631,20 @@ fn anthropic_tool_results_to_chat(value: &Value) -> Vec<Value> {
                         .get("content")
                         .map(anthropic_content_to_text)
                         .unwrap_or_default();
+                    let content = loop_guard.compress_tool_result(id, &content);
                     Some(json!({"role":"tool","tool_call_id":id,"content":content}))
                 })
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn loop_guard_context_hint(hints: &[ToolLoopHint]) -> Option<String> {
+    let hint = hints.first()?;
+    Some(format!(
+        "Gateway Switch LoopGuard note: the tool `{}` with similar arguments appears {} times in the recent context. This approach may be looping. Before calling it again, consider a different strategy, summarize what failed, or ask the user for guidance.",
+        hint.tool_name, hint.repeats
+    ))
 }
 
 fn anthropic_content_to_text(value: &Value) -> String {
@@ -1966,6 +2103,10 @@ mod tests {
     };
     use tower::ServiceExt;
 
+    fn test_client() -> Client {
+        Client::builder().no_proxy().build().unwrap()
+    }
+
     #[test]
     fn test_gateway_route_resolve_marks_volcengine_deepseek_user_assistant_only() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2238,7 +2379,7 @@ mod tests {
 
         let app = build_router(Ctx {
             db,
-            client: Client::new(),
+            client: test_client(),
             profile: GatewayProfile {
                 listen_host: "127.0.0.1".into(),
                 listen_port: 3456,
@@ -2324,7 +2465,7 @@ mod tests {
 
         let app = build_router(Ctx {
             db,
-            client: Client::new(),
+            client: test_client(),
             profile: GatewayProfile {
                 listen_host: "127.0.0.1".into(),
                 listen_port: 3456,
@@ -2416,7 +2557,7 @@ mod tests {
 
         let app = build_router(Ctx {
             db,
-            client: Client::new(),
+            client: test_client(),
             profile: GatewayProfile {
                 listen_host: "127.0.0.1".into(),
                 listen_port: 3456,
@@ -2448,7 +2589,7 @@ mod tests {
 
         let app = build_router(Ctx {
             db,
-            client: Client::new(),
+            client: test_client(),
             profile: GatewayProfile {
                 listen_host: "127.0.0.1".into(),
                 listen_port: 3456,
@@ -2555,7 +2696,7 @@ mod tests {
 
         let app = build_router(Ctx {
             db,
-            client: Client::new(),
+            client: test_client(),
             profile: GatewayProfile {
                 listen_host: "127.0.0.1".into(),
                 listen_port: 3456,
@@ -2669,6 +2810,102 @@ mod tests {
             resp["content"][0]["input"]["query"],
             "Manchester United transfers"
         );
+    }
+
+    #[test]
+    fn test_large_tool_result_is_compressed_before_chat_conversion() {
+        let large_result = "x".repeat(60_000);
+        let conversion = anthropic_to_chat_conversion(
+            &json!({
+                "model":"claude-sonnet-4-6",
+                "messages":[{
+                    "role":"user",
+                    "content":[{
+                        "type":"tool_result",
+                        "tool_use_id":"toolu_large",
+                        "content":large_result
+                    }]
+                }]
+            }),
+            "mimo-v2.5",
+            false,
+            ChatRoleMode::Standard,
+        );
+
+        let content = conversion.payload["messages"][0]["content"]
+            .as_str()
+            .unwrap_or_default();
+        assert!(content.contains("tool_result compressed"));
+        assert!(content.contains("original_chars: 60000"));
+        assert!(content.chars().count() < 60_000);
+        assert_eq!(conversion.loop_summary.large_tool_results, 1);
+    }
+
+    #[test]
+    fn test_repeated_tool_use_injects_loopguard_hint() {
+        let repeated = json!({
+            "type":"tool_use",
+            "id":"toolu_1",
+            "name":"Read",
+            "input":{"file_path":"/tmp/large.html"}
+        });
+        let conversion = anthropic_to_chat_conversion(
+            &json!({
+                "model":"claude-sonnet-4-6",
+                "messages":[{
+                    "role":"assistant",
+                    "content":[repeated.clone(), repeated.clone(), repeated]
+                }]
+            }),
+            "mimo-v2.5",
+            false,
+            ChatRoleMode::Standard,
+        );
+
+        let messages = conversion.payload["messages"].as_array().unwrap();
+        let last = messages.last().unwrap()["content"]
+            .as_str()
+            .unwrap_or_default();
+        assert!(last.contains("Gateway Switch LoopGuard note"));
+        assert!(last.contains("Read"));
+        assert_eq!(conversion.loop_summary.tool_loop_hints, 1);
+        assert!(conversion.loop_summary.duplicate_tool_calls >= 2);
+    }
+
+    #[test]
+    fn test_direct_anthropic_payload_is_guarded() {
+        let repeated = json!({
+            "type":"tool_use",
+            "id":"toolu_1",
+            "name":"Read",
+            "input":{"file_path":"/tmp/large.html"}
+        });
+        let guarded = guard_anthropic_request_payload(&json!({
+            "model":"claude-sonnet-4-6",
+            "messages":[{
+                "role":"assistant",
+                "content":[repeated.clone(), repeated.clone(), repeated]
+            },{
+                "role":"user",
+                "content":[{
+                    "type":"tool_result",
+                    "tool_use_id":"toolu_1",
+                    "content":"x".repeat(60_000)
+                }]
+            }]
+        }));
+
+        let messages = guarded.payload["messages"].as_array().unwrap();
+        let compressed = messages[1]["content"][0]["content"]
+            .as_str()
+            .unwrap_or_default();
+        let hint = messages.last().unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap_or_default();
+        assert!(compressed.contains("tool_result compressed"));
+        assert!(hint.contains("Gateway Switch LoopGuard note"));
+        assert_eq!(guarded.loop_summary.large_tool_results, 1);
+        assert_eq!(guarded.loop_summary.tool_loop_hints, 1);
     }
 
     #[test]

@@ -6,6 +6,7 @@ use crate::{
     settings,
     state::{AppState, GatewayStatus},
 };
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs, process::Command, time::Instant};
 use tauri::{AppHandle, State};
@@ -115,6 +116,470 @@ pub struct SafeInstallPlan {
     pub release_artifacts_dir: Option<String>,
     pub steps: Vec<String>,
     pub warning: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AppWorkbenchSummary {
+    pub app_id: String,
+    pub label: String,
+    pub managed: bool,
+    pub gateway_running: bool,
+    pub route_count: usize,
+    pub provider_count: usize,
+    pub active_model: Option<String>,
+    pub recent_request_count: usize,
+    pub recent_failure_count: usize,
+    pub next_action: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RuntimeDashboardReport {
+    pub generated_at: String,
+    pub overall_status: String,
+    pub overall_score: u8,
+    pub claude_gateway: HealthStatus,
+    pub codex_gateway: HealthStatus,
+    pub provider_count: usize,
+    pub claude_route_count: usize,
+    pub codex_route_count: usize,
+    pub apps: Vec<AppWorkbenchSummary>,
+    pub recent_failures: Vec<RequestLog>,
+    pub recent_activity: Vec<RequestLog>,
+    pub runtime_source: RuntimeSourceReport,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AppWorkbenchReport {
+    pub generated_at: String,
+    pub app: AppWorkbenchSummary,
+    pub desktop: Option<desktop_binding::DesktopInfo>,
+    pub claude_code: Option<ClaudeCodeInfo>,
+    pub codex_binding: Option<CodexBindingInfo>,
+    pub claude_routes: Vec<ModelRoute>,
+    pub codex_routes: Vec<CodexRoute>,
+    pub providers: Vec<Provider>,
+    pub recent_logs: Vec<RequestLog>,
+    pub diagnostics: UnifiedDiagnosticsReport,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProviderConsoleItem {
+    pub provider: Provider,
+    pub supports_claude: bool,
+    pub supports_codex: bool,
+    pub linked_claude_routes: usize,
+    pub linked_codex_routes: usize,
+    pub recent_request_count: usize,
+    pub recent_failure_count: usize,
+    pub health_score: u8,
+    pub policy_tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProviderConsoleReport {
+    pub generated_at: String,
+    pub providers: Vec<ProviderConsoleItem>,
+    pub presets: Vec<ProviderPreset>,
+    pub policies: Vec<ProviderCompatibilityPolicy>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct UsageProviderStat {
+    pub provider_id: String,
+    pub provider_name: String,
+    pub request_count: usize,
+    pub failure_count: usize,
+    pub success_rate: u8,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct UsageStatusBucket {
+    pub status: String,
+    pub count: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct UsageInsightsReport {
+    pub generated_at: String,
+    pub total_requests: usize,
+    pub success_rate: u8,
+    pub failure_count: usize,
+    pub average_latency_ms: Option<u64>,
+    pub p95_latency_ms: Option<u64>,
+    pub provider_stats: Vec<UsageProviderStat>,
+    pub status_buckets: Vec<UsageStatusBucket>,
+    pub recent_logs: Vec<RequestLog>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RouteBuilderPayload {
+    pub target_app: String,
+    pub route_id: String,
+    pub visible_model: String,
+    pub display_name: String,
+    pub provider_id: String,
+    pub upstream_model: String,
+    pub tool_call_mode: Option<String>,
+    pub conflict_strategy: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RouteBuilderPreview {
+    pub target_app: String,
+    pub route_kind: String,
+    pub route_id: String,
+    pub visible_model: String,
+    pub provider_id: String,
+    pub provider_name: String,
+    pub upstream_model: String,
+    pub conflict: bool,
+    pub conflict_detail: Option<String>,
+    pub policy_tags: Vec<String>,
+    pub warnings: Vec<String>,
+    pub next_action: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RouteBuilderApplyReport {
+    pub preview: RouteBuilderPreview,
+    pub claude_routes: Vec<ModelRoute>,
+    pub codex_routes: Vec<CodexRoute>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderWizardPayload {
+    pub preset_id: String,
+    pub api_key: Option<String>,
+    pub target_app: Option<String>,
+    pub route_id: Option<String>,
+    pub visible_model: Option<String>,
+    pub display_name: Option<String>,
+    pub upstream_model: Option<String>,
+    pub apply_route: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProviderWizardPreview {
+    pub preset: ProviderPreset,
+    pub provider_exists: bool,
+    pub provider_has_key: bool,
+    pub route_preview: Option<RouteBuilderPreview>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProviderWizardApplyReport {
+    pub provider: Provider,
+    pub providers: Vec<Provider>,
+    pub policies: Vec<ProviderCompatibilityPolicy>,
+    pub route_report: Option<RouteBuilderApplyReport>,
+}
+
+fn request_failed(log: &RequestLog) -> bool {
+    log.status_code.map(|code| code >= 400).unwrap_or(true)
+}
+
+fn route_provider_ids(routes: &[ModelRoute], codex_routes: &[CodexRoute]) -> Vec<String> {
+    routes
+        .iter()
+        .map(|route| route.provider_id.clone())
+        .chain(codex_routes.iter().map(|route| route.provider_id.clone()))
+        .collect()
+}
+
+fn policy_tags(policy: Option<&ProviderCompatibilityPolicy>) -> Vec<String> {
+    let Some(policy) = policy else {
+        return Vec::new();
+    };
+    [
+        (policy.system_to_user, "system_to_user"),
+        (policy.tool_to_user, "tool_to_user"),
+        (policy.disable_tools, "disable_tools"),
+        (policy.strip_unsupported_params, "strip_params"),
+        (policy.direct_provider_safe, "direct_safe"),
+        (policy.gateway_route_recommended, "gateway_route"),
+        (policy.codex_disable_responses, "codex_chat_fallback"),
+        (policy.codex_strict_tool_calls, "strict_tools"),
+        (policy.codex_strip_reasoning, "strip_reasoning"),
+    ]
+    .into_iter()
+    .filter_map(|(enabled, label)| enabled.unwrap_or(false).then(|| label.to_string()))
+    .collect()
+}
+
+fn app_logs<'a>(
+    app_id: &str,
+    routes: &[ModelRoute],
+    codex_routes: &[CodexRoute],
+    logs: &'a [RequestLog],
+) -> Vec<&'a RequestLog> {
+    logs.iter()
+        .filter(|log| match app_id {
+            "codex" => codex_routes
+                .iter()
+                .any(|route| route.codex_model == log.claude_alias),
+            _ => routes
+                .iter()
+                .any(|route| route.claude_alias == log.claude_alias),
+        })
+        .collect()
+}
+
+fn app_summaries(
+    desktop: &desktop_binding::DesktopInfo,
+    claude_code: &ClaudeCodeInfo,
+    codex_binding: &CodexBindingInfo,
+    claude_gateway_running: bool,
+    codex_gateway_running: bool,
+    routes: &[ModelRoute],
+    codex_routes: &[CodexRoute],
+    providers: &[Provider],
+    logs: &[RequestLog],
+) -> Vec<AppWorkbenchSummary> {
+    let claude_logs = app_logs("claude_desktop", routes, codex_routes, logs);
+    let codex_logs = app_logs("codex", routes, codex_routes, logs);
+    vec![
+        AppWorkbenchSummary {
+            app_id: "claude_desktop".into(),
+            label: "Claude Desktop".into(),
+            managed: desktop.managed,
+            gateway_running: claude_gateway_running,
+            route_count: routes.iter().filter(|route| route.enabled).count(),
+            provider_count: providers.len(),
+            active_model: desktop.models.first().cloned(),
+            recent_request_count: claude_logs.len(),
+            recent_failure_count: claude_logs.iter().filter(|log| request_failed(log)).count(),
+            next_action: if !desktop.managed {
+                "Bind Claude Desktop to Gateway Switch".into()
+            } else if !claude_gateway_running {
+                "Start or repair Claude Gateway".into()
+            } else if routes.is_empty() {
+                "Build a Claude route".into()
+            } else {
+                "Monitor recent Claude requests".into()
+            },
+        },
+        AppWorkbenchSummary {
+            app_id: "claude_code".into(),
+            label: "Claude Code".into(),
+            managed: claude_code.managed,
+            gateway_running: claude_gateway_running,
+            route_count: routes.iter().filter(|route| route.enabled).count(),
+            provider_count: providers.len(),
+            active_model: claude_code.model.clone(),
+            recent_request_count: claude_logs.len(),
+            recent_failure_count: claude_logs.iter().filter(|log| request_failed(log)).count(),
+            next_action: if !claude_code.managed {
+                "Bind Claude Code to a Gateway Route".into()
+            } else if !claude_gateway_running {
+                "Start or repair Claude Gateway".into()
+            } else {
+                "Review Claude Code route diagnostics".into()
+            },
+        },
+        AppWorkbenchSummary {
+            app_id: "codex".into(),
+            label: "Codex".into(),
+            managed: codex_binding.managed,
+            gateway_running: codex_gateway_running,
+            route_count: codex_routes.iter().filter(|route| route.enabled).count(),
+            provider_count: providers.len(),
+            active_model: codex_binding.model.clone(),
+            recent_request_count: codex_logs.len(),
+            recent_failure_count: codex_logs.iter().filter(|log| request_failed(log)).count(),
+            next_action: if !codex_binding.managed {
+                "Bind Codex to the local Responses gateway".into()
+            } else if !codex_gateway_running {
+                "Start or repair Codex Gateway".into()
+            } else if codex_routes.is_empty() {
+                "Build a Codex route".into()
+            } else {
+                "Monitor Codex usage and reliability".into()
+            },
+        },
+    ]
+}
+
+fn validate_route_target(target_app: &str) -> Result<&'static str, String> {
+    match target_app {
+        "claude_desktop" => Ok("claude_desktop_alias"),
+        "claude_code" => Ok("claude_code_gateway"),
+        "codex" => Ok("codex_responses"),
+        _ => Err(format!("Unsupported target_app: {target_app}")),
+    }
+}
+
+fn route_builder_preview_from_payload(
+    providers: &[Provider],
+    routes: &[ModelRoute],
+    codex_routes: &[CodexRoute],
+    policies: &[ProviderCompatibilityPolicy],
+    payload: &RouteBuilderPayload,
+) -> Result<RouteBuilderPreview, String> {
+    let route_kind = validate_route_target(&payload.target_app)?.to_string();
+    let route_id = payload.route_id.trim();
+    let visible_model = payload.visible_model.trim();
+    let provider_id = payload.provider_id.trim();
+    let upstream_model = payload.upstream_model.trim();
+    if route_id.is_empty() {
+        return Err("Route ID is required".into());
+    }
+    if visible_model.is_empty() {
+        return Err("Visible model is required".into());
+    }
+    if provider_id.is_empty() {
+        return Err("Provider is required".into());
+    }
+    if upstream_model.is_empty() {
+        return Err("Upstream model is required".into());
+    }
+    let provider = providers
+        .iter()
+        .find(|provider| provider.id == provider_id)
+        .ok_or_else(|| format!("Provider '{provider_id}' not found"))?;
+    let conflict_detail = if payload.target_app == "codex" {
+        codex_routes
+            .iter()
+            .find(|route| route.id == route_id || route.codex_model == visible_model)
+            .map(|route| {
+                format!(
+                    "Codex route '{}' or model '{}' already exists",
+                    route.id, route.codex_model
+                )
+            })
+    } else {
+        routes
+            .iter()
+            .find(|route| route.id == route_id || route.claude_alias == visible_model)
+            .map(|route| {
+                format!(
+                    "Claude route '{}' or alias '{}' already exists",
+                    route.id, route.claude_alias
+                )
+            })
+    };
+    let policy = policies
+        .iter()
+        .find(|policy| policy.provider_id == provider_id);
+    let mut warnings = Vec::new();
+    if payload.target_app == "claude_code" {
+        warnings.push("Claude Code direct-provider risk is avoided by using Gateway Route.".into());
+    }
+    if payload.target_app == "codex"
+        && policy
+            .and_then(|policy| policy.codex_disable_responses)
+            .unwrap_or(false)
+    {
+        warnings
+            .push("This provider is likely to use Responses-to-Chat fallback for Codex.".into());
+    }
+    if !provider.enabled {
+        warnings.push("Provider is disabled; enable it before using this route.".into());
+    }
+    let conflict = conflict_detail.is_some();
+    Ok(RouteBuilderPreview {
+        target_app: payload.target_app.clone(),
+        route_kind,
+        route_id: route_id.into(),
+        visible_model: visible_model.into(),
+        provider_id: provider.id.clone(),
+        provider_name: provider.name.clone(),
+        upstream_model: upstream_model.into(),
+        conflict,
+        conflict_detail,
+        policy_tags: policy_tags(policy),
+        warnings,
+        next_action: if conflict {
+            "Choose update existing or change the route/model name.".into()
+        } else {
+            "Save route and run Quick Check.".into()
+        },
+    })
+}
+
+fn apply_route_builder_inner(
+    st: &AppState,
+    payload: &RouteBuilderPayload,
+) -> Result<RouteBuilderApplyReport, String> {
+    let providers = database::list_providers(&st.db_path)?;
+    let routes = database::list_routes(&st.db_path)?;
+    let codex_routes = database::list_codex_routes(&st.db_path)?;
+    let policies = database::list_provider_policies(&st.db_path)?;
+    let preview =
+        route_builder_preview_from_payload(&providers, &routes, &codex_routes, &policies, payload)?;
+    let update_existing = payload.conflict_strategy.as_deref() == Some("update");
+    if preview.conflict && !update_existing {
+        return Err(preview
+            .conflict_detail
+            .clone()
+            .unwrap_or_else(|| "Route conflict detected".into()));
+    }
+
+    if payload.target_app == "codex" {
+        let existing = codex_routes.iter().find(|route| {
+            route.id == preview.route_id || route.codex_model == preview.visible_model
+        });
+        if let Some(existing) = existing {
+            database::update_codex_route(
+                &st.db_path,
+                &UpdateCodexRoute {
+                    id: existing.id.clone(),
+                    codex_model: preview.visible_model.clone(),
+                    display_name: payload.display_name.trim().to_string(),
+                    provider_id: preview.provider_id.clone(),
+                    upstream_model: preview.upstream_model.clone(),
+                    tool_call_mode: payload.tool_call_mode.clone(),
+                    enabled: true,
+                },
+            )?;
+        } else {
+            database::create_codex_route(
+                &st.db_path,
+                &CreateCodexRoute {
+                    id: preview.route_id.clone(),
+                    codex_model: preview.visible_model.clone(),
+                    display_name: payload.display_name.trim().to_string(),
+                    provider_id: preview.provider_id.clone(),
+                    upstream_model: preview.upstream_model.clone(),
+                    tool_call_mode: payload.tool_call_mode.clone(),
+                },
+            )?;
+        }
+    } else {
+        let existing = routes.iter().find(|route| {
+            route.id == preview.route_id || route.claude_alias == preview.visible_model
+        });
+        if let Some(existing) = existing {
+            database::update_route(
+                &st.db_path,
+                &UpdateModelRoute {
+                    id: existing.id.clone(),
+                    claude_alias: preview.visible_model.clone(),
+                    display_name: payload.display_name.trim().to_string(),
+                    provider_id: preview.provider_id.clone(),
+                    upstream_model: preview.upstream_model.clone(),
+                    enabled: true,
+                },
+            )?;
+        } else {
+            database::create_route(
+                &st.db_path,
+                &CreateModelRoute {
+                    id: preview.route_id.clone(),
+                    claude_alias: preview.visible_model.clone(),
+                    display_name: payload.display_name.trim().to_string(),
+                    provider_id: preview.provider_id.clone(),
+                    upstream_model: preview.upstream_model.clone(),
+                },
+            )?;
+        }
+    }
+
+    Ok(RouteBuilderApplyReport {
+        preview,
+        claude_routes: database::list_routes(&st.db_path)?,
+        codex_routes: database::list_codex_routes(&st.db_path)?,
+    })
 }
 
 #[tauri::command]
@@ -280,6 +745,478 @@ pub fn reveal_safe_install_locations() -> Result<String, String> {
         let _ = Command::new("open").arg(&dir).status();
     }
     Ok("Opened /Applications and the latest local release-artifacts folder when available.".into())
+}
+
+#[tauri::command]
+pub async fn get_runtime_dashboard(
+    st: State<'_, AppState>,
+) -> Result<RuntimeDashboardReport, String> {
+    let providers = database::list_providers(&st.db_path)?;
+    let routes = database::list_routes(&st.db_path)?;
+    let codex_routes = database::list_codex_routes(&st.db_path)?;
+    let logs = database::list_logs(&st.db_path, 40)?;
+    let desktop = desktop_binding::inspect(&dirs::home_dir().ok_or("no home")?)?;
+    let claude_code = claude_code_binding::inspect(&dirs::home_dir().ok_or("no home")?)?;
+    let codex_binding = codex_binding::inspect(&dirs::home_dir().ok_or("no home")?)?;
+    let profile = database::get_profile(&st.db_path)?;
+    let codex_profile = database::get_codex_profile(&st.db_path)?;
+    let claude_gateway = probe_gateway_health(&profile).await;
+    let codex_gateway = probe_codex_gateway_health(&codex_profile).await;
+    let recent_failures = logs
+        .iter()
+        .filter(|log| request_failed(log))
+        .take(10)
+        .cloned()
+        .collect::<Vec<_>>();
+    let provider_ids = route_provider_ids(&routes, &codex_routes);
+    let active_provider_count = providers
+        .iter()
+        .filter(|provider| provider_ids.iter().any(|id| id == &provider.id))
+        .count();
+    let apps = app_summaries(
+        &desktop,
+        &claude_code,
+        &codex_binding,
+        claude_gateway.ok,
+        codex_gateway.ok,
+        &routes,
+        &codex_routes,
+        &providers,
+        &logs,
+    );
+    let healthy_apps = apps
+        .iter()
+        .filter(|app| app.managed && app.gateway_running)
+        .count();
+    let mut overall_score = 30
+        + (healthy_apps as u8 * 15)
+        + if active_provider_count > 0 { 10 } else { 0 }
+        + if recent_failures.is_empty() { 15 } else { 0 };
+    overall_score = overall_score.min(100);
+    let overall_status = if overall_score >= 85 {
+        "healthy"
+    } else if overall_score >= 65 {
+        "attention"
+    } else if overall_score >= 40 {
+        "degraded"
+    } else {
+        "critical"
+    }
+    .to_string();
+
+    Ok(RuntimeDashboardReport {
+        generated_at: Utc::now().to_rfc3339(),
+        overall_status,
+        overall_score,
+        claude_gateway,
+        codex_gateway,
+        provider_count: providers.len(),
+        claude_route_count: routes.len(),
+        codex_route_count: codex_routes.len(),
+        apps,
+        recent_failures,
+        recent_activity: logs.into_iter().take(10).collect(),
+        runtime_source: get_runtime_source_report(),
+    })
+}
+
+#[tauri::command]
+pub fn get_app_workbench(
+    st: State<'_, AppState>,
+    app_id: String,
+) -> Result<AppWorkbenchReport, String> {
+    if !matches!(app_id.as_str(), "claude_desktop" | "claude_code" | "codex") {
+        return Err(format!("Unsupported app_id: {app_id}"));
+    }
+    let providers = database::list_providers(&st.db_path)?;
+    let routes = database::list_routes(&st.db_path)?;
+    let codex_routes = database::list_codex_routes(&st.db_path)?;
+    let logs = database::list_logs(&st.db_path, 80)?;
+    let desktop = desktop_binding::inspect(&dirs::home_dir().ok_or("no home")?)?;
+    let claude_code = claude_code_binding::inspect(&dirs::home_dir().ok_or("no home")?)?;
+    let codex_binding = codex_binding::inspect(&dirs::home_dir().ok_or("no home")?)?;
+    let gateway_running = gateway::status(&st)
+        .map(|status| status.running)
+        .unwrap_or(false);
+    let codex_gateway_running = codex_gateway::status(&st)
+        .map(|status| status.running)
+        .unwrap_or(false);
+    let apps = app_summaries(
+        &desktop,
+        &claude_code,
+        &codex_binding,
+        gateway_running,
+        codex_gateway_running,
+        &routes,
+        &codex_routes,
+        &providers,
+        &logs,
+    );
+    let app = apps
+        .into_iter()
+        .find(|summary| summary.app_id == app_id)
+        .ok_or_else(|| format!("Unsupported app_id: {app_id}"))?;
+    let recent_logs = logs
+        .into_iter()
+        .filter(|log| match app_id.as_str() {
+            "codex" => codex_routes
+                .iter()
+                .any(|route| route.codex_model == log.claude_alias),
+            _ => routes
+                .iter()
+                .any(|route| route.claude_alias == log.claude_alias),
+        })
+        .take(30)
+        .collect();
+
+    Ok(AppWorkbenchReport {
+        generated_at: Utc::now().to_rfc3339(),
+        app,
+        desktop: (app_id == "claude_desktop").then_some(desktop),
+        claude_code: (app_id == "claude_code").then_some(claude_code),
+        codex_binding: (app_id == "codex").then_some(codex_binding),
+        claude_routes: routes,
+        codex_routes,
+        providers,
+        recent_logs,
+        diagnostics: unified_diagnostics_report(&st)?,
+    })
+}
+
+#[tauri::command]
+pub fn get_provider_console(st: State<'_, AppState>) -> Result<ProviderConsoleReport, String> {
+    let providers = database::list_providers(&st.db_path)?;
+    let routes = database::list_routes(&st.db_path)?;
+    let codex_routes = database::list_codex_routes(&st.db_path)?;
+    let policies = database::list_provider_policies(&st.db_path)?;
+    let logs = database::list_logs(&st.db_path, 200)?;
+    let items = providers
+        .iter()
+        .cloned()
+        .map(|provider| {
+            let linked_claude_routes = routes
+                .iter()
+                .filter(|route| route.provider_id == provider.id)
+                .count();
+            let linked_codex_routes = codex_routes
+                .iter()
+                .filter(|route| route.provider_id == provider.id)
+                .count();
+            let recent_request_count = logs
+                .iter()
+                .filter(|log| log.provider_id == provider.id)
+                .count();
+            let recent_failure_count = logs
+                .iter()
+                .filter(|log| log.provider_id == provider.id && request_failed(log))
+                .count();
+            let policy = policies
+                .iter()
+                .find(|policy| policy.provider_id == provider.id);
+            let health_score = if !provider.enabled {
+                0
+            } else if recent_request_count == 0 {
+                75
+            } else {
+                let success_count = recent_request_count.saturating_sub(recent_failure_count);
+                ((success_count * 100) / recent_request_count) as u8
+            };
+            ProviderConsoleItem {
+                supports_claude: provider.anthropic_base_url.is_some() || linked_claude_routes > 0,
+                supports_codex: !provider.openai_base_url.trim().is_empty(),
+                linked_claude_routes,
+                linked_codex_routes,
+                recent_request_count,
+                recent_failure_count,
+                health_score,
+                policy_tags: policy_tags(policy),
+                provider,
+            }
+        })
+        .collect();
+
+    Ok(ProviderConsoleReport {
+        generated_at: Utc::now().to_rfc3339(),
+        providers: items,
+        presets: built_in_provider_presets(),
+        policies,
+    })
+}
+
+#[tauri::command]
+pub fn get_usage_insights(st: State<'_, AppState>) -> Result<UsageInsightsReport, String> {
+    let providers = database::list_providers(&st.db_path)?;
+    let logs = database::list_logs(&st.db_path, 500)?;
+    let total_requests = logs.len();
+    let failure_count = logs.iter().filter(|log| request_failed(log)).count();
+    let success_rate = if total_requests == 0 {
+        0
+    } else {
+        (((total_requests - failure_count) * 100) / total_requests) as u8
+    };
+    let mut durations = logs
+        .iter()
+        .filter_map(|log| log.duration_ms)
+        .collect::<Vec<_>>();
+    durations.sort_unstable();
+    let average_latency_ms = if durations.is_empty() {
+        None
+    } else {
+        Some(durations.iter().sum::<u64>() / durations.len() as u64)
+    };
+    let p95_latency_ms = if durations.is_empty() {
+        None
+    } else {
+        Some(durations[((durations.len() as f64 * 0.95).floor() as usize).min(durations.len() - 1)])
+    };
+    let provider_stats = providers
+        .iter()
+        .map(|provider| {
+            let request_count = logs
+                .iter()
+                .filter(|log| log.provider_id == provider.id)
+                .count();
+            let failure_count = logs
+                .iter()
+                .filter(|log| log.provider_id == provider.id && request_failed(log))
+                .count();
+            let success_rate = if request_count == 0 {
+                0
+            } else {
+                (((request_count - failure_count) * 100) / request_count) as u8
+            };
+            UsageProviderStat {
+                provider_id: provider.id.clone(),
+                provider_name: provider.name.clone(),
+                request_count,
+                failure_count,
+                success_rate,
+            }
+        })
+        .collect();
+    let mut buckets = HashMap::<String, usize>::new();
+    for log in &logs {
+        let key = log
+            .status_code
+            .map(|code| code.to_string())
+            .unwrap_or_else(|| "network".into());
+        *buckets.entry(key).or_default() += 1;
+    }
+    let mut status_buckets = buckets
+        .into_iter()
+        .map(|(status, count)| UsageStatusBucket { status, count })
+        .collect::<Vec<_>>();
+    status_buckets.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.status.cmp(&b.status)));
+
+    Ok(UsageInsightsReport {
+        generated_at: Utc::now().to_rfc3339(),
+        total_requests,
+        success_rate,
+        failure_count,
+        average_latency_ms,
+        p95_latency_ms,
+        provider_stats,
+        status_buckets,
+        recent_logs: logs.into_iter().take(80).collect(),
+    })
+}
+
+#[tauri::command]
+pub fn preview_route_builder(
+    st: State<'_, AppState>,
+    payload: RouteBuilderPayload,
+) -> Result<RouteBuilderPreview, String> {
+    let providers = database::list_providers(&st.db_path)?;
+    let routes = database::list_routes(&st.db_path)?;
+    let codex_routes = database::list_codex_routes(&st.db_path)?;
+    let policies = database::list_provider_policies(&st.db_path)?;
+    route_builder_preview_from_payload(&providers, &routes, &codex_routes, &policies, &payload)
+}
+
+#[tauri::command]
+pub fn apply_route_builder(
+    st: State<'_, AppState>,
+    payload: RouteBuilderPayload,
+) -> Result<RouteBuilderApplyReport, String> {
+    apply_route_builder_inner(&st, &payload)
+}
+
+#[tauri::command]
+pub fn preview_provider_wizard(
+    st: State<'_, AppState>,
+    payload: ProviderWizardPayload,
+) -> Result<ProviderWizardPreview, String> {
+    let preset = built_in_provider_presets()
+        .into_iter()
+        .find(|p| p.id == payload.preset_id)
+        .ok_or_else(|| format!("Provider preset '{}' not found", payload.preset_id))?;
+    let providers = database::list_providers(&st.db_path)?;
+    let provider_exists = providers.iter().any(|provider| provider.id == preset.id);
+    let provider_has_key = providers
+        .iter()
+        .find(|provider| provider.id == preset.id)
+        .and_then(|provider| provider.api_key.as_deref())
+        .map(|key| !key.trim().is_empty())
+        .unwrap_or(false)
+        || payload
+            .api_key
+            .as_deref()
+            .map(|key| !key.trim().is_empty())
+            .unwrap_or(false);
+    let route_preview = if let Some(target_app) = payload.target_app.as_deref() {
+        let route_payload = RouteBuilderPayload {
+            target_app: target_app.into(),
+            route_id: payload
+                .route_id
+                .clone()
+                .unwrap_or_else(|| format!("{}-{}", target_app.replace('_', "-"), preset.id)),
+            visible_model: payload.visible_model.clone().unwrap_or_else(|| {
+                if target_app == "codex" {
+                    preset.recommended_codex_model.clone()
+                } else {
+                    preset.recommended_claude_alias.clone()
+                }
+            }),
+            display_name: payload
+                .display_name
+                .clone()
+                .unwrap_or_else(|| format!("{} via {}", target_app.replace('_', " "), preset.name)),
+            provider_id: preset.id.clone(),
+            upstream_model: payload
+                .upstream_model
+                .clone()
+                .unwrap_or_else(|| preset.upstream_model_example.clone()),
+            tool_call_mode: None,
+            conflict_strategy: Some("update".into()),
+        };
+        let routes = database::list_routes(&st.db_path)?;
+        let codex_routes = database::list_codex_routes(&st.db_path)?;
+        let policies = database::list_provider_policies(&st.db_path)?;
+        Some(route_builder_preview_from_payload(
+            &providers,
+            &routes,
+            &codex_routes,
+            &policies,
+            &route_payload,
+        )?)
+    } else {
+        None
+    };
+    let mut warnings = preset.warnings.clone();
+    if !provider_has_key {
+        warnings.push(
+            "API key is missing. The provider can be saved, but health checks may fail.".into(),
+        );
+    }
+    Ok(ProviderWizardPreview {
+        preset,
+        provider_exists,
+        provider_has_key,
+        route_preview,
+        warnings,
+    })
+}
+
+#[tauri::command]
+pub fn apply_provider_wizard(
+    st: State<'_, AppState>,
+    payload: ProviderWizardPayload,
+) -> Result<ProviderWizardApplyReport, String> {
+    let preset = built_in_provider_presets()
+        .into_iter()
+        .find(|p| p.id == payload.preset_id)
+        .ok_or_else(|| format!("Provider preset '{}' not found", payload.preset_id))?;
+    let existing = database::list_providers(&st.db_path)?
+        .into_iter()
+        .find(|provider| provider.id == preset.id);
+    let api_key = payload
+        .api_key
+        .as_deref()
+        .filter(|key| !key.trim().is_empty())
+        .map(|key| key.trim().to_string())
+        .or_else(|| {
+            existing
+                .as_ref()
+                .and_then(|provider| provider.api_key.clone())
+        });
+    if let Some(existing) = existing {
+        database::update_provider(
+            &st.db_path,
+            &UpdateProvider {
+                id: preset.id.clone(),
+                name: preset.name.clone(),
+                base_url: preset.base_url.clone(),
+                openai_base_url: Some(preset.openai_base_url.clone()),
+                anthropic_base_url: preset.anthropic_base_url.clone(),
+                auth_header: preset.auth_header.clone(),
+                auth_scheme: preset.auth_scheme.clone(),
+                api_key,
+                enabled: existing.enabled,
+            },
+        )?;
+    } else {
+        database::create_provider(
+            &st.db_path,
+            &CreateProvider {
+                id: preset.id.clone(),
+                name: preset.name.clone(),
+                base_url: preset.base_url.clone(),
+                openai_base_url: Some(preset.openai_base_url.clone()),
+                anthropic_base_url: preset.anthropic_base_url.clone(),
+                auth_header: preset.auth_header.clone(),
+                auth_scheme: preset.auth_scheme.clone(),
+                api_key,
+            },
+        )?;
+    }
+    database::upsert_provider_policy(&st.db_path, &preset.recommended_policy)?;
+
+    let route_report = if payload.apply_route.unwrap_or(false) {
+        let target_app = payload
+            .target_app
+            .clone()
+            .unwrap_or_else(|| "claude_desktop".into());
+        let route_payload = RouteBuilderPayload {
+            target_app: target_app.clone(),
+            route_id: payload
+                .route_id
+                .clone()
+                .unwrap_or_else(|| format!("{}-{}", target_app.replace('_', "-"), preset.id)),
+            visible_model: payload.visible_model.clone().unwrap_or_else(|| {
+                if target_app == "codex" {
+                    preset.recommended_codex_model.clone()
+                } else {
+                    preset.recommended_claude_alias.clone()
+                }
+            }),
+            display_name: payload
+                .display_name
+                .clone()
+                .unwrap_or_else(|| format!("{} via {}", target_app.replace('_', " "), preset.name)),
+            provider_id: preset.id.clone(),
+            upstream_model: payload
+                .upstream_model
+                .clone()
+                .unwrap_or_else(|| preset.upstream_model_example.clone()),
+            tool_call_mode: None,
+            conflict_strategy: Some("update".into()),
+        };
+        Some(apply_route_builder_inner(&st, &route_payload)?)
+    } else {
+        None
+    };
+    let providers = database::list_providers(&st.db_path)?;
+    let provider = providers
+        .iter()
+        .find(|provider| provider.id == preset.id)
+        .cloned()
+        .ok_or_else(|| format!("Provider '{}' not found after apply", preset.id))?;
+    Ok(ProviderWizardApplyReport {
+        provider,
+        providers,
+        policies: database::list_provider_policies(&st.db_path)?,
+        route_report,
+    })
 }
 
 #[tauri::command]
@@ -1586,7 +2523,29 @@ async fn probe_gateway_health(profile: &GatewayProfile) -> HealthStatus {
         Err(e) => HealthStatus {
             target: "gateway".into(),
             ok: false,
-            message: e.to_string(),
+            message: format!("Gateway is not running or not reachable at {url}: {e}"),
+            latency_ms: Some(start.elapsed().as_millis() as u64),
+        },
+    }
+}
+
+async fn probe_codex_gateway_health(profile: &GatewayProfile) -> HealthStatus {
+    let url = format!(
+        "http://{}:{}/health",
+        profile.listen_host, profile.listen_port
+    );
+    let start = Instant::now();
+    match reqwest::get(&url).await {
+        Ok(r) => HealthStatus {
+            target: "codex-gateway".into(),
+            ok: r.status().is_success(),
+            message: format!("HTTP {}", r.status()),
+            latency_ms: Some(start.elapsed().as_millis() as u64),
+        },
+        Err(e) => HealthStatus {
+            target: "codex-gateway".into(),
+            ok: false,
+            message: format!("Codex Gateway is not running or not reachable at {url}: {e}"),
             latency_ms: Some(start.elapsed().as_millis() as u64),
         },
     }

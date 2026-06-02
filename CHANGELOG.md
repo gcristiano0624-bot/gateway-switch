@@ -2,6 +2,16 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.13.2 - 2026-06-02
+
+- Added the Runtime Console refactor with Dashboard, App Workbench, Provider Console, Route Builder, Health Center, and Usage Insights as first-class modules.
+- Moved Claude Desktop, Claude Code, and Codex route CRUD into Route Builder so product workbench pages focus on read-only route status and runtime health.
+- Added Runtime Console aggregation commands and shared frontend feature modules to keep `App.tsx` smaller and reduce duplicated UI logic.
+- Fixed Codex OpenAI login restore by removing Gateway Switch/Codex++ provider configuration and clearing stale API-key auth from `~/.codex/auth.json`.
+- Improved Claude Desktop health failures so gateway-offline checks show friendly guidance instead of raw `error sending request` messages.
+- Added LoopGuard tool-result compression, repeated tool-call fingerprint detection, warm strategy-change hints, and opt-in debug logging for agent loop diagnosis.
+- Verification: `cargo test`, `pnpm exec tsc --noEmit`, `pnpm build`, LoopGuard debug simulation, local `/v1/messages` smoke validation, and DMG mount inspection.
+
 ## 1.13.1 - 2026-05-30
 
 - Fixed the Claude Code Direct Provider risk confirmation layout so the checkbox and English confirmation text no longer collapse into a vertical column.

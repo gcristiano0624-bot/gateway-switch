@@ -4,11 +4,13 @@ use std::{
 };
 
 use chrono::Utc;
+use serde_json::Value;
 
 use crate::models::CodexBindingInfo;
 
 const PROVIDER_ID: &str = "gateway-switch";
 const PROVIDER_NAME: &str = "Gateway Switch";
+const OPENAI_AUTH_METHOD: &str = "chatgpt";
 
 pub fn inspect(home: &Path) -> Result<CodexBindingInfo, String> {
     let config = config_path(home);
@@ -48,7 +50,7 @@ pub fn apply(
         write_backup(&config, &original)?;
     }
 
-    let cleaned = remove_managed_codex_config(&original);
+    let cleaned = remove_gateway_managed_and_codexpp_config(&original);
     let header = format!(
         r#"model_provider = "{PROVIDER_ID}"
 model = "{model}"
@@ -76,18 +78,18 @@ pub fn restore(home: &Path) -> Result<CodexBindingInfo, String> {
     if let Some(parent) = config.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    if let Some(backup) = latest_unmanaged_backup(&config) {
-        let content = fs::read_to_string(&backup).map_err(|e| e.to_string())?;
-        fs::write(&config, content).map_err(|e| e.to_string())?;
-    } else {
-        let current = read_config(&config)?;
-        fs::write(&config, remove_managed_codex_config(&current)).map_err(|e| e.to_string())?;
-    }
+    let current = read_config(&config)?;
+    fs::write(&config, restore_openai_auth_config(&current)).map_err(|e| e.to_string())?;
+    remove_openai_api_key_from_auth(home)?;
     inspect(home)
 }
 
 fn config_path(home: &Path) -> PathBuf {
     home.join(".codex/config.toml")
+}
+
+fn auth_path(home: &Path) -> PathBuf {
+    home.join(".codex/auth.json")
 }
 
 fn read_config(config: &Path) -> Result<String, String> {
@@ -108,6 +110,16 @@ fn write_backup(config: &Path, content: &str) -> Result<(), String> {
     fs::write(backup, content).map_err(|e| e.to_string())
 }
 
+fn write_named_backup(path: &Path, content: &str, label: &str) -> Result<(), String> {
+    let backup_dir = path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join("gateway-switch-backups");
+    fs::create_dir_all(&backup_dir).map_err(|e| e.to_string())?;
+    let backup = backup_dir.join(format!("{label}-{}.bak", Utc::now().timestamp_millis()));
+    fs::write(backup, content).map_err(|e| e.to_string())
+}
+
 fn latest_backup(config: &Path) -> Option<PathBuf> {
     let backup_dir = config.parent()?.join("gateway-switch-backups");
     let mut entries: Vec<PathBuf> = fs::read_dir(backup_dir)
@@ -125,47 +137,65 @@ fn latest_backup(config: &Path) -> Option<PathBuf> {
     entries.pop()
 }
 
-fn latest_unmanaged_backup(config: &Path) -> Option<PathBuf> {
-    let backup_dir = config.parent()?.join("gateway-switch-backups");
-    let mut entries: Vec<PathBuf> = fs::read_dir(backup_dir)
-        .ok()?
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .map(|name| name.starts_with("config-"))
-                .unwrap_or(false)
-        })
-        .collect();
-    entries.sort();
-    entries.into_iter().rev().find(|path| {
-        fs::read_to_string(path)
-            .map(|content| !is_managed_config(&content))
-            .unwrap_or(false)
-    })
-}
-
 fn is_managed_config(content: &str) -> bool {
     top_level_value(content, "model_provider").as_deref() == Some(PROVIDER_ID)
 }
 
-fn remove_managed_codex_config(content: &str) -> String {
+fn restore_openai_auth_config(content: &str) -> String {
+    let cleaned = remove_gateway_managed_and_codexpp_config(content);
+    let trimmed = cleaned.trim_start();
+    if trimmed.is_empty() {
+        format!("preferred_auth_method = \"{OPENAI_AUTH_METHOD}\"\n")
+    } else {
+        format!("preferred_auth_method = \"{OPENAI_AUTH_METHOD}\"\n\n{trimmed}")
+    }
+}
+
+fn remove_openai_api_key_from_auth(home: &Path) -> Result<(), String> {
+    let auth = auth_path(home);
+    if !auth.exists() {
+        return Ok(());
+    }
+
+    let original = fs::read_to_string(&auth).map_err(|e| e.to_string())?;
+    let Ok(mut value) = serde_json::from_str::<Value>(&original) else {
+        return Ok(());
+    };
+
+    let Some(object) = value.as_object_mut() else {
+        return Ok(());
+    };
+
+    let mut changed = false;
+    for key in ["OPENAI_API_KEY", "openai_api_key", "api_key"] {
+        changed |= object.remove(key).is_some();
+    }
+
+    if changed {
+        write_named_backup(&auth, &original, "auth")?;
+        let next = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
+        fs::write(&auth, format!("{next}\n")).map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
+fn remove_gateway_managed_and_codexpp_config(content: &str) -> String {
     let mut out = Vec::new();
-    let mut in_gateway_table = false;
+    let mut in_removed_provider_table = false;
     let mut in_root = true;
 
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with('[') && trimmed.ends_with(']') {
             in_root = false;
-            in_gateway_table = trimmed == format!("[model_providers.{PROVIDER_ID}]");
-            if in_gateway_table {
+            in_removed_provider_table = is_removed_provider_table(trimmed);
+            if in_removed_provider_table {
                 continue;
             }
         }
 
-        if in_gateway_table {
+        if in_removed_provider_table {
             continue;
         }
 
@@ -181,6 +211,25 @@ fn remove_managed_codex_config(content: &str) -> String {
     }
 
     out.join("\n")
+}
+
+fn is_removed_provider_table(trimmed: &str) -> bool {
+    let Some(table) = trimmed
+        .strip_prefix("[model_providers.")
+        .and_then(|rest| rest.strip_suffix(']'))
+    else {
+        return false;
+    };
+    is_gateway_or_codexpp_provider_id(table)
+}
+
+fn is_gateway_or_codexpp_provider_id(provider_id: &str) -> bool {
+    let normalized: String = provider_id
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .flat_map(|ch| ch.to_lowercase())
+        .collect();
+    normalized == "gatewayswitch" || normalized == "codexplusplus"
 }
 
 fn top_level_value(content: &str, key: &str) -> Option<String> {
@@ -241,8 +290,14 @@ mod tests {
     fn apply_and_restore_codex_config() {
         let tmp = tempfile::tempdir().unwrap();
         let config = config_path(tmp.path());
+        let auth = auth_path(tmp.path());
         fs::create_dir_all(config.parent().unwrap()).unwrap();
         fs::write(&config, "[projects.foo]\ntrust_level = \"trusted\"\n").unwrap();
+        fs::write(
+            &auth,
+            r#"{"OPENAI_API_KEY":"tp-test","tokens":{"id":"keep"}}"#,
+        )
+        .unwrap();
 
         let applied = apply(tmp.path(), "http://127.0.0.1:3457/v1", "tok", "gpt-5.5").unwrap();
         assert!(applied.managed);
@@ -259,10 +314,55 @@ mod tests {
         apply(tmp.path(), "http://127.0.0.1:3457/v1", "tok", "gpt-5.5").unwrap();
 
         let restored = restore(tmp.path()).unwrap();
+        let restored_config = fs::read_to_string(config).unwrap();
+        let restored_auth = fs::read_to_string(auth).unwrap();
         assert!(!restored.managed);
-        assert!(fs::read_to_string(config)
-            .unwrap()
-            .contains("[projects.foo]"));
+        assert!(restored_config.contains("preferred_auth_method = \"chatgpt\""));
+        assert!(restored_config.contains("[projects.foo]"));
+        assert!(!restored_auth.contains("OPENAI_API_KEY"));
+        assert!(restored_auth.contains("tokens"));
+    }
+
+    #[test]
+    fn restore_openai_login_deactivates_codexplusplus_provider() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = config_path(tmp.path());
+        let auth = auth_path(tmp.path());
+        fs::create_dir_all(config.parent().unwrap()).unwrap();
+        fs::write(
+            &config,
+            r#"model_provider = "CodexPlusPlus"
+model = "gpt-4.1"
+preferred_auth_method = "apikey"
+
+[model_providers.CodexPlusPlus]
+name = "codex++"
+base_url = "http://127.0.0.1:3000/v1"
+requires_openai_auth = true
+experimental_bearer_token = "token"
+
+[projects.foo]
+trust_level = "trusted"
+"#,
+        )
+        .unwrap();
+        fs::write(&auth, r#"{"OPENAI_API_KEY":"tp-test"}"#).unwrap();
+
+        apply(tmp.path(), "http://127.0.0.1:3457/v1", "tok", "gpt-5.5").unwrap();
+
+        let restored = restore(tmp.path()).unwrap();
+        let content = fs::read_to_string(config).unwrap();
+        assert!(!restored.managed);
+        assert_eq!(restored.model_provider, None);
+        assert_eq!(restored.model, None);
+        assert!(content.contains("preferred_auth_method = \"chatgpt\""));
+        assert!(!content.contains("model_provider = \"CodexPlusPlus\""));
+        assert!(!content.contains("model = \"gpt-4.1\""));
+        assert!(!content.contains("preferred_auth_method = \"apikey\""));
+        assert!(!content.contains("[model_providers.gateway-switch]"));
+        assert!(!content.contains("[model_providers.CodexPlusPlus]"));
+        assert!(!fs::read_to_string(auth).unwrap().contains("OPENAI_API_KEY"));
+        assert!(content.contains("[projects.foo]"));
     }
 
     #[test]
@@ -292,6 +392,7 @@ trust_level = "trusted"
         let restored = restore(tmp.path()).unwrap();
         let content = fs::read_to_string(config).unwrap();
         assert!(!restored.managed);
+        assert!(content.contains("preferred_auth_method = \"chatgpt\""));
         assert!(!content.contains("gateway-switch"));
         assert!(content.contains("[projects.foo]"));
     }

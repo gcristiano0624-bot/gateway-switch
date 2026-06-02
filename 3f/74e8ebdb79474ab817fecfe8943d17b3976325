@@ -1,0 +1,2034 @@
+src/features/provider-console/ProviderHealthGrid.tsx
+  64638beb875646a4 1-85 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,85]}]}]}
+docs/superpowers/specs/2026-06-02-agent-loopguard-tool-result-design.md
+  64638beb875646a4 1-60 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,60]}]}]}
+src/features/dashboard/AppWorkbenchGrid.tsx
+  64638beb875646a4 1-33 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,33]}]}]}
+src/features/route-builder/RouteTargetSelector.tsx
+  64638beb875646a4 1-29 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,29]}]}]}
+src/shared/types/runtime-console.ts
+  64638beb875646a4 1-402 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,402]}]}]}
+CHANGELOG.md
+  64638beb875646a4 5-14 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[5,14]}]}]}
+src-tauri/src/gateway.rs
+  64638beb875646a4 22,48-52,332-334,389,489,514,532,538-539,633,645,744-746,1359-1400,1402-1403,1424-1428,1439-1440,1480-1483,1519-1567,1578-1582,1586-1600,1602-1611,1616,1634,1642-1649,2106-2109,2382,2468,2560,2592,2699,2815-2910 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":22},{"Range":[48,52]},{"Range":[332,334]},{"Single":389},{"Single":489},{"Single":514},{"Single":532},{"Range":[538,539]},{"Single":633},{"Single":645},{"Range":[744,746]},{"Range":[1359,1400]},{"Range":[1402,1403]},{"Range":[1424,1428]},{"Range":[1439,1440]},{"Range":[1480,1483]},{"Range":[1519,1567]},{"Range":[1578,1582]},{"Range":[1586,1600]},{"Range":[1602,1611]},{"Single":1616},{"Single":1634},{"Range":[1642,1649]},{"Range":[2106,2109]},{"Single":2382},{"Single":2468},{"Single":2560},{"Single":2592},{"Single":2699},{"Range":[2815,2910]}]}]}
+docs/superpowers/specs/2026-06-01-runtime-console-refactor-implementation-notes.md
+  64638beb875646a4 1-64 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,64]}]}]}
+src-tauri/tauri.conf.json
+  64638beb875646a4 4 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":4}]}]}
+src/App.tsx
+  64638beb875646a4 5-54,57,484-487,562-569,574,577-596,710,1551-1554,1601-1604,1609,1653-1656,1676,1690-1695,1724-1731,1789-1794,1960-2015,2084-2089,2091-2103,2105-2129,2131-2151,2169-2170,2424-2434,2446-2447,2489-2496,2514-2515,2519-2522,2526-2528,2532-2535,2539-2547,2560-2617,2623-2624,2627-2641,2812-2820,2823-2836,2864-2873,2971-2977,3100-3101,3165,3169-3174,3204,3208,3279-3280,3572,3647,3651-3656,4081,4308-4453,4575-4587,4988,4992,4995 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[5,54]},{"Single":57},{"Range":[484,487]},{"Range":[562,569]},{"Single":574},{"Range":[577,596]},{"Single":710},{"Range":[1551,1554]},{"Range":[1601,1604]},{"Single":1609},{"Range":[1653,1656]},{"Single":1676},{"Range":[1690,1695]},{"Range":[1724,1731]},{"Range":[1789,1794]},{"Range":[1960,2015]},{"Range":[2084,2089]},{"Range":[2091,2103]},{"Range":[2105,2129]},{"Range":[2131,2151]},{"Range":[2169,2170]},{"Range":[2424,2434]},{"Range":[2446,2447]},{"Range":[2489,2496]},{"Range":[2514,2515]},{"Range":[2519,2522]},{"Range":[2526,2528]},{"Range":[2532,2535]},{"Range":[2539,2547]},{"Range":[2560,2617]},{"Range":[2623,2624]},{"Range":[2627,2641]},{"Range":[2812,2820]},{"Range":[2823,2836]},{"Range":[2864,2873]},{"Range":[2971,2977]},{"Range":[3100,3101]},{"Single":3165},{"Range":[3169,3174]},{"Single":3204},{"Single":3208},{"Range":[3279,3280]},{"Single":3572},{"Single":3647},{"Range":[3651,3656]},{"Single":4081},{"Range":[4308,4453]},{"Range":[4575,4587]},{"Single":4988},{"Single":4992},{"Single":4995}]}]}
+src-tauri/src/commands.rs
+  64638beb875646a4 9,121-584,750-1221,2526-2548 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":9},{"Range":[121,584]},{"Range":[750,1221]},{"Range":[2526,2548]}]}]}
+src-tauri/src/lib.rs
+  64638beb875646a4 94-101 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[94,101]}]}]}
+src-tauri/Cargo.toml
+  64638beb875646a4 3 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":3}]}]}
+src/main.tsx
+  64638beb875646a4 3,6-14,17-19 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":3},{"Range":[6,14]},{"Range":[17,19]}]}]}
+src/features/health-center/HealthCenterPanel.tsx
+  64638beb875646a4 1-104 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,104]}]}]}
+package.json
+  64638beb875646a4 4,13,15,18,23 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":4},{"Single":13},{"Single":15},{"Single":18},{"Single":23}]}]}
+src/features/route-builder/RouteDraftForm.tsx
+  64638beb875646a4 1-143 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,143]}]}]}
+src-tauri/src/codex_binding.rs
+  64638beb875646a4 7,13,53,81-83,91-94,113-120,123,137,144-183,185,192-193,198,216-234,293,296-300,317-354,356-365,395 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Single":7},{"Single":13},{"Single":53},{"Range":[81,83]},{"Range":[91,94]},{"Range":[113,120]},{"Single":123},{"Single":137},{"Range":[144,183]},{"Single":185},{"Range":[192,193]},{"Single":198},{"Range":[216,234]},{"Single":293},{"Range":[296,300]},{"Range":[317,354]},{"Range":[356,365]},{"Single":395}]}]}
+src/features/provider-console/ProviderPresetStrategyList.tsx
+  64638beb875646a4 1-51 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,51]}]}]}
+src/features/usage-insights/UsageInsightsPanel.tsx
+  64638beb875646a4 1-117 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,117]}]}]}
+src/features/app-workbench/AppWorkbenchOverview.tsx
+  64638beb875646a4 1-76 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,76]}]}]}
+src/App.css
+  64638beb875646a4 2-3,2132-2511,2542-2545,2554 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[2,3]},{"Range":[2132,2511]},{"Range":[2542,2545]},{"Single":2554}]}]}
+src/shared/api/runtime-console.ts
+  64638beb875646a4 1-29 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,29]}]}]}
+src/features/provider-console/ProviderStrategyOverrides.tsx
+  64638beb875646a4 1-151 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,151]}]}]}
+src-tauri/src/loop_guard.rs
+  64638beb875646a4 1-13,26-28,36-38,46-52,56-71,79-80,91-92,150-176,179-244,289-358,408-473 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,13]},{"Range":[26,28]},{"Range":[36,38]},{"Range":[46,52]},{"Range":[56,71]},{"Range":[79,80]},{"Range":[91,92]},{"Range":[150,176]},{"Range":[179,244]},{"Range":[289,358]},{"Range":[408,473]}]}]}
+docs/release-1.13.2-runtime-console-loopguard.md
+  64638beb875646a4 1-39 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,39]}]}]}
+src/features/provider-console/ProviderSetupWizard.tsx
+  64638beb875646a4 1-86 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,86]}]}]}
+src/features/route-builder/CompatibilityPreview.tsx
+  64638beb875646a4 1-45 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a1ecbe912cb332cc54cbf03","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1,45]}]}]}
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "3f74e8ebdb79474ab817fecfe8943d17b3976325",
+  "prompts": {
+    "64638beb875646a4": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a1cf099a0bc30d261098398",
+        "model": "gpt-5.5__dev"
+      },
+      "human_author": "hugo0624 <gcristiano0624@gmail.com>",
+      "messages": [],
+      "total_additions": 5822,
+      "total_deletions": 2013,
+      "accepted_lines": 4600,
+      "overriden_lines": 0
+    }
+  },
+  "attestation_metadata": {
+    "CHANGELOG.md": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              5,
+              14
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  5,
+                  14
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "docs/release-1.13.2-runtime-console-loopguard.md": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              39
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  39
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "docs/superpowers/specs/2026-06-01-runtime-console-refactor-implementation-notes.md": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              64
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  64
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "docs/superpowers/specs/2026-06-02-agent-loopguard-tool-result-design.md": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              60
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  60
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "package.json": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Single": 4
+          },
+          {
+            "Single": 13
+          },
+          {
+            "Single": 15
+          },
+          {
+            "Single": 18
+          },
+          {
+            "Single": 23
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 4
+              },
+              {
+                "Single": 13
+              },
+              {
+                "Single": 15
+              },
+              {
+                "Single": 18
+              },
+              {
+                "Single": 23
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/Cargo.toml": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Single": 3
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 3
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/src/codex_binding.rs": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Single": 7
+          },
+          {
+            "Single": 13
+          },
+          {
+            "Single": 53
+          },
+          {
+            "Range": [
+              81,
+              83
+            ]
+          },
+          {
+            "Range": [
+              91,
+              94
+            ]
+          },
+          {
+            "Range": [
+              113,
+              120
+            ]
+          },
+          {
+            "Single": 123
+          },
+          {
+            "Single": 137
+          },
+          {
+            "Range": [
+              144,
+              183
+            ]
+          },
+          {
+            "Single": 185
+          },
+          {
+            "Range": [
+              192,
+              193
+            ]
+          },
+          {
+            "Single": 198
+          },
+          {
+            "Range": [
+              216,
+              234
+            ]
+          },
+          {
+            "Single": 293
+          },
+          {
+            "Range": [
+              296,
+              300
+            ]
+          },
+          {
+            "Range": [
+              317,
+              354
+            ]
+          },
+          {
+            "Range": [
+              356,
+              365
+            ]
+          },
+          {
+            "Single": 395
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 7
+              },
+              {
+                "Single": 13
+              },
+              {
+                "Single": 53
+              },
+              {
+                "Range": [
+                  81,
+                  83
+                ]
+              },
+              {
+                "Range": [
+                  91,
+                  94
+                ]
+              },
+              {
+                "Range": [
+                  113,
+                  120
+                ]
+              },
+              {
+                "Single": 123
+              },
+              {
+                "Single": 137
+              },
+              {
+                "Range": [
+                  144,
+                  183
+                ]
+              },
+              {
+                "Single": 185
+              },
+              {
+                "Range": [
+                  192,
+                  193
+                ]
+              },
+              {
+                "Single": 198
+              },
+              {
+                "Range": [
+                  216,
+                  234
+                ]
+              },
+              {
+                "Single": 293
+              },
+              {
+                "Range": [
+                  296,
+                  300
+                ]
+              },
+              {
+                "Range": [
+                  317,
+                  354
+                ]
+              },
+              {
+                "Range": [
+                  356,
+                  365
+                ]
+              },
+              {
+                "Single": 395
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/src/commands.rs": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Single": 9
+          },
+          {
+            "Range": [
+              121,
+              584
+            ]
+          },
+          {
+            "Range": [
+              750,
+              1221
+            ]
+          },
+          {
+            "Range": [
+              2526,
+              2548
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 9
+              },
+              {
+                "Range": [
+                  121,
+                  584
+                ]
+              },
+              {
+                "Range": [
+                  750,
+                  1221
+                ]
+              },
+              {
+                "Range": [
+                  2526,
+                  2548
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/src/gateway.rs": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Single": 22
+          },
+          {
+            "Range": [
+              48,
+              52
+            ]
+          },
+          {
+            "Range": [
+              332,
+              334
+            ]
+          },
+          {
+            "Single": 389
+          },
+          {
+            "Single": 489
+          },
+          {
+            "Single": 514
+          },
+          {
+            "Single": 532
+          },
+          {
+            "Range": [
+              538,
+              539
+            ]
+          },
+          {
+            "Single": 633
+          },
+          {
+            "Single": 645
+          },
+          {
+            "Range": [
+              744,
+              746
+            ]
+          },
+          {
+            "Range": [
+              1359,
+              1400
+            ]
+          },
+          {
+            "Range": [
+              1402,
+              1403
+            ]
+          },
+          {
+            "Range": [
+              1424,
+              1428
+            ]
+          },
+          {
+            "Range": [
+              1439,
+              1440
+            ]
+          },
+          {
+            "Range": [
+              1480,
+              1483
+            ]
+          },
+          {
+            "Range": [
+              1519,
+              1567
+            ]
+          },
+          {
+            "Range": [
+              1578,
+              1582
+            ]
+          },
+          {
+            "Range": [
+              1586,
+              1600
+            ]
+          },
+          {
+            "Range": [
+              1602,
+              1611
+            ]
+          },
+          {
+            "Single": 1616
+          },
+          {
+            "Single": 1634
+          },
+          {
+            "Range": [
+              1642,
+              1649
+            ]
+          },
+          {
+            "Range": [
+              2106,
+              2109
+            ]
+          },
+          {
+            "Single": 2382
+          },
+          {
+            "Single": 2468
+          },
+          {
+            "Single": 2560
+          },
+          {
+            "Single": 2592
+          },
+          {
+            "Single": 2699
+          },
+          {
+            "Range": [
+              2815,
+              2910
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 22
+              },
+              {
+                "Range": [
+                  48,
+                  52
+                ]
+              },
+              {
+                "Range": [
+                  332,
+                  334
+                ]
+              },
+              {
+                "Single": 389
+              },
+              {
+                "Single": 489
+              },
+              {
+                "Single": 514
+              },
+              {
+                "Single": 532
+              },
+              {
+                "Range": [
+                  538,
+                  539
+                ]
+              },
+              {
+                "Single": 633
+              },
+              {
+                "Single": 645
+              },
+              {
+                "Range": [
+                  744,
+                  746
+                ]
+              },
+              {
+                "Range": [
+                  1359,
+                  1400
+                ]
+              },
+              {
+                "Range": [
+                  1402,
+                  1403
+                ]
+              },
+              {
+                "Range": [
+                  1424,
+                  1428
+                ]
+              },
+              {
+                "Range": [
+                  1439,
+                  1440
+                ]
+              },
+              {
+                "Range": [
+                  1480,
+                  1483
+                ]
+              },
+              {
+                "Range": [
+                  1519,
+                  1567
+                ]
+              },
+              {
+                "Range": [
+                  1578,
+                  1582
+                ]
+              },
+              {
+                "Range": [
+                  1586,
+                  1600
+                ]
+              },
+              {
+                "Range": [
+                  1602,
+                  1611
+                ]
+              },
+              {
+                "Single": 1616
+              },
+              {
+                "Single": 1634
+              },
+              {
+                "Range": [
+                  1642,
+                  1649
+                ]
+              },
+              {
+                "Range": [
+                  2106,
+                  2109
+                ]
+              },
+              {
+                "Single": 2382
+              },
+              {
+                "Single": 2468
+              },
+              {
+                "Single": 2560
+              },
+              {
+                "Single": 2592
+              },
+              {
+                "Single": 2699
+              },
+              {
+                "Range": [
+                  2815,
+                  2910
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/src/lib.rs": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              94,
+              101
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  94,
+                  101
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/src/loop_guard.rs": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              13
+            ]
+          },
+          {
+            "Range": [
+              26,
+              28
+            ]
+          },
+          {
+            "Range": [
+              36,
+              38
+            ]
+          },
+          {
+            "Range": [
+              46,
+              52
+            ]
+          },
+          {
+            "Range": [
+              56,
+              71
+            ]
+          },
+          {
+            "Range": [
+              79,
+              80
+            ]
+          },
+          {
+            "Range": [
+              91,
+              92
+            ]
+          },
+          {
+            "Range": [
+              150,
+              176
+            ]
+          },
+          {
+            "Range": [
+              179,
+              244
+            ]
+          },
+          {
+            "Range": [
+              289,
+              358
+            ]
+          },
+          {
+            "Range": [
+              408,
+              473
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  13
+                ]
+              },
+              {
+                "Range": [
+                  26,
+                  28
+                ]
+              },
+              {
+                "Range": [
+                  36,
+                  38
+                ]
+              },
+              {
+                "Range": [
+                  46,
+                  52
+                ]
+              },
+              {
+                "Range": [
+                  56,
+                  71
+                ]
+              },
+              {
+                "Range": [
+                  79,
+                  80
+                ]
+              },
+              {
+                "Range": [
+                  91,
+                  92
+                ]
+              },
+              {
+                "Range": [
+                  150,
+                  176
+                ]
+              },
+              {
+                "Range": [
+                  179,
+                  244
+                ]
+              },
+              {
+                "Range": [
+                  289,
+                  358
+                ]
+              },
+              {
+                "Range": [
+                  408,
+                  473
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src-tauri/tauri.conf.json": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Single": 4
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 4
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/App.css": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              2,
+              3
+            ]
+          },
+          {
+            "Range": [
+              2132,
+              2511
+            ]
+          },
+          {
+            "Range": [
+              2542,
+              2545
+            ]
+          },
+          {
+            "Single": 2554
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  2,
+                  3
+                ]
+              },
+              {
+                "Range": [
+                  2132,
+                  2511
+                ]
+              },
+              {
+                "Range": [
+                  2542,
+                  2545
+                ]
+              },
+              {
+                "Single": 2554
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/App.tsx": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              5,
+              54
+            ]
+          },
+          {
+            "Single": 57
+          },
+          {
+            "Range": [
+              484,
+              487
+            ]
+          },
+          {
+            "Range": [
+              562,
+              569
+            ]
+          },
+          {
+            "Single": 574
+          },
+          {
+            "Range": [
+              577,
+              596
+            ]
+          },
+          {
+            "Single": 710
+          },
+          {
+            "Range": [
+              1551,
+              1554
+            ]
+          },
+          {
+            "Range": [
+              1601,
+              1604
+            ]
+          },
+          {
+            "Single": 1609
+          },
+          {
+            "Range": [
+              1653,
+              1656
+            ]
+          },
+          {
+            "Single": 1676
+          },
+          {
+            "Range": [
+              1690,
+              1695
+            ]
+          },
+          {
+            "Range": [
+              1724,
+              1731
+            ]
+          },
+          {
+            "Range": [
+              1789,
+              1794
+            ]
+          },
+          {
+            "Range": [
+              1960,
+              2015
+            ]
+          },
+          {
+            "Range": [
+              2084,
+              2089
+            ]
+          },
+          {
+            "Range": [
+              2091,
+              2103
+            ]
+          },
+          {
+            "Range": [
+              2105,
+              2129
+            ]
+          },
+          {
+            "Range": [
+              2131,
+              2151
+            ]
+          },
+          {
+            "Range": [
+              2169,
+              2170
+            ]
+          },
+          {
+            "Range": [
+              2424,
+              2434
+            ]
+          },
+          {
+            "Range": [
+              2446,
+              2447
+            ]
+          },
+          {
+            "Range": [
+              2489,
+              2496
+            ]
+          },
+          {
+            "Range": [
+              2514,
+              2515
+            ]
+          },
+          {
+            "Range": [
+              2519,
+              2522
+            ]
+          },
+          {
+            "Range": [
+              2526,
+              2528
+            ]
+          },
+          {
+            "Range": [
+              2532,
+              2535
+            ]
+          },
+          {
+            "Range": [
+              2539,
+              2547
+            ]
+          },
+          {
+            "Range": [
+              2560,
+              2617
+            ]
+          },
+          {
+            "Range": [
+              2623,
+              2624
+            ]
+          },
+          {
+            "Range": [
+              2627,
+              2641
+            ]
+          },
+          {
+            "Range": [
+              2812,
+              2820
+            ]
+          },
+          {
+            "Range": [
+              2823,
+              2836
+            ]
+          },
+          {
+            "Range": [
+              2864,
+              2873
+            ]
+          },
+          {
+            "Range": [
+              2971,
+              2977
+            ]
+          },
+          {
+            "Range": [
+              3100,
+              3101
+            ]
+          },
+          {
+            "Single": 3165
+          },
+          {
+            "Range": [
+              3169,
+              3174
+            ]
+          },
+          {
+            "Single": 3204
+          },
+          {
+            "Single": 3208
+          },
+          {
+            "Range": [
+              3279,
+              3280
+            ]
+          },
+          {
+            "Single": 3572
+          },
+          {
+            "Single": 3647
+          },
+          {
+            "Range": [
+              3651,
+              3656
+            ]
+          },
+          {
+            "Single": 4081
+          },
+          {
+            "Range": [
+              4308,
+              4453
+            ]
+          },
+          {
+            "Range": [
+              4575,
+              4587
+            ]
+          },
+          {
+            "Single": 4988
+          },
+          {
+            "Single": 4992
+          },
+          {
+            "Single": 4995
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  5,
+                  54
+                ]
+              },
+              {
+                "Single": 57
+              },
+              {
+                "Range": [
+                  484,
+                  487
+                ]
+              },
+              {
+                "Range": [
+                  562,
+                  569
+                ]
+              },
+              {
+                "Single": 574
+              },
+              {
+                "Range": [
+                  577,
+                  596
+                ]
+              },
+              {
+                "Single": 710
+              },
+              {
+                "Range": [
+                  1551,
+                  1554
+                ]
+              },
+              {
+                "Range": [
+                  1601,
+                  1604
+                ]
+              },
+              {
+                "Single": 1609
+              },
+              {
+                "Range": [
+                  1653,
+                  1656
+                ]
+              },
+              {
+                "Single": 1676
+              },
+              {
+                "Range": [
+                  1690,
+                  1695
+                ]
+              },
+              {
+                "Range": [
+                  1724,
+                  1731
+                ]
+              },
+              {
+                "Range": [
+                  1789,
+                  1794
+                ]
+              },
+              {
+                "Range": [
+                  1960,
+                  2015
+                ]
+              },
+              {
+                "Range": [
+                  2084,
+                  2089
+                ]
+              },
+              {
+                "Range": [
+                  2091,
+                  2103
+                ]
+              },
+              {
+                "Range": [
+                  2105,
+                  2129
+                ]
+              },
+              {
+                "Range": [
+                  2131,
+                  2151
+                ]
+              },
+              {
+                "Range": [
+                  2169,
+                  2170
+                ]
+              },
+              {
+                "Range": [
+                  2424,
+                  2434
+                ]
+              },
+              {
+                "Range": [
+                  2446,
+                  2447
+                ]
+              },
+              {
+                "Range": [
+                  2489,
+                  2496
+                ]
+              },
+              {
+                "Range": [
+                  2514,
+                  2515
+                ]
+              },
+              {
+                "Range": [
+                  2519,
+                  2522
+                ]
+              },
+              {
+                "Range": [
+                  2526,
+                  2528
+                ]
+              },
+              {
+                "Range": [
+                  2532,
+                  2535
+                ]
+              },
+              {
+                "Range": [
+                  2539,
+                  2547
+                ]
+              },
+              {
+                "Range": [
+                  2560,
+                  2617
+                ]
+              },
+              {
+                "Range": [
+                  2623,
+                  2624
+                ]
+              },
+              {
+                "Range": [
+                  2627,
+                  2641
+                ]
+              },
+              {
+                "Range": [
+                  2812,
+                  2820
+                ]
+              },
+              {
+                "Range": [
+                  2823,
+                  2836
+                ]
+              },
+              {
+                "Range": [
+                  2864,
+                  2873
+                ]
+              },
+              {
+                "Range": [
+                  2971,
+                  2977
+                ]
+              },
+              {
+                "Range": [
+                  3100,
+                  3101
+                ]
+              },
+              {
+                "Single": 3165
+              },
+              {
+                "Range": [
+                  3169,
+                  3174
+                ]
+              },
+              {
+                "Single": 3204
+              },
+              {
+                "Single": 3208
+              },
+              {
+                "Range": [
+                  3279,
+                  3280
+                ]
+              },
+              {
+                "Single": 3572
+              },
+              {
+                "Single": 3647
+              },
+              {
+                "Range": [
+                  3651,
+                  3656
+                ]
+              },
+              {
+                "Single": 4081
+              },
+              {
+                "Range": [
+                  4308,
+                  4453
+                ]
+              },
+              {
+                "Range": [
+                  4575,
+                  4587
+                ]
+              },
+              {
+                "Single": 4988
+              },
+              {
+                "Single": 4992
+              },
+              {
+                "Single": 4995
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/features/app-workbench/AppWorkbenchOverview.tsx": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              76
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  76
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/features/dashboard/AppWorkbenchGrid.tsx": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              33
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  33
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/features/health-center/HealthCenterPanel.tsx": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              104
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  104
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/features/provider-console/ProviderHealthGrid.tsx": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              85
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  85
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/features/provider-console/ProviderPresetStrategyList.tsx": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              51
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  51
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/features/provider-console/ProviderSetupWizard.tsx": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              86
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  86
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/features/provider-console/ProviderStrategyOverrides.tsx": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              151
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  151
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/features/route-builder/CompatibilityPreview.tsx": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              45
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  45
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/features/route-builder/RouteDraftForm.tsx": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              143
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  143
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/features/route-builder/RouteTargetSelector.tsx": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              29
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  29
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/features/usage-insights/UsageInsightsPanel.tsx": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              117
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  117
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/main.tsx": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Single": 3
+          },
+          {
+            "Range": [
+              6,
+              14
+            ]
+          },
+          {
+            "Range": [
+              17,
+              19
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Single": 3
+              },
+              {
+                "Range": [
+                  6,
+                  14
+                ]
+              },
+              {
+                "Range": [
+                  17,
+                  19
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/shared/api/runtime-console.ts": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              29
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  29
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "src/shared/types/runtime-console.ts": [
+      {
+        "hash": "64638beb875646a4",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              402
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a1ecbe912cb332cc54cbf03",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  402
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "remote_transcripts": {
+    "64638beb875646a4": {
+      "tool": "trae",
+      "conversation_id": "6a1cf099a0bc30d261098398",
+      "session_id": "6a1cf099a0bc30d261098398",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    }
+  }
+}

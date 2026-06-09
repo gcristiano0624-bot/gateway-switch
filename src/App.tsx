@@ -330,11 +330,11 @@ const isTauriRuntime = typeof window !== "undefined" && "__TAURI_INTERNALS__" in
 type Language = "zh" | "en";
 
 const ZH_TEXT: Record<string, string> = {
-  "Dashboard": "仪表盘",
+  "Dashboard": "总览",
   "Claude": "Claude",
   "Claude Code": "Claude Code",
   "Codex": "Codex",
-  "MCP Sync": "MCP Sync",
+  "MCP Sync": "MCP 同步",
   "Cold Start": "冷启动",
   "Providers": "模型服务商",
   "Logs": "日志",
@@ -343,6 +343,66 @@ const ZH_TEXT: Record<string, string> = {
   "Features": "功能",
   "General": "通用",
   "System": "系统",
+  "Overview": "总览",
+  "Apps": "应用",
+  "Setup": "配置",
+  "Diagnostics": "诊断",
+  "More": "更多",
+  "Operations": "运维",
+  "Assets": "资源",
+  "Runtime Dashboard": "运行总览",
+  "Provider Console": "模型服务商",
+  "Route Builder": "路由编辑器",
+  "Health Center": "健康中心",
+  "Usage Insights": "使用统计",
+  "Diagnostics Export": "诊断导出",
+  "Install Doctor": "安装诊断",
+  "Advanced": "高级",
+  "Health": "健康",
+  "Usage": "使用统计",
+  "Unified Diagnostics Center": "统一诊断中心",
+  "Runtime Console": "运行时控制台",
+  "Stable third-party model access for three clients": "为三个客户端提供稳定的第三方模型接入",
+  "Gateway Switch ties Provider, Route, Binding, Health and Logs into one path so you don't have to debug across multiple technical pages.": "Gateway Switch 把模型服务商、路由、绑定、健康检查和日志串成一条连续路径，无需在多个技术页面之间切换排查。",
+  "Configure Provider": "配置服务商",
+  "Build Route": "创建路由",
+  "Run Check": "运行健康检查",
+  "Next Actions": "下一步操作",
+  "Click an item to fix it now": "点击一项即可立即处理",
+  "Add your first provider": "添加你的第一个模型服务商",
+  "Pick a preset (OpenRouter, DeepSeek, Volcengine...) and paste your API key.": "选择一个预设（OpenRouter、DeepSeek、火山引擎…）并粘贴 API Key。",
+  "Create your first route": "创建你的第一条路由",
+  "Map a Claude alias or Codex model to one of your providers.": "把 Claude 别名或 Codex 模型映射到任意一个已配置的服务商。",
+  "Claude Gateway is stopped": "Claude 网关未运行",
+  "Claude Desktop and Claude Code rely on the local Claude Gateway.": "Claude Desktop 与 Claude Code 都依赖本地 Claude 网关。",
+  "Claude Desktop is not bound": "Claude Desktop 未绑定",
+  "Bind Claude Desktop to Gateway Switch so it picks up your routes.": "把 Claude Desktop 绑定到 Gateway Switch，它才会使用你配置的路由。",
+  "Codex App is not bound": "Codex App 未绑定",
+  "Bind Codex to the local Responses gateway to use your Codex routes.": "把 Codex 绑定到本地 Responses 网关后，才能使用 Codex 路由。",
+  "Bind Codex": "绑定 Codex",
+  "Diagnostics needs attention": "诊断需要关注",
+  "score": "评分",
+  "Open": "打开",
+  "Recent Claude request failed": "最近一次 Claude 请求失败",
+  "Inspect": "查看详情",
+  "Local runtime console for Claude Desktop, Claude Code and Codex. Check what's working, then follow the suggested actions.": "Claude Desktop、Claude Code 与 Codex 的本地运行时控制台。先看哪些已经可用，再按建议完成下一步。",
+  "Manage upstream providers, protocol endpoints and compatibility policies shared across Claude Desktop, Claude Code and Codex.": "统一管理 Claude Desktop、Claude Code 与 Codex 共享的上游服务商、协议端点和兼容策略。",
+  "Check All": "全部检查",
+  "First-run setup": "首次配置",
+  "Step 1 of 1": "一步即可完成",
+  "Pick a provider preset, paste your API key, and Gateway Switch will create a matching route for the selected app in one step.": "选择服务商预设，粘贴 API Key，Gateway Switch 会一步为目标应用创建匹配的路由。",
+  "Setup Wizard": "配置向导",
+  "Pick a preset, paste the API key, choose the target app, and Gateway Switch will create the provider, policy and recommended route in one click.": "选择预设、粘贴 Key、选择目标应用，一键生成模型服务商、兼容策略和推荐路由。",
+  "Provider Preset": "服务商预设",
+  "API Key": "API Key",
+  "Leave empty to keep existing key": "留空以保留已配置的 Key",
+  "Create recommended route": "创建推荐路由",
+  "Provider only": "只创建服务商",
+  "No preset selected": "未选择预设",
+  "Upstream": "上游模型",
+  "Visible model": "对外模型名",
+  "recommended compatibility strategy": "推荐兼容策略",
+  "Run Setup Wizard": "运行配置向导",
   "Read-only product gateway overview": "只读的产品网关总览",
   "Claude Gateway": "Claude Gateway",
   "Codex Gateway": "Codex Gateway",
@@ -482,7 +542,13 @@ const ZH_TEXT: Record<string, string> = {
   "No routes configured": "暂无路由配置",
   "Add a route above to start mapping models.": "请先在上方添加路由来映射模型。",
   "Use Route Builder to create model routes.": "请在 Route Builder 中创建模型路由。",
-  "Manage in Route Builder": "在 Route Builder 中管理",
+  "Add Gateway Route": "添加网关路由",
+  "Edit Gateway Route": "编辑网关路由",
+  "Advanced Route Builder": "高级路由编辑器",
+  "Open advanced multi-target route builder": "打开高级多目标路由编辑器",
+  "Click Add Route to create one, or open Route Builder for advanced editing.": "点击「添加路由」创建一条；或打开「高级路由编辑器」进行多目标对比与高级编辑。",
+  "Click Add Route to create a Codex route, or open Route Builder for advanced editing.": "点击「添加路由」创建 Codex 路由；或打开「高级路由编辑器」进行多目标对比。",
+  "Manage in Route Builder": "在路由编辑器中管理",
   "Claude Routes": "Claude 路由",
   "Codex Routes": "Codex 路由",
   "Claude Gateway Status": "Claude Gateway 状态",
@@ -565,8 +631,6 @@ const ZH_TEXT: Record<string, string> = {
   "stopped": "已停止",
   "not set": "未设置",
   "Recent": "最近请求",
-  "Configure Provider": "配置服务商",
-  "Run Check": "运行检查",
   "Select provider...": "请选择服务商...",
   "Default aliases will be used until you add a custom one.": "未添加自定义别名前会使用默认别名。",
   "Claude Gateway health check passed": "Claude Gateway 健康检查通过",
@@ -1607,6 +1671,9 @@ function App() {
   const [rForm, setRForm] = useState({ id: "", claude_alias: "claude-sonnet-4-6", display_name: "", provider_id: "", upstream_model: "" });
   const [editingR, setEditingR] = useState<string | null>(null);
   const [routeBuilderTarget, setRouteBuilderTarget] = useState<RouteBuilderTarget>("claude_desktop");
+  const [showClaudeRouteEditor, setShowClaudeRouteEditor] = useState(false);
+  const [showClaudeCodeRouteEditor, setShowClaudeCodeRouteEditor] = useState(false);
+  const [showCodexRouteEditor, setShowCodexRouteEditor] = useState(false);
 
   // Settings
   const [importPath, setImportPath] = useState("");
@@ -2163,11 +2230,13 @@ function App() {
       await loadAll();
     } catch (e) { flash(String(e), "error"); }
   };
-  const editRoute = (r: ModelRoute) => {
+  const editRoute = (r: ModelRoute, options?: { stayOnPage?: boolean }) => {
     setEditingR(r.id);
     setRForm({ id: r.id, claude_alias: r.claude_alias, display_name: r.display_name, provider_id: r.provider_id, upstream_model: r.upstream_model });
     setRouteBuilderTarget("claude_desktop");
-    setPage("routeBuilder");
+    if (!options?.stayOnPage) {
+      setPage("routeBuilder");
+    }
   };
 
   // Settings
@@ -2440,11 +2509,13 @@ function App() {
   const delCodexRoute = async (id: string) => {
     try { await invoke("delete_codex_route", { id }); flash("Codex route deleted"); await loadAll(); } catch (e) { flash(String(e), "error"); }
   };
-  const editCodexRoute = (r: CodexRoute) => {
+  const editCodexRoute = (r: CodexRoute, options?: { stayOnPage?: boolean }) => {
     setEditingC(r.id);
     setCForm({ id: r.id, codex_model: r.codex_model, display_name: r.display_name, provider_id: r.provider_id, upstream_model: r.upstream_model, tool_call_mode: r.tool_call_mode || "force_when_tools_present" });
     setRouteBuilderTarget("codex");
-    setPage("routeBuilder");
+    if (!options?.stayOnPage) {
+      setPage("routeBuilder");
+    }
   };
 
   const addModelAlias = async (aliasType: "claude" | "codex") => {
@@ -2511,39 +2582,35 @@ function App() {
       </div>
 
       <div className="nav-group">
-        <div className="nav-group-label">Overview</div>
-        <NavButton target="dashboard" label="Runtime Dashboard" icon={<IconGrid />} />
+        <div className="nav-group-label">{t("Overview")}</div>
+        <NavButton target="dashboard" label={t("Dashboard")} icon={<IconGrid />} />
       </div>
 
       <div className="nav-group">
-        <div className="nav-group-label">Apps</div>
+        <div className="nav-group-label">{t("Apps")}</div>
         <NavButton target="claude" label="Claude Desktop" icon={<IconShuffle />} badge={routes.length || null} />
         <NavButton target="claudeCode" label="Claude Code" icon={<IconTerminal />} />
         <NavButton target="codex" label="Codex" icon={<IconTerminal />} badge={codexRoutes.length || null} />
       </div>
 
       <div className="nav-group">
-        <div className="nav-group-label">Setup</div>
-        <NavButton target="providers" label="Provider Console" icon={<IconSun />} badge={providers.length || null} />
-        <NavButton target="routeBuilder" label="Route Builder" icon={<IconLink />} badge={(routes.length + codexRoutes.length) || null} />
+        <div className="nav-group-label">{t("Setup")}</div>
+        <NavButton target="providers" label={t("Providers")} icon={<IconSun />} badge={providers.length || null} />
       </div>
 
       <div className="nav-group">
-        <div className="nav-group-label">Operations</div>
-        <NavButton target="healthCenter" label="Health Center" icon={<IconPulse />} badge={unifiedDiagnostics && unifiedDiagnostics.status !== "healthy" ? unifiedDiagnostics.score : null} />
-        <NavButton target="usageInsights" label="Usage Insights" icon={<IconMonitor />} badge={logs.length || null} />
-        <NavButton target="logs" label={t("Request Logs")} icon={<IconSearch />} />
+        <div className="nav-group-label">{t("Diagnostics")}</div>
+        <NavButton target="healthCenter" label={t("Health")} icon={<IconPulse />} badge={unifiedDiagnostics && unifiedDiagnostics.status !== "healthy" ? unifiedDiagnostics.score : null} />
+        <NavButton target="usageInsights" label={t("Usage")} icon={<IconMonitor />} badge={logs.length || null} />
+        <NavButton target="logs" label={t("Logs")} icon={<IconSearch />} />
       </div>
 
       <div className="nav-group">
-        <div className="nav-group-label">Assets</div>
-        <NavButton target="mcpSync" label="MCP Sync" icon={<IconShuffle />} badge={mcpPreview?.merged_count || null} />
-      </div>
-
-      <div className="nav-group">
-        <div className="nav-group-label">System</div>
-        <NavButton target="coldstart" label="Install Doctor" icon={<IconZap />} />
-        <NavButton target="diagnostics" label="Diagnostics Export" icon={<IconDownload />} />
+        <div className="nav-group-label">{t("Advanced")}</div>
+        <NavButton target="routeBuilder" label={t("Route Builder")} icon={<IconLink />} badge={(routes.length + codexRoutes.length) || null} />
+        <NavButton target="mcpSync" label={t("MCP Sync")} icon={<IconShuffle />} badge={mcpPreview?.merged_count || null} />
+        <NavButton target="coldstart" label={t("Install Doctor")} icon={<IconZap />} />
+        <NavButton target="diagnostics" label={t("Diagnostics Export")} icon={<IconDownload />} />
         <NavButton target="settings" label={t("Settings")} icon={<IconSettings />} />
       </div>
 
@@ -2599,6 +2666,98 @@ function App() {
   const appPageFor = (appId: RouteBuilderTarget): Page =>
     appId === "codex" ? "codex" : appId === "claude_code" ? "claudeCode" : "claude";
 
+  type NextAction = {
+    id: string;
+    title: string;
+    detail: string;
+    cta: string;
+    severity: "danger" | "warn" | "info";
+    icon: React.ReactNode;
+    onClick: () => void;
+  };
+
+  const nextActions: NextAction[] = (() => {
+    const items: NextAction[] = [];
+    if (providers.length === 0) {
+      items.push({
+        id: "no-providers",
+        title: t("Add your first provider"),
+        detail: t("Pick a preset (OpenRouter, DeepSeek, Volcengine...) and paste your API key."),
+        cta: t("Add Provider"),
+        severity: "danger",
+        icon: <IconPlus />,
+        onClick: () => setPage("providers"),
+      });
+    }
+    if (providers.length > 0 && routes.length === 0 && codexRoutes.length === 0) {
+      items.push({
+        id: "no-routes",
+        title: t("Create your first route"),
+        detail: t("Map a Claude alias or Codex model to one of your providers."),
+        cta: t("Add Route"),
+        severity: "warn",
+        icon: <IconLink />,
+        onClick: () => { setRouteBuilderTarget("claude_desktop"); setPage("claude"); },
+      });
+    }
+    if (!status?.gateway_running) {
+      items.push({
+        id: "gateway-stopped",
+        title: t("Claude Gateway is stopped"),
+        detail: t("Claude Desktop and Claude Code rely on the local Claude Gateway."),
+        cta: t("Start"),
+        severity: "warn",
+        icon: <IconPlay />,
+        onClick: () => { void startGw(); },
+      });
+    }
+    if (routes.length > 0 && desktop && !desktop.managed) {
+      items.push({
+        id: "claude-not-bound",
+        title: t("Claude Desktop is not bound"),
+        detail: t("Bind Claude Desktop to Gateway Switch so it picks up your routes."),
+        cta: t("Bind Desktop"),
+        severity: "warn",
+        icon: <IconLink />,
+        onClick: () => setPage("claude"),
+      });
+    }
+    if (codexRoutes.length > 0 && codexBinding && !codexBinding.managed) {
+      items.push({
+        id: "codex-not-bound",
+        title: t("Codex App is not bound"),
+        detail: t("Bind Codex to the local Responses gateway to use your Codex routes."),
+        cta: t("Bind Codex"),
+        severity: "warn",
+        icon: <IconLink />,
+        onClick: () => setPage("codex"),
+      });
+    }
+    if (unifiedDiagnostics && unifiedDiagnostics.status !== "healthy") {
+      items.push({
+        id: "diagnostics-attention",
+        title: t("Diagnostics needs attention"),
+        detail: `${unifiedDiagnostics.status} · ${t("score")} ${unifiedDiagnostics.score}`,
+        cta: t("Open"),
+        severity: unifiedDiagnostics.status === "critical" ? "danger" : "warn",
+        icon: <IconPulse />,
+        onClick: () => setPage("healthCenter"),
+      });
+    }
+    if (latestClaudeLog?.status_code && latestClaudeLog.status_code >= 400) {
+      items.push({
+        id: "recent-claude-failure",
+        title: t("Recent Claude request failed"),
+        detail: `HTTP ${latestClaudeLog.status_code} · ${latestClaudeLog.upstream_model ?? "?"}`,
+        cta: t("Inspect"),
+        severity: "warn",
+        icon: <IconSearch />,
+        onClick: () => setPage("logs"),
+      });
+    }
+    return items.slice(0, 5);
+  })();
+
   const renderAppWorkbenchOverview = (appId: RouteBuilderTarget) => (
     <AppWorkbenchOverview
       appId={appId}
@@ -2620,22 +2779,68 @@ function App() {
   const DashboardPage = () => (
     <div>
       <div className="page-header">
-        <h1>Runtime Dashboard</h1>
-        <p>Claude Desktop、Claude Code 与 Codex 的本地运行时控制台。先看是否可用，再按建议完成配置、检查和绑定。</p>
+        <h1>{t("Runtime Dashboard")}</h1>
+        <p>{t("Local runtime console for Claude Desktop, Claude Code and Codex. Check what's working, then follow the suggested actions.")}</p>
       </div>
 
       <div className="runtime-hero">
         <div>
-          <div className="runtime-eyebrow">Runtime Console</div>
-          <h2>让三个客户端稳定接入第三方模型</h2>
-          <p>Gateway Switch 会把 Provider、Route、Binding、Health 和 Logs 串成一条连续路径，而不是让你在多个技术页面里来回排查。</p>
+          <div className="runtime-eyebrow">{t("Runtime Console")}</div>
+          <h2>{t("Stable third-party model access for three clients")}</h2>
+          <p>{t("Gateway Switch ties Provider, Route, Binding, Health and Logs into one path so you don't have to debug across multiple technical pages.")}</p>
         </div>
         <div className="runtime-actions">
-          <button className="btn btn-primary" onClick={() => setPage("providers")}><IconPlus /> Configure Provider</button>
-          <button className="btn" onClick={() => setPage("routeBuilder")}><IconLink /> Build Route</button>
-          <button className="btn" onClick={() => setPage("healthCenter")}><IconPulse /> Run Check</button>
+          <button className="btn btn-primary" onClick={() => setPage("providers")}><IconPlus /> {t("Configure Provider")}</button>
+          <button className="btn" onClick={() => { setRouteBuilderTarget("claude_desktop"); setPage("claude"); }}><IconLink /> {t("Build Route")}</button>
+          <button className="btn" onClick={() => setPage("healthCenter")}><IconPulse /> {t("Run Check")}</button>
         </div>
       </div>
+
+      {nextActions.length > 0 && (
+        <div className="card next-actions-card" style={{ marginBottom: 16 }}>
+          <div className="card-title-row">
+            <div className="card-title" style={{ margin: 0 }}>{t("Next Actions")}</div>
+            <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("Click an item to fix it now")}</span>
+          </div>
+          <div className="route-list" style={{ marginBottom: 0 }}>
+            {nextActions.map(action => (
+              <button key={action.id} className="route-item next-action-item" onClick={action.onClick} type="button">
+                <div className={`route-icon ${action.severity}`}>{action.icon}</div>
+                <div className="route-info">
+                  <div className="route-name">{action.title}</div>
+                  <div className="route-path">{action.detail}</div>
+                </div>
+                <span className={`badge ${action.severity === "danger" ? "badge-red" : action.severity === "warn" ? "badge-amber" : "badge-blue"}`}>{action.cta}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {providers.length === 0 && (
+        <div className="card first-run-card" style={{ marginBottom: 16 }}>
+          <div className="card-title-row">
+            <div className="card-title" style={{ margin: 0 }}>{t("First-run setup")}</div>
+            <span className="badge badge-blue">{t("Step 1 of 1")}</span>
+          </div>
+          <p style={{ color: "var(--muted)", marginBottom: 12 }}>{t("Pick a provider preset, paste your API key, and Gateway Switch will create a matching route for the selected app in one step.")}</p>
+          <ProviderSetupWizard
+            presets={providerPresets}
+            presetId={wizardPresetId}
+            targetApp={wizardTargetApp}
+            apiKey={wizardApiKey}
+            applyRoute={wizardApplyRoute}
+            onPresetChange={setWizardPresetId}
+            onTargetAppChange={setWizardTargetApp}
+            onApiKeyChange={setWizardApiKey}
+            onApplyRouteChange={setWizardApplyRoute}
+            onRunWizard={() => void applyProviderWizard()}
+            onAdvancedRouteBuilder={() => setPage("providers")}
+            t={t}
+            showHeader={false}
+          />
+        </div>
+      )}
 
       <AppWorkbenchGrid apps={runtimeAppSummaries} onOpenWorkbench={(appId) => setPage(appPageFor(appId))} />
 
@@ -2811,12 +3016,12 @@ function App() {
     <div>
       <div className="page-header page-header-row">
         <div>
-          <h1>Provider Console</h1>
-          <p>统一管理 Claude Desktop、Claude Code 与 Codex 共享的上游 Provider、协议端点和兼容策略。</p>
+          <h1>{t("Provider Console")}</h1>
+          <p>{t("Manage upstream providers, protocol endpoints and compatibility policies shared across Claude Desktop, Claude Code and Codex.")}</p>
         </div>
         <div className="qa-buttons" style={{ margin: 0 }}>
-          <button className="btn btn-primary" onClick={() => setPage("routeBuilder")}><IconLink /> Build Route</button>
-          <button className="btn" onClick={() => setPage("healthCenter")}><IconPulse /> Check All</button>
+          <button className="btn btn-primary" onClick={() => setPage("routeBuilder")}><IconLink /> {t("Build Route")}</button>
+          <button className="btn" onClick={() => setPage("healthCenter")}><IconPulse /> {t("Check All")}</button>
         </div>
       </div>
 
@@ -3141,7 +3346,17 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
 
       <div className="two-col">
         <div className="card">
-          <div className="card-title">{t("Route Cards")}</div>
+          <div className="card-title-row">
+            <div className="card-title" style={{ margin: 0 }}>{t("Route Cards")}</div>
+            <div className="qa-buttons" style={{ margin: 0, gap: 6 }}>
+              <button className="btn btn-primary" style={{ padding: "5px 10px" }} onClick={() => {
+                setEditingR(null);
+                setRForm({ id: "", claude_alias: "claude-sonnet-4-6", display_name: "", provider_id: "", upstream_model: "" });
+                setRouteBuilderTarget("claude_desktop");
+                setShowClaudeRouteEditor(true);
+              }}><IconPlus /> {t("Add Route")}</button>
+            </div>
+          </div>
           <div className="route-list" style={{ marginBottom: 0 }}>
             {routes.length > 0 ? (
               routes.map(r => (
@@ -3156,26 +3371,60 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
                   <span className={`route-status ${r.enabled ? "active" : "disabled"}`}>
                     {r.enabled ? t("Active") : t("Disabled")}
                   </span>
+                  <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
+                    <button className="btn" style={{ padding: "5px 8px" }} onClick={() => { editRoute(r, { stayOnPage: true }); setShowClaudeRouteEditor(true); }} title={t("Edit Route")}><IconEdit /></button>
+                    <button className="btn btn-danger" style={{ padding: "5px 8px" }} onClick={() => delRoute(r.id)} title={t("Delete")}><IconTrash /></button>
+                  </div>
                 </div>
               ))
             ) : (
               <div className="empty-state">
                 <div className="empty-icon">--</div>
                 <h3>{t("No routes configured")}</h3>
-                <p>{t("Use Route Builder to create model routes.")}</p>
+                <p>{t("Click Add Route to create one, or open Route Builder for advanced editing.")}</p>
               </div>
             )}
           </div>
           <div className="qa-buttons" style={{ marginTop: 16 }}>
-            <button className="btn btn-primary" onClick={() => {
+            <button className="btn" onClick={() => {
               setRouteBuilderTarget("claude_desktop");
               setPage("routeBuilder");
-            }}><IconLink /> {t("Manage in Route Builder")}</button>
+            }} title={t("Open advanced multi-target route builder")}><IconLink /> {t("Advanced Route Builder")}</button>
           </div>
         </div>
 
         {DesktopExposedModelsCard()}
       </div>
+
+      {showClaudeRouteEditor && (
+        <div className="card" style={{ marginTop: 20 }}>
+          <RouteDraftForm
+            isCodexTarget={false}
+            targetCopy={t("Create a Claude Desktop alias route for the local /v1/messages gateway.")}
+            providers={providers}
+            claudeAliasOptions={claudeAliasOptions}
+            codexModelOptions={codexModelOptions}
+            claudeForm={rForm}
+            codexForm={cForm}
+            editingClaude={Boolean(editingR)}
+            editingCodex={Boolean(editingC)}
+            t={t}
+            onClaudeFormChange={setRForm}
+            onCodexFormChange={setCForm}
+            onSaveClaude={async () => { await saveRoute(); setShowClaudeRouteEditor(false); }}
+            onSaveCodex={saveCodexRoute}
+            onCancelClaude={() => {
+              setEditingR(null);
+              setRForm({ id: "", claude_alias: "claude-sonnet-4-6", display_name: "", provider_id: "", upstream_model: "" });
+              setShowClaudeRouteEditor(false);
+            }}
+            onCancelCodex={() => {
+              setEditingC(null);
+              setCForm({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "", tool_call_mode: "force_when_tools_present" });
+            }}
+          />
+        </div>
+      )}
 
       <div className="section-label">{t("Route Table")}</div>
       <div className="table-wrap">
@@ -3323,6 +3572,21 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
                   ))}
                 </select>
                 <p>{t("Claude Code will use the local Claude Gateway and configured Claude routes, including Chat Completions fallback for providers such as XiaoMiMo.")}</p>
+                <div className="qa-buttons" style={{ margin: "4px 0 0", gap: 6 }}>
+                  <button className="btn" style={{ padding: "5px 10px" }} onClick={() => {
+                    setEditingR(null);
+                    setRForm({ id: "", claude_alias: "claude-sonnet-4-6", display_name: "", provider_id: "", upstream_model: "" });
+                    setRouteBuilderTarget("claude_desktop");
+                    setShowClaudeCodeRouteEditor(true);
+                  }}><IconPlus /> {t("Add Gateway Route")}</button>
+                  {routes.length > 0 && (
+                    <button className="btn" style={{ padding: "5px 10px" }} onClick={() => {
+                      const matched = routes.find(r => r.claude_alias === ccModel) ?? routes[0];
+                      editRoute(matched, { stayOnPage: true });
+                      setShowClaudeCodeRouteEditor(true);
+                    }}><IconEdit /> {t("Edit Gateway Route")}</button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="binding-actions" style={{ marginTop: 16 }}>
@@ -3386,6 +3650,36 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
             </div>
           </div>
         </div>
+
+        {showClaudeCodeRouteEditor && (
+          <div className="card">
+            <RouteDraftForm
+              isCodexTarget={false}
+              targetCopy={t("Create a Claude Code Gateway Route. Risky Direct Provider binding stays explicit on the Claude Code workbench.")}
+              providers={providers}
+              claudeAliasOptions={claudeAliasOptions}
+              codexModelOptions={codexModelOptions}
+              claudeForm={rForm}
+              codexForm={cForm}
+              editingClaude={Boolean(editingR)}
+              editingCodex={Boolean(editingC)}
+              t={t}
+              onClaudeFormChange={setRForm}
+              onCodexFormChange={setCForm}
+              onSaveClaude={async () => { await saveRoute(); setShowClaudeCodeRouteEditor(false); }}
+              onSaveCodex={saveCodexRoute}
+              onCancelClaude={() => {
+                setEditingR(null);
+                setRForm({ id: "", claude_alias: "claude-sonnet-4-6", display_name: "", provider_id: "", upstream_model: "" });
+                setShowClaudeCodeRouteEditor(false);
+              }}
+              onCancelCodex={() => {
+                setEditingC(null);
+                setCForm({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "", tool_call_mode: "force_when_tools_present" });
+              }}
+            />
+          </div>
+        )}
 
         <div className="card">
           <div className="card-title">Route Diagnostics</div>
@@ -3623,7 +3917,17 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
       </div>
 
       {/* Route cards */}
-      <div className="section-label">{t("Active Codex Routes")}</div>
+      <div className="section-label-row">
+        <div className="section-label" style={{ margin: 0 }}>{t("Active Codex Routes")}</div>
+        <div className="qa-buttons" style={{ margin: 0, gap: 6 }}>
+          <button className="btn btn-primary" style={{ padding: "5px 10px" }} onClick={() => {
+            setEditingC(null);
+            setCForm({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "", tool_call_mode: "force_when_tools_present" });
+            setRouteBuilderTarget("codex");
+            setShowCodexRouteEditor(true);
+          }}><IconPlus /> {t("Add Route")}</button>
+        </div>
+      </div>
       <div className="route-list" style={{ marginBottom: 20 }}>
         {codexRoutes.length > 0 ? (
           codexRoutes.map(r => (
@@ -3638,21 +3942,54 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
               <span className={`route-status ${r.enabled ? "active" : "disabled"}`}>
                 {r.enabled ? t("Active") : t("Disabled")}
               </span>
+              <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
+                <button className="btn" style={{ padding: "5px 8px" }} onClick={() => { editCodexRoute(r, { stayOnPage: true }); setShowCodexRouteEditor(true); }} title={t("Edit Route")}><IconEdit /></button>
+                <button className="btn btn-danger" style={{ padding: "5px 8px" }} onClick={() => delCodexRoute(r.id)} title={t("Delete")}><IconTrash /></button>
+              </div>
             </div>
           ))
         ) : (
           <div className="empty-state">
             <div className="empty-icon">--</div>
             <h3>{t("No Codex routes configured")}</h3>
-            <p>{t("Use Route Builder to create Codex routes.")}</p>
+            <p>{t("Click Add Route to create a Codex route, or open Route Builder for advanced editing.")}</p>
           </div>
         )}
       </div>
+      {showCodexRouteEditor && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <RouteDraftForm
+            isCodexTarget={true}
+            targetCopy={t("Create a Codex Responses route that can fall back to OpenAI Chat Completions.")}
+            providers={providers}
+            claudeAliasOptions={claudeAliasOptions}
+            codexModelOptions={codexModelOptions}
+            claudeForm={rForm}
+            codexForm={cForm}
+            editingClaude={Boolean(editingR)}
+            editingCodex={Boolean(editingC)}
+            t={t}
+            onClaudeFormChange={setRForm}
+            onCodexFormChange={setCForm}
+            onSaveClaude={saveRoute}
+            onSaveCodex={async () => { await saveCodexRoute(); setShowCodexRouteEditor(false); }}
+            onCancelClaude={() => {
+              setEditingR(null);
+              setRForm({ id: "", claude_alias: "claude-sonnet-4-6", display_name: "", provider_id: "", upstream_model: "" });
+            }}
+            onCancelCodex={() => {
+              setEditingC(null);
+              setCForm({ id: "", codex_model: "gpt-4o", display_name: "", provider_id: "", upstream_model: "", tool_call_mode: "force_when_tools_present" });
+              setShowCodexRouteEditor(false);
+            }}
+          />
+        </div>
+      )}
       <div className="qa-buttons" style={{ marginTop: -8, marginBottom: 20 }}>
-        <button className="btn btn-primary" onClick={() => {
+        <button className="btn" onClick={() => {
           setRouteBuilderTarget("codex");
           setPage("routeBuilder");
-        }}><IconLink /> {t("Manage in Route Builder")}</button>
+        }} title={t("Open advanced multi-target route builder")}><IconLink /> {t("Advanced Route Builder")}</button>
       </div>
     </div>
   );
@@ -4467,7 +4804,7 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
       <div>
         <div className="page-header page-header-row">
           <div>
-            <h1>Unified Diagnostics Center</h1>
+            <h1>{t("Unified Diagnostics Center")}</h1>
             <p>Cross-product health for Claude Desktop, Claude Code, Codex, Codex++, providers, and install runtime.</p>
           </div>
           <div className="qa-buttons" style={{ margin: 0 }}>

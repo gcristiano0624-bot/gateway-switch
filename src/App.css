@@ -1188,6 +1188,55 @@ code, pre, .mono {
   margin-bottom: 8px;
 }
 
+.section-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.next-actions-card .route-list {
+  gap: 8px;
+}
+
+.next-action-item {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--duration) var(--ease-out), border-color var(--duration) var(--ease-out);
+}
+
+.next-action-item:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-focus);
+}
+
+.next-action-item .route-icon.danger {
+  background: var(--red-light);
+  color: var(--red);
+}
+
+.next-action-item .route-icon.warn {
+  background: var(--amber-light);
+  color: var(--amber);
+}
+
+.next-action-item .route-icon.info {
+  background: var(--blue-light);
+  color: var(--blue);
+}
+
 .route-list {
   display: flex;
   flex-direction: column;

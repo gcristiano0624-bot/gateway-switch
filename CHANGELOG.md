@@ -2,6 +2,17 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.13.3 - 2026-06-08
+
+- Reworked the sidebar from 6 nav groups (9 items) into 5 groups: Overview / Apps / Setup / Diagnostics / Advanced, all driven by `t()` for full bilingual coverage.
+- Reverted the previous "route CRUD only inside Route Builder" constraint: Claude Desktop, Claude Code and Codex pages now embed inline Add / Edit / Delete for their own routes.
+- Kept Route Builder under Advanced as a multi-target editor entry; per-app pages link to it as "Advanced Route Builder" instead of forcing a page jump.
+- Added a Dashboard "Next Actions" card that derives up to 5 click-to-fix CTAs from current state (no provider, no route, gateway stopped, app not bound, diagnostics critical, recent failure).
+- Added a one-step First-run setup card on the Dashboard when no provider is configured, embedding the existing provider wizard with clean header copy.
+- Bilingualized `ProviderSetupWizard`: now accepts an optional `t` and `showHeader`; all labels and preset preview rows go through `t()`.
+- Removed hard-coded English/Chinese page-header copy on Dashboard, Provider Console and Unified Diagnostics Center; added 30+ new bilingual entries (Apps / Setup / Diagnostics / Advanced / Add Route / Advanced Route Builder / Next Actions / First-run setup, etc.).
+- Verification: `cargo test` (75 passed), `pnpm build`.
+
 ## 1.13.2 - 2026-06-02
 
 - Added the Runtime Console refactor with Dashboard, App Workbench, Provider Console, Route Builder, Health Center, and Usage Insights as first-class modules.

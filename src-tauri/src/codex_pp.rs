@@ -28,16 +28,6 @@ const WATCHER_LABEL: &str = "com.codexplusplus.watcher";
 const INSTALLED_GATEWAY_SWITCH_EXECUTABLE: &str =
     "/Applications/Gateway Switch.app/Contents/MacOS/gateway-switch";
 const UI_IMPROVEMENTS_TWEAK_ID: &str = "co.bennett.ui-improvements";
-const DEFAULT_TWEAKS: [(&str, &str); 2] = [
-    (
-        "co.bennett.custom-keyboard-shortcuts",
-        "b-nnett/codex-plusplus-keyboard-shortcuts",
-    ),
-    (
-        "co.bennett.ui-improvements",
-        "b-nnett/codex-plusplus-bennett-ui",
-    ),
-];
 const RECOMMENDED_SCRIPT_SOURCE: &str = "gateway-switch-recommended";
 const RECOMMENDED_SCRIPTS: [(&str, &str, &str, &str); 4] = [
     (
@@ -1164,6 +1154,7 @@ fn resolve_cli_plan(action: &str) -> Result<CommandPlan, String> {
     let (args, label) = match action {
         "status" => (vec!["status"], "status"),
         "doctor" => (vec!["doctor"], "doctor"),
+        "debug" => (vec!["debug"], "debug"),
         "repair" => (vec!["repair"], "repair"),
         "repair-local" => (vec!["repair", "--local"], "repair --local"),
         "update" => (vec!["update"], "update"),
@@ -1524,7 +1515,11 @@ fn native_install_impl(ctx: &mut NativeInstallContext, local_signing: bool) -> R
         );
         stage_runtime_assets(ctx, &source_dir, &root)?;
         initialize_native_config(&root, &source_dir)?;
-        install_default_tweaks_native(ctx, &root.join("tweaks"))?;
+        fs::create_dir_all(root.join("tweaks")).map_err(|e| e.to_string())?;
+        ctx.log(
+            "stdout",
+            "Codex++ 1.0 starts with a clean tweak directory. Install UI tweaks explicitly from the store.",
+        );
         let cli_shim_summary = install_cli_shims_native(&root)?;
         ctx.log("stdout", cli_shim_summary);
         maybe_fail_native_phase("after-runtime")?;
@@ -2485,98 +2480,6 @@ fn initialize_native_config(root: &Path, source_dir: &Path) -> Result<(), String
         );
     root_obj.entry("tweaks").or_insert_with(|| json!({}));
     write_json_pretty(&config_path, &config)
-}
-
-fn install_default_tweaks_native(
-    ctx: &mut NativeInstallContext,
-    tweaks_dir: &Path,
-) -> Result<(), String> {
-    fs::create_dir_all(tweaks_dir).map_err(|e| e.to_string())?;
-    for (id, repo) in DEFAULT_TWEAKS {
-        let target = tweaks_dir.join(id);
-        if target.exists() {
-            ctx.log("stdout", format!("Default tweak already installed: {}", id));
-            continue;
-        }
-        let url = latest_release_archive_url(repo)?;
-        let extract_root = download_and_extract_archive_blocking(&url, "default-tweak")?;
-        let source = find_manifest_root(&extract_root)
-            .ok_or_else(|| format!("Default tweak {} archive did not contain manifest.json", id))?;
-        copy_dir(&source, &target)?;
-        ctx.log("stdout", format!("Installed default tweak: {}", id));
-    }
-    Ok(())
-}
-
-fn latest_release_archive_url(repo: &str) -> Result<String, String> {
-    let url = format!("https://api.github.com/repos/{}/releases/latest", repo);
-    let response = reqwest::blocking::Client::new()
-        .get(url)
-        .header("Accept", "application/vnd.github+json")
-        .header("User-Agent", "Gateway-Switch")
-        .send()
-        .map_err(|e| e.to_string())?;
-    let release: Value = match response.error_for_status() {
-        Ok(ok) => ok.json().map_err(|e| e.to_string())?,
-        Err(_) => {
-            return Ok(format!(
-                "https://codeload.github.com/{}/tar.gz/refs/heads/main",
-                repo
-            ))
-        }
-    };
-    if let Some(assets) = release.get("assets").and_then(Value::as_array) {
-        for asset in assets {
-            let name = asset
-                .get("name")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            let download_url = asset
-                .get("browser_download_url")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            if (name.ends_with(".tgz") || name.ends_with(".tar.gz")) && !download_url.is_empty() {
-                return Ok(download_url.to_string());
-            }
-        }
-    }
-    if let Some(tarball) = release.get("tarball_url").and_then(Value::as_str) {
-        return Ok(tarball.to_string());
-    }
-    Ok(format!(
-        "https://codeload.github.com/{}/tar.gz/refs/heads/main",
-        repo
-    ))
-}
-
-fn download_and_extract_archive_blocking(url: &str, prefix: &str) -> Result<PathBuf, String> {
-    let temp_root =
-        std::env::temp_dir().join(format!("gateway-switch-{}-{}", prefix, now_millis()));
-    fs::create_dir_all(&temp_root).map_err(|e| e.to_string())?;
-    let archive_path = temp_root.join("archive.tar.gz");
-    let extract_root = temp_root.join("extract");
-    let bytes = reqwest::blocking::Client::new()
-        .get(url)
-        .header("User-Agent", "Gateway-Switch")
-        .send()
-        .map_err(|e| e.to_string())?
-        .error_for_status()
-        .map_err(|e| e.to_string())?
-        .bytes()
-        .map_err(|e| e.to_string())?;
-    fs::write(&archive_path, &bytes).map_err(|e| e.to_string())?;
-    fs::create_dir_all(&extract_root).map_err(|e| e.to_string())?;
-    let file = fs::File::open(&archive_path).map_err(|e| e.to_string())?;
-    let decoder = GzDecoder::new(file);
-    let mut archive = tar::Archive::new(decoder);
-    archive.unpack(&extract_root).map_err(|e| e.to_string())?;
-    fs::read_dir(&extract_root)
-        .map_err(|e| e.to_string())?
-        .find_map(|entry| {
-            let path = entry.ok()?.path();
-            path.is_dir().then_some(path)
-        })
-        .ok_or_else(|| format!("No extracted directory found for {}", url))
 }
 
 fn install_cli_shims_native(root: &Path) -> Result<String, String> {
@@ -3907,10 +3810,7 @@ mod native_install_acceptance_tests {
             state.get("watcher").and_then(Value::as_str),
             Some("launchd")
         );
-        assert!(user_root()
-            .join("tweaks")
-            .join(DEFAULT_TWEAKS[0].0)
-            .exists());
+        assert!(user_root().join("tweaks").exists());
         assert!(user_root().join("bin").join("codexplusplus").exists());
         let shim = fs::read_to_string(user_root().join("bin").join("codexplusplus"))
             .expect("native CLI shim should be readable");

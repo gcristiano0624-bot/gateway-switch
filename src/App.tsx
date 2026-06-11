@@ -353,7 +353,6 @@ const ZH_TEXT: Record<string, string> = {
   "Runtime Dashboard": "运行总览",
   "Provider Console": "模型服务商",
   "Route Builder": "路由编辑器",
-  "Health Center": "健康中心",
   "Usage Insights": "使用统计",
   "Diagnostics Export": "诊断导出",
   "Install Doctor": "安装诊断",
@@ -618,20 +617,166 @@ const ZH_TEXT: Record<string, string> = {
   "Config": "配置",
   "Port": "端口",
   "Not configured": "未配置",
-  "No providers configured": "暂无服务商配置",
-  "Model": "模型",
-  "Auth Env": "认证环境变量",
   "Not set": "未设置",
-  "Not bound": "未绑定",
   "Disabled": "已禁用",
-  "Managed by Gateway Switch": "由 Gateway Switch 接管",
-  "App Workbench": "应用工作台",
+  "Enable": "启用",
+  "Disable": "禁用",
+  "Managed by Gateway Switch": "已由 Gateway Switch 接管",
+  "Not bound": "未绑定",
+  "Default Model": "默认模型",
+  "Last Codex Model": "最近 Codex 模型",
+  "No Codex request yet": "暂无 Codex 请求",
+  "Default Codex provider": "Codex 默认服务商",
+  "Result": "结果",
+  "Required for Direct Provider": "直连模式必填",
+  "Missing Anthropic URL": "缺少 Anthropic URL",
+  "Select provider...": "选择服务商...",
+  "Create Route": "创建路由",
+  "Target App": "目标应用",
+  "Policy": "策略",
+  "Model": "模型",
+  "Recent": "最近请求",
+  "running": "运行中",
+  "stopped": "已停止",
   "managed": "已接管",
   "setup needed": "需要配置",
-  "stopped": "已停止",
   "not set": "未设置",
-  "Recent": "最近请求",
-  "Select provider...": "请选择服务商...",
+  "ready": "就绪",
+  "check": "检查",
+  "setup": "配置",
+  "Routes:": "路由：",
+  "Gateway:": "Gateway：",
+  "Model:": "模型：",
+  "Recent:": "最近：",
+  "Open workbench": "打开工作台",
+  "Current Routes": "当前生效路由",
+  "What the app will request": "应用请求名",
+  "Where it goes": "转发到",
+  "Exposed model count": "已暴露模型数",
+  "Advanced details": "高级详情",
+  "Show advanced details": "显示高级详情",
+  "Hide advanced details": "收起高级详情",
+  "Route Diagnostics": "路由诊断",
+  "Failed Request Diagnostics": "失败请求诊断",
+  "Replay Preview": "本地预览",
+  "No failed diagnostic snapshots yet.": "暂无失败请求诊断快照。",
+  "No Claude routes available for diagnostics.": "暂无可诊断的 Claude 路由。",
+  "Codex Route Diagnostics": "Codex 路由诊断",
+  "No Codex route diagnostics yet.": "暂无 Codex 路由诊断。",
+  "direct safe": "可直连",
+  "gateway recommended": "建议走 Gateway",
+  "strict tools": "严格工具调用",
+  "profiled": "已套用策略",
+  "Direct Provider compatibility risk": "直连模式兼容风险",
+  "This provider/model is risky for Claude Code Direct Provider because system/tool roles may be rejected. Gateway Route is recommended.": "这个服务商/模型用于 Claude Code 直连时有风险，system/tool 角色可能被拒绝。建议使用 Gateway 路由。",
+  "I understand the risk and still want to bind Direct Provider.": "我理解风险，仍然要绑定直连模式。",
+  "Repair Claude Code to Gateway Route": "修复为 Gateway 路由",
+  "backs up settings.json first": "会先备份 settings.json",
+  "Payload Preview": "Payload 预览",
+  "Preview Selected Route": "预览所选路由",
+  "Health Center": "健康中心",
+  "Quick Check": "快速检查",
+  "Export Report": "导出报告",
+  "Failure Clusters": "失败聚类",
+  "Surface": "入口",
+  "Count": "次数",
+  "Recommendation": "建议",
+  "No failure clusters": "暂无失败聚类",
+  "Recent diagnostics do not show repeated provider failures.": "最近诊断没有发现重复的服务商失败。",
+  "Codex++ Page Enhancements": "Codex++ 页面增强",
+  "Install or repair Codex++ first, then manage approved tweaks explicitly.": "先安装或修复 Codex++，再显式管理已审核的增强插件。",
+  "Install Preflight": "安装前预检",
+  "Run preflight to verify Node.js, npm, bootstrap tools, and Codex.app before patching.": "安装前检查 Node.js、npm、引导工具和 Codex.app，确认可以安全打补丁。",
+  "Run Preflight": "运行预检",
+  "Ready to install": "可以安装",
+  "Blocked": "有阻塞",
+  "Installed": "已安装",
+  "Not installed": "未安装",
+  "Version": "版本",
+  "Auto Update": "自动更新",
+  "Safe Mode": "安全模式",
+  "Install Mode": "安装模式",
+  "User Root": "用户目录",
+  "Enabled": "已开启",
+  "Off": "关闭",
+  "On": "开启",
+  "Bootstrap via Gateway Switch": "通过 Gateway Switch 引导",
+  "Install Codex++": "安装 Codex++",
+  "Install with Local Signing": "使用本地签名安装",
+  "Reapply Patch": "重新打补丁",
+  "Reapply with Local Signing": "用本地签名重新打补丁",
+  "Open Root": "打开根目录",
+  "Open Tweaks": "打开增强目录",
+  "Codex++ 1.0 keeps the core install clean. Install page tweaks from the market only when you need them.": "Codex++ 1.0 默认保持核心安装干净；需要页面增强时，再从市场显式安装。",
+  "UI Safe Mode": "UI 安全模式",
+  "Managed Tweak": "受控增强",
+  "Current State": "当前状态",
+  "Other Features": "其他功能",
+  "Kept enabled": "保持启用",
+  "UI safe mode on": "UI 安全模式已开启",
+  "Page enhancement active": "页面增强已启用",
+  "Tweak not installed": "增强未安装",
+  "Disable Page Enhancement": "禁用页面增强",
+  "Re-enable Page Enhancement": "重新启用页面增强",
+  "Tweak Summary": "增强汇总",
+  "Installed Tweaks": "已安装增强",
+  "Updates": "可更新",
+  "Tweaks Dir": "增强目录",
+  "missing entry": "入口缺失",
+  "No Codex++ tweaks found": "暂无 Codex++ 增强",
+  "Install Codex++ first from the overview card, then open the market tab to add approved tweaks.": "先在总览卡片安装 Codex++，再到脚本市场添加已审核增强。",
+  "Codex++ Script Market": "Codex++ 脚本市场",
+  "Search tweaks...": "搜索增强...",
+  "Refresh Store": "刷新市场",
+  "Recommended Scripts": "推荐脚本",
+  "Detecting Codex++ native user-script storage...": "正在检测 Codex++ 原生用户脚本目录...",
+  "Storage Mode": "存储模式",
+  "Storage Path": "存储路径",
+  "Not detected": "未检测到",
+  "Install Recommended Scripts": "安装推荐脚本",
+  "Refresh Script Status": "刷新脚本状态",
+  "Upstream Tweak Store": "上游 Tweak Store",
+  "Remote": "远程",
+  "matched": "已匹配",
+  "Repo": "仓库",
+  "Archive": "归档包",
+  "Installed Path": "安装路径",
+  "Derived after registry validation": "校验 registry 后生成",
+  "Reinstall": "重新安装",
+  "Install": "安装",
+  "Copy URL": "复制 URL",
+  "Release": "发布页",
+  "Review": "审核",
+  "No store entries loaded": "尚未加载市场条目",
+  "Click Refresh Store to fetch the approved Codex++ tweak index.": "点击「刷新市场」拉取已审核的 Codex++ 增强列表。",
+  "Session Repair": "历史会话修复",
+  "Safe Repair Strategy": "安全修复策略",
+  "Automatic repair boundary": "自动修复边界",
+  "Recommended flow": "推荐流程",
+  "Codex++ Diagnostics": "Codex++ 诊断维护",
+  "Maintenance Commands": "维护命令",
+  "Debug": "调试信息",
+  "Install / Patch": "安装 / 打补丁",
+  "Install Local": "本地签名安装",
+  "Repair": "修复",
+  "Repair Local": "本地签名修复",
+  "Update Codex++": "更新 Codex++",
+  "Update Codex": "更新 Codex",
+  "Safe On": "开启安全模式",
+  "Safe Off": "关闭安全模式",
+  "codex++ live output": "codex++ 实时输出",
+  "ok": "正常",
+  "warn": "警告",
+  "error": "错误",
+  "missing": "缺失",
+  "unknown": "未知",
+  "healthy": "健康",
+  "attention": "需关注",
+  "degraded": "降级",
+  "critical": "严重",
+  "No providers configured": "暂无服务商配置",
+  "Auth Env": "认证环境变量",
+  "App Workbench": "应用工作台",
   "Default aliases will be used until you add a custom one.": "未添加自定义别名前会使用默认别名。",
   "Claude Gateway health check passed": "Claude Gateway 健康检查通过",
   "Claude Gateway health check failed": "Claude Gateway 健康检查失败",
@@ -639,20 +784,17 @@ const ZH_TEXT: Record<string, string> = {
   "Codex Gateway health check passed": "Codex Gateway 健康检查通过",
   "Codex Gateway health check failed": "Codex Gateway 健康检查失败",
   "Use Route Builder to create Codex routes.": "请在 Route Builder 中创建 Codex 路由。",
-  "Target App": "目标应用",
   "Alias route for Claude Desktop model validation": "用于 Claude Desktop 模型验证的别名路由",
   "Gateway route for safer coding agent runs": "用于更安全编码代理运行的 Gateway 路由",
   "Responses gateway route for Codex App": "用于 Codex App 的 Responses Gateway 路由",
   "Compatibility Preview": "兼容性预览",
   "Conflict": "冲突",
-  "Policy": "策略",
   "Not selected": "未选择",
   "Existing Codex route/model": "已有 Codex 路由或模型",
   "Existing Claude route/alias": "已有 Claude 路由或别名",
   "No obvious conflict": "未发现明显冲突",
   "Auto profile will be inferred": "将自动推断兼容性配置",
   "Open Workbench": "打开工作台",
-  "Quick Check": "快速检查",
   "Route Draft": "路由草稿",
   "Create a Claude Desktop alias route for the local /v1/messages gateway.": "为本地 /v1/messages Gateway 创建 Claude Desktop 别名路由。",
   "Create a Claude Code Gateway Route. Risky Direct Provider binding stays explicit on the Claude Code workbench.": "创建 Claude Code Gateway 路由；有风险的直连服务商绑定仍保留在 Claude Code 工作台显式操作。",
@@ -669,7 +811,6 @@ const ZH_TEXT: Record<string, string> = {
   "Conflicts": "冲突数量",
   "Last Sync": "最近同步",
   "Ready": "可同步",
-  "Blocked": "阻断",
   "Sources": "来源",
   "Resolved": "已解决",
   "Not run yet": "尚未执行",
@@ -697,17 +838,10 @@ const ZH_TEXT: Record<string, string> = {
   "Write Status": "写入状态",
   "Generated at": "生成时间",
   "Claude Code will use the local Claude Gateway and configured Claude routes, including Chat Completions fallback for providers such as XiaoMiMo.": "Claude Code 将使用本地 Claude Gateway 和已配置的 Claude 路由，并支持小米 MiMO 等服务商的 Chat Completions fallback。",
-  "Required for Direct Provider": "直连服务商模式必填",
-  "Missing Anthropic URL": "缺少 Anthropic URL",
   "Direct Provider writes the provider's Anthropic Base URL and API key into Claude Code. Use Gateway Route when a provider only supports OpenAI Chat Completions.": "直连服务商会把该服务商的 Anthropic Base URL 和 API Key 写入 Claude Code；当服务商只支持 OpenAI Chat Completions 时，请使用 Gateway 路由。",
   "Writes `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, and `ANTHROPIC_MODEL` into `~/.claude/settings.json`. Claude Desktop binding is not touched.": "写入 `ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN` 和 `ANTHROPIC_MODEL` 到 `~/.claude/settings.json`，不会影响 Claude Desktop 绑定。",
   "Writes `ANTHROPIC_BASE_URL` from the provider's Anthropic URL. The OpenAI URL is reserved for Codex and Chat Completions fallback.": "从服务商的 Anthropic URL 写入 `ANTHROPIC_BASE_URL`；OpenAI URL 保留给 Codex 和 Chat Completions fallback 使用。",
-  "Last Codex Model": "最近 Codex 模型",
-  "No Codex request yet": "暂无 Codex 请求",
-  "Result": "结果",
   "Trace / Error": "追踪 / 错误",
-  "Default Codex provider": "默认 Codex 服务商",
-  "Default Model": "默认模型",
   "Bind writes Gateway Switch into `~/.codex/config.toml` and forces API-key mode for the local gateway. Restart Codex App after binding.": "绑定会把 Gateway Switch 写入 `~/.codex/config.toml`，并强制本地网关使用 API Key 模式。绑定后请重启 Codex App。",
   "Gateway Switch converts protocol shape; it does not add or remove a model's native reasoning ability. If the upstream model is fast, or does not expose reasoning tokens through Chat Completions, the visible response can be very quick.": "Gateway Switch 只转换协议形态，不会增加或移除模型本身的推理能力。如果上游模型响应很快，或不通过 Chat Completions 暴露推理 token，界面上看到的回复可能会非常快。",
   "Binding preserves `~/.codex/config.toml` project entries. Existing Codex conversations may still be separated by Codex's own account/provider state, so switching providers can show a different conversation list even when local project trust remains intact.": "绑定会保留 `~/.codex/config.toml` 中的项目配置。已有 Codex 会话仍可能按 Codex 自身账号或服务商状态隔离，因此切换服务商后即使本地项目 trust 仍然保留，也可能看到不同的会话列表。",
@@ -765,13 +899,8 @@ const ZH_TEXT: Record<string, string> = {
   "Enable Auto Start Gateway if Claude Desktop should work immediately after app launch": "如果希望应用启动后 Claude Desktop 立即可用，请开启自动启动 Gateway",
   "Enable Auto Takeover Desktop if Gateway Switch should re-assert Claude Desktop binding on every launch": "如果希望每次启动时重新确认 Claude Desktop 绑定，请开启自动接管 Desktop",
   "Compiled UI report, safe-fix results, manual remediation list, and security notes": "已生成界面报告、安全修复结果、手动修复清单和安全说明",
-  "Review": "需检查",
   "OK": "正常",
-  "ok": "正常",
-  "warn": "警告",
-  "error": "错误",
   "fixed": "已修复",
-  "running": "运行中",
 };
 
 function tx(text: string, language: Language): string {
@@ -1674,6 +1803,8 @@ function App() {
   const [showClaudeRouteEditor, setShowClaudeRouteEditor] = useState(false);
   const [showClaudeCodeRouteEditor, setShowClaudeCodeRouteEditor] = useState(false);
   const [showCodexRouteEditor, setShowCodexRouteEditor] = useState(false);
+  const [showClaudeAdvancedDetails, setShowClaudeAdvancedDetails] = useState(false);
+  const [showCodexAdvancedDetails, setShowCodexAdvancedDetails] = useState(false);
 
   // Settings
   const [importPath, setImportPath] = useState("");
@@ -2737,7 +2868,7 @@ function App() {
       items.push({
         id: "diagnostics-attention",
         title: t("Diagnostics needs attention"),
-        detail: `${unifiedDiagnostics.status} · ${t("score")} ${unifiedDiagnostics.score}`,
+        detail: `${t(unifiedDiagnostics.status)} · ${t("score")} ${unifiedDiagnostics.score}`,
         cta: t("Open"),
         severity: unifiedDiagnostics.status === "critical" ? "danger" : "warn",
         icon: <IconPulse />,
@@ -2842,7 +2973,7 @@ function App() {
         </div>
       )}
 
-      <AppWorkbenchGrid apps={runtimeAppSummaries} onOpenWorkbench={(appId) => setPage(appPageFor(appId))} />
+      <AppWorkbenchGrid apps={runtimeAppSummaries} onOpenWorkbench={(appId) => setPage(appPageFor(appId))} t={t} />
 
       {/* KPI Row */}
       <div className="kpi-row">
@@ -3347,7 +3478,10 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
       <div className="two-col">
         <div className="card">
           <div className="card-title-row">
-            <div className="card-title" style={{ margin: 0 }}>{t("Route Cards")}</div>
+            <div>
+              <div className="card-title" style={{ margin: 0 }}>{t("Current Routes")}</div>
+              <p className="field-hint">{t("What the app will request")} → {t("Where it goes")}</p>
+            </div>
             <div className="qa-buttons" style={{ margin: 0, gap: 6 }}>
               <button className="btn btn-primary" style={{ padding: "5px 10px" }} onClick={() => {
                 setEditingR(null);
@@ -3366,7 +3500,7 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
                   </div>
                   <div className="route-info">
                     <div className="route-name">{r.claude_alias}</div>
-                    <div className="route-path">{r.display_name || r.upstream_model} via {r.provider_id}</div>
+                    <div className="route-path">{r.display_name || r.upstream_model} → {r.provider_id} / {r.upstream_model}</div>
                   </div>
                   <span className={`route-status ${r.enabled ? "active" : "disabled"}`}>
                     {r.enabled ? t("Active") : t("Disabled")}
@@ -3393,7 +3527,20 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
           </div>
         </div>
 
-        {DesktopExposedModelsCard()}
+        <div className="card">
+          <div className="card-title">{t("Advanced details")}</div>
+          <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
+            <span className="info-key">{t("Exposed model count")}</span>
+            <span className="info-val">{desktop?.models?.length ?? 0}</span>
+            <span className="info-key">{t("Config File")}</span>
+            <span className="info-val">{desktop?.config_path ?? "-"}</span>
+          </div>
+          <div className="qa-buttons" style={{ marginTop: 16 }}>
+            <button className="btn" onClick={() => setShowClaudeAdvancedDetails(v => !v)}>
+              {showClaudeAdvancedDetails ? t("Hide advanced details") : t("Show advanced details")}
+            </button>
+          </div>
+        </div>
       </div>
 
       {showClaudeRouteEditor && (
@@ -3426,9 +3573,12 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
         </div>
       )}
 
-      <div className="section-label">{t("Route Table")}</div>
-      <div className="table-wrap">
-        <table>
+      {showClaudeAdvancedDetails && (
+        <>
+          {DesktopExposedModelsCard()}
+          <div className="section-label">{t("Route Table")}</div>
+          <div className="table-wrap">
+            <table>
           <thead>
             <tr>
               <th>Claude Alias</th>
@@ -3460,11 +3610,11 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
               </tr>
             )}
           </tbody>
-        </table>
-      </div>
+            </table>
+          </div>
 
-      <div className="card" style={{ marginTop: 20 }}>
-        <div className="card-title">Failed Request Diagnostics</div>
+          <div className="card" style={{ marginTop: 20 }}>
+        <div className="card-title">{t("Failed Request Diagnostics")}</div>
         <p style={{ color: "var(--muted)", marginBottom: 14 }}>
           Pick a captured failed request to inspect the redacted original request and converted upstream payload. Preview is local-only and never calls the provider.
         </p>
@@ -3478,13 +3628,13 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
                 </div>
               </div>
               <button className="btn" onClick={() => void loadReplayReport(item.request_id)}>
-                <IconSearch /> Replay Preview
+                <IconSearch /> {t("Replay Preview")}
               </button>
             </div>
           ))}
           {failedDiagnostics.length === 0 && (
             <div className="empty-state" style={{ padding: 16 }}>
-              <p>No failed diagnostic snapshots yet.</p>
+              <p>{t("No failed diagnostic snapshots yet.")}</p>
             </div>
           )}
         </div>
@@ -3506,7 +3656,9 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
             }, null, 2)}</pre>
           </>
         )}
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 
@@ -3618,9 +3770,9 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
                 <p>{t("Direct Provider writes the provider's Anthropic Base URL and API key into Claude Code. Use Gateway Route when a provider only supports OpenAI Chat Completions.")}</p>
                 {directProviderBlocked && (
                   <div className="risk-confirm-card">
-                    <div className="risk-confirm-title">Direct Provider compatibility risk</div>
+                    <div className="risk-confirm-title">{t("Direct Provider compatibility risk")}</div>
                     <p>
-                      This provider/model is risky for Claude Code Direct Provider because system/tool roles may be rejected. Gateway Route is recommended.
+                      {t("This provider/model is risky for Claude Code Direct Provider because system/tool roles may be rejected. Gateway Route is recommended.")}
                     </p>
                     <label className="check-row">
                       <input
@@ -3628,7 +3780,7 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
                         checked={ccForceDirectProvider}
                         onChange={e => setCcForceDirectProvider(e.target.checked)}
                       />
-                      <span>I understand the risk and still want to bind Direct Provider.</span>
+                      <span>{t("I understand the risk and still want to bind Direct Provider.")}</span>
                     </label>
                   </div>
                 )}
@@ -3682,7 +3834,7 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
         )}
 
         <div className="card">
-          <div className="card-title">Route Diagnostics</div>
+          <div className="card-title">{t("Route Diagnostics")}</div>
           <p style={{ color: "var(--muted)", marginBottom: 14 }}>
             Provider capability profile explains whether Claude Code can use Direct Provider or must use Gateway Route.
           </p>
@@ -3701,22 +3853,22 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
                   )}
                 </div>
                 <span className={`badge ${diagnostic.strategy.direct_provider_safe ? "badge-green" : "badge-amber"}`}>
-                  {diagnostic.strategy.direct_provider_safe ? "direct safe" : "gateway recommended"}
+                  {diagnostic.strategy.direct_provider_safe ? t("direct safe") : t("gateway recommended")}
                 </span>
               </div>
             ))}
             {routeDiagnostics.length === 0 && (
               <div className="empty-state" style={{ padding: 16 }}>
-                <p>No Claude routes available for diagnostics.</p>
+                <p>{t("No Claude routes available for diagnostics.")}</p>
               </div>
             )}
           </div>
           {selectedRouteDiagnostic && !selectedRouteDiagnostic.strategy.direct_provider_safe && (
             <div className="qa-buttons" style={{ marginTop: 16 }}>
               <button className="btn btn-primary" onClick={() => void repairClaudeCodeGateway()}>
-                <IconZap /> Repair Claude Code to Gateway Route
+                <IconZap /> {t("Repair Claude Code to Gateway Route")}
               </button>
-              <span className="badge badge-amber">backs up settings.json first</span>
+              <span className="badge badge-amber">{t("backs up settings.json first")}</span>
             </div>
           )}
         </div>
@@ -3736,13 +3888,13 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
         </div>
 
         <div className="card">
-          <div className="card-title">Payload Preview</div>
+          <div className="card-title">{t("Payload Preview")}</div>
           <p style={{ color: "var(--muted)", marginBottom: 14 }}>
             Preview uses a fixed redacted sample request. It does not call the upstream provider or consume tokens.
           </p>
           <div className="qa-buttons" style={{ marginTop: 0 }}>
             <button className="btn" onClick={() => void loadPayloadPreview(ccModel)}>
-              <IconPulse /> Preview Selected Route
+              <IconPulse /> {t("Preview Selected Route")}
             </button>
             {selectedRouteDiagnostic && (
               <span className={`badge ${selectedRouteDiagnostic.strategy.system_to_user ? "badge-amber" : "badge-green"}`}>
@@ -3884,8 +4036,9 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
         </div>
       </div>
 
+      {showCodexAdvancedDetails && (
       <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-title">Codex Route Diagnostics</div>
+        <div className="card-title">{t("Codex Route Diagnostics")}</div>
         <p style={{ color: "var(--muted)", marginBottom: 14 }}>
           Codex routes now use the same Provider Compatibility Profile as Claude routes, with Codex-specific flags for Responses fallback, strict tool calls, and reasoning cleanup.
         </p>
@@ -3904,17 +4057,18 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
                 )}
               </div>
               <span className={`badge ${diagnostic.strategy.codex_strict_tool_calls ? "badge-amber" : "badge-blue"}`}>
-                {diagnostic.strategy.codex_strict_tool_calls ? "strict tools" : "profiled"}
+                {diagnostic.strategy.codex_strict_tool_calls ? t("strict tools") : t("profiled")}
               </span>
             </div>
           ))}
           {codexRouteDiagnostics.length === 0 && (
             <div className="empty-state" style={{ padding: 16 }}>
-              <p>No Codex route diagnostics yet.</p>
+              <p>{t("No Codex route diagnostics yet.")}</p>
             </div>
           )}
         </div>
       </div>
+      )}
 
       {/* Route cards */}
       <div className="section-label-row">
@@ -3926,6 +4080,9 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
             setRouteBuilderTarget("codex");
             setShowCodexRouteEditor(true);
           }}><IconPlus /> {t("Add Route")}</button>
+          <button className="btn" style={{ padding: "5px 10px" }} onClick={() => setShowCodexAdvancedDetails(v => !v)}>
+            {showCodexAdvancedDetails ? t("Hide advanced details") : t("Show advanced details")}
+          </button>
         </div>
       </div>
       <div className="route-list" style={{ marginBottom: 20 }}>
@@ -3937,7 +4094,7 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
               </div>
               <div className="route-info">
                 <div className="route-name">{r.codex_model}</div>
-                <div className="route-path">{r.display_name || r.upstream_model} via {r.provider_id} · {t(toolCallModeLabel(r.tool_call_mode))}</div>
+                <div className="route-path">{r.display_name || r.upstream_model} → {r.provider_id} / {r.upstream_model}</div>
               </div>
               <span className={`route-status ${r.enabled ? "active" : "disabled"}`}>
                 {r.enabled ? t("Active") : t("Disabled")}
@@ -4021,9 +4178,9 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
 
   const CodexPpPreflightCard = () => (
     <div className="card">
-      <div className="card-title">安装前预检</div>
+      <div className="card-title">{t("Install Preflight")}</div>
       <p style={{ color: "var(--muted)", marginBottom: 14 }}>
-        {codexPpPreflight?.summary ?? "Run preflight to verify Node.js, npm, bootstrap tools, and Codex.app before patching."}
+        {codexPpPreflight?.summary ?? t("Run preflight to verify Node.js, npm, bootstrap tools, and Codex.app before patching.")}
       </p>
       <div className="route-list" style={{ marginBottom: 0 }}>
         {(codexPpPreflight?.checks ?? []).map(check => (
@@ -4032,16 +4189,16 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
               <div className="route-name">{check.name}</div>
               <div className="route-path">{check.detail}</div>
             </div>
-            <span className={`badge ${codexPpStatusBadge(check.status)}`}>{check.status}</span>
+            <span className={`badge ${codexPpStatusBadge(check.status)}`}>{t(check.status)}</span>
           </div>
         ))}
       </div>
       <div className="qa-buttons" style={{ marginTop: 16 }}>
         <button className="btn" onClick={() => void refreshCodexPp(false)} disabled={codexPpLoading}>
-          <IconRefresh /> Run Preflight
+          <IconRefresh /> {t("Run Preflight")}
         </button>
         <span className={`badge ${codexPpPreflight?.ready ? "badge-green" : "badge-red"}`}>
-          {codexPpPreflight?.ready ? "Ready to install" : "Blocked"}
+          {codexPpPreflight?.ready ? t("Ready to install") : t("Blocked")}
         </span>
       </div>
     </div>
@@ -4054,49 +4211,49 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
         <span className="info-key">{t("Status")}</span>
         <span className="info-val">
           <span className={`badge ${codexPpInstall?.installed ? "badge-green" : "badge-gray"}`}>
-            {codexPpInstall?.installed ? "Installed" : "Not installed"}
+            {codexPpInstall?.installed ? t("Installed") : t("Not installed")}
           </span>
         </span>
         <span className="info-key">{t("Version")}</span>
         <span className="info-val">{codexPpInstall?.version ?? "-"}</span>
-        <span className="info-key">Auto Update</span>
-        <span className="info-val">{codexPpInstall?.auto_update ? "Enabled" : "Disabled"}</span>
-        <span className="info-key">Safe Mode</span>
-        <span className="info-val">{codexPpInstall?.safe_mode ? "On" : "Off"}</span>
+        <span className="info-key">{t("Auto Update")}</span>
+        <span className="info-val">{codexPpInstall?.auto_update ? t("Enabled") : t("Disabled")}</span>
+        <span className="info-key">{t("Safe Mode")}</span>
+        <span className="info-val">{codexPpInstall?.safe_mode ? t("On") : t("Off")}</span>
         <span className="info-key">CLI</span>
-        <span className="info-val">{codexPpInstall?.cli_path ?? "Bootstrap via Gateway Switch"}</span>
-        <span className="info-key">Install Mode</span>
+        <span className="info-val">{codexPpInstall?.cli_path ?? t("Bootstrap via Gateway Switch")}</span>
+        <span className="info-key">{t("Install Mode")}</span>
         <span className="info-val">{codexPpPreflight?.install_mode ?? "-"}</span>
-        <span className="info-key">User Root</span>
+        <span className="info-key">{t("User Root")}</span>
         <span className="info-val">{codexPpInstall?.user_root ?? "-"}</span>
       </div>
       <div className="qa-buttons" style={{ marginTop: 16 }}>
         {!codexPpInstall?.installed && (
           <>
             <button className="btn btn-primary" onClick={() => void runCodexPpCli("install")} disabled={codexPpLoading}>
-              Install Codex++
+              {t("Install Codex++")}
             </button>
             <button className="btn" onClick={() => void runCodexPpCli("install-local")} disabled={codexPpLoading}>
-              Install with Local Signing
+              {t("Install with Local Signing")}
             </button>
           </>
         )}
         {codexPpInstall?.installed && (
           <>
             <button className="btn btn-primary" onClick={() => void runCodexPpCli("install")} disabled={codexPpLoading}>
-              Reapply Patch
+              {t("Reapply Patch")}
             </button>
             <button className="btn" onClick={() => void runCodexPpCli("install-local")} disabled={codexPpLoading}>
-              Reapply with Local Signing
+              {t("Reapply with Local Signing")}
             </button>
           </>
         )}
         <button className="btn" onClick={() => void refreshCodexPp(true)} disabled={codexPpLoading}><IconRefresh /> {t("Refresh")}</button>
-        <button className="btn" onClick={() => void openCodexPpPath("root")}>Open Root</button>
-        <button className="btn" onClick={() => void openCodexPpPath("tweaks")}>Open Tweaks</button>
+        <button className="btn" onClick={() => void openCodexPpPath("root")}>{t("Open Root")}</button>
+        <button className="btn" onClick={() => void openCodexPpPath("tweaks")}>{t("Open Tweaks")}</button>
       </div>
       <p style={{ marginTop: 12, marginBottom: 0, color: "var(--muted)", fontSize: 12 }}>
-        Gateway Switch will auto-detect an existing <code>codexplusplus</code> CLI. If none is found, it falls back to the official bootstrap installer and patches <code>Codex.app</code> for you.
+        {t("Codex++ 1.0 keeps the core install clean. Install page tweaks from the market only when you need them.")}
       </p>
     </div>
   );
@@ -4108,14 +4265,14 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
     <div>
       <div className="page-header page-header-row">
         <div>
-          <h1>Codex++ 页面增强</h1>
-          <p>可从这里一键安装并 patch Codex.app，安装完成后再读取本地 tweak manifest、入口文件和启用状态。</p>
+          <h1>{t("Codex++ Page Enhancements")}</h1>
+          <p>{t("Install or repair Codex++ first, then manage approved tweaks explicitly.")}</p>
         </div>
         <div className="qa-buttons" style={{ margin: 0 }}>
           <button className="btn" onClick={() => void refreshCodexPp(false)} disabled={codexPpLoading}><IconRefresh /> {t("Refresh")}</button>
-          <button className="btn" onClick={() => void runCodexPpCli("safe-mode-status")} disabled={codexPpLoading}>Safe Mode</button>
+          <button className="btn" onClick={() => void runCodexPpCli("safe-mode-status")} disabled={codexPpLoading}>{t("Safe Mode")}</button>
           <button className="btn btn-primary" onClick={() => void setCodexPpUiSafeMode(true)} disabled={codexPpLoading || uiSafeModeOn}>
-            UI Safe On
+            {t("Safe On")}
           </button>
         </div>
       </div>
@@ -4124,37 +4281,37 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
         {CodexPpPreflightCard()}
       </div>
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title">UI Safe Mode</div>
+        <div className="card-title">{t("UI Safe Mode")}</div>
         <p style={{ color: "var(--muted)", marginBottom: 14 }}>
           一键禁用页面增强 tweak，保留路由、脚本市场、历史会话修复、watcher 和 CLI shim。适合 Codex UI 错位或设置页异常时临时排障。
         </p>
         <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
-          <span className="info-key">Managed Tweak</span>
+          <span className="info-key">{t("Managed Tweak")}</span>
           <span className="info-val">{CODEX_PP_UI_IMPROVEMENTS_TWEAK_ID}</span>
-          <span className="info-key">Current State</span>
-          <span className="info-val">{uiEnhancement ? (uiSafeModeOn ? "UI safe mode on" : "Page enhancement active") : "Tweak not installed"}</span>
-          <span className="info-key">Other Features</span>
-          <span className="info-val">Kept enabled</span>
+          <span className="info-key">{t("Current State")}</span>
+          <span className="info-val">{uiEnhancement ? (uiSafeModeOn ? t("UI safe mode on") : t("Page enhancement active")) : t("Tweak not installed")}</span>
+          <span className="info-key">{t("Other Features")}</span>
+          <span className="info-val">{t("Kept enabled")}</span>
         </div>
         <div className="qa-buttons">
           <button className="btn btn-primary" onClick={() => void setCodexPpUiSafeMode(true)} disabled={codexPpLoading || !uiEnhancement || uiSafeModeOn}>
-            Disable Page Enhancement
+            {t("Disable Page Enhancement")}
           </button>
           <button className="btn" onClick={() => void setCodexPpUiSafeMode(false)} disabled={codexPpLoading || !uiEnhancement || !uiSafeModeOn}>
-            Re-enable Page Enhancement
+            {t("Re-enable Page Enhancement")}
           </button>
         </div>
       </div>
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title">Tweak Summary</div>
+        <div className="card-title">{t("Tweak Summary")}</div>
         <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
-          <span className="info-key">Installed Tweaks</span>
+          <span className="info-key">{t("Installed Tweaks")}</span>
           <span className="info-val">{codexPpTweaks.length}</span>
-          <span className="info-key">Enabled</span>
+          <span className="info-key">{t("Enabled")}</span>
           <span className="info-val">{codexPpTweaks.filter(tw => tw.enabled).length}</span>
-          <span className="info-key">Updates</span>
+          <span className="info-key">{t("Updates")}</span>
           <span className="info-val">{codexPpTweaks.filter(tw => tw.update_available).length}</span>
-          <span className="info-key">Tweaks Dir</span>
+          <span className="info-key">{t("Tweaks Dir")}</span>
           <span className="info-val">{codexPpInstall?.tweaks_dir ?? "-"}</span>
         </div>
       </div>
@@ -4172,14 +4329,14 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
             <p className="tweak-card-desc">{tweak.description ?? tweak.id}</p>
             <div className="tweak-card-tags">
               {tweak.tags.map(tag => <span key={tag} className="tweak-tag">{tag}</span>)}
-              {!tweak.entry_exists && <span className="tweak-tag">missing entry</span>}
-              {tweak.update_available && <span className="tweak-tag">update {tweak.latest_version}</span>}
+              {!tweak.entry_exists && <span className="tweak-tag">{t("missing entry")}</span>}
+              {tweak.update_available && <span className="tweak-tag">{t("Updates")} {tweak.latest_version}</span>}
             </div>
             <div className="tweak-card-footer">
               <span className="tweak-card-author">{tweak.author ?? tweak.github_repo ?? tweak.id}</span>
               <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
                 <button className="btn" onClick={() => void toggleCodexPpTweak(tweak.id, !tweak.enabled)} disabled={codexPpLoading}>
-                  {tweak.enabled ? "Disable" : "Enable"}
+                  {tweak.enabled ? t("Disable") : t("Enable")}
                 </button>
                 <button className="btn btn-danger" onClick={() => void uninstallCodexPpTweak(tweak.id)} disabled={codexPpLoading}><IconTrash /></button>
               </div>
@@ -4189,8 +4346,8 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
         {codexPpTweaks.length === 0 && (
           <div className="empty-state">
             <div className="empty-icon">++</div>
-            <h3>No Codex++ tweaks found</h3>
-            <p>Install Codex++ first from the overview card, then open the market tab to add approved tweaks.</p>
+            <h3>{t("No Codex++ tweaks found")}</h3>
+            <p>{t("Install Codex++ first from the overview card, then open the market tab to add approved tweaks.")}</p>
           </div>
         )}
       </div>
@@ -4202,24 +4359,24 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
     <div>
       <div className="page-header page-header-row">
         <div>
-          <h1>Codex++ 脚本市场</h1>
+          <h1>{t("Codex++ Script Market")}</h1>
           <p>优先恢复 Codex++ 原生推荐脚本；下方仍保留官方 Tweak Store。</p>
         </div>
         <div className="qa-buttons" style={{ margin: 0 }}>
-          <input value={codexPpSearch} onChange={e => setCodexPpSearch(e.target.value)} placeholder="Search tweaks..." style={{ minWidth: 220 }} />
-          <button className="btn" onClick={() => void refreshCodexPp(true)} disabled={codexPpLoading}><IconRefresh /> Refresh Store</button>
+          <input value={codexPpSearch} onChange={e => setCodexPpSearch(e.target.value)} placeholder={t("Search tweaks...")} style={{ minWidth: 220 }} />
+          <button className="btn" onClick={() => void refreshCodexPp(true)} disabled={codexPpLoading}><IconRefresh /> {t("Refresh Store")}</button>
         </div>
       </div>
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title">Recommended Scripts</div>
+        <div className="card-title">{t("Recommended Scripts")}</div>
         <p style={{ color: "var(--muted)", marginBottom: 14 }}>
-          {codexPpRecommendedScripts?.summary ?? "Detecting Codex++ native user-script storage..."}
+          {codexPpRecommendedScripts?.summary ?? t("Detecting Codex++ native user-script storage...")}
         </p>
         <div className="info-grid" style={{ marginTop: 0, paddingTop: 0, borderTop: "none" }}>
-          <span className="info-key">Storage Mode</span>
+          <span className="info-key">{t("Storage Mode")}</span>
           <span className="info-val">{codexPpRecommendedScripts?.storage_mode ?? "-"}</span>
-          <span className="info-key">Storage Path</span>
-          <span className="info-val">{codexPpRecommendedScripts?.storage_path ?? "Not detected"}</span>
+          <span className="info-key">{t("Storage Path")}</span>
+          <span className="info-val">{codexPpRecommendedScripts?.storage_path ?? t("Not detected")}</span>
         </div>
         <div className="route-list" style={{ marginBottom: 0 }}>
           {(codexPpRecommendedScripts?.scripts ?? []).map(script => (
@@ -4228,19 +4385,19 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
                 <div className="route-name">{script.name}</div>
                 <div className="route-path">{script.file_name} · {script.description}</div>
               </div>
-              <span className={`badge ${codexPpStatusBadge(script.status)}`}>{script.status}</span>
+              <span className={`badge ${codexPpStatusBadge(script.status)}`}>{t(script.status)}</span>
             </div>
           ))}
         </div>
         <div className="qa-buttons" style={{ marginTop: 16 }}>
           <button className="btn btn-primary" onClick={() => void installCodexPpRecommendedScripts()} disabled={codexPpLoading || codexPpRecommendedScripts?.storage_mode !== "codex_user_scripts"}>
-            Install Recommended Scripts
+            {t("Install Recommended Scripts")}
           </button>
           <button className="btn" onClick={() => void refreshCodexPp(false)} disabled={codexPpLoading}>
-            <IconRefresh /> Refresh Script Status
+            <IconRefresh /> {t("Refresh Script Status")}
           </button>
           <button className="btn" onClick={() => void openCodexPpPath("log")}>
-            Open Logs
+            {t("Open Logs")}
           </button>
         </div>
         {codexPpRecommendedScripts?.storage_mode !== "codex_user_scripts" && (
@@ -4250,7 +4407,7 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
         )}
       </div>
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title">Upstream Tweak Store</div>
+        <div className="card-title">{t("Upstream Tweak Store")}</div>
         <p style={{ color: "var(--muted)", marginBottom: 14 }}>
           {codexPpStore?.summary ?? "Fetches the live approved Codex++ Tweak Store registry and derives safe archive URLs from approved commits."}
         </p>
@@ -4271,11 +4428,11 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
                 <div className="route-info">
                   <div className="route-name">{item.name}</div>
                   <div className="route-path">
-                    {item.note}{item.replacementEntryId ? ` · Replacement: ${item.replacementEntryId}` : ""}
+                  {item.note}{item.replacementEntryId ? ` · Replacement: ${item.replacementEntryId}` : ""}
                   </div>
                 </div>
                 <span className={`badge ${item.exactMatch ? "badge-green" : "badge-amber"}`}>
-                  {item.exactMatch ? "matched" : "legacy"}
+                  {item.exactMatch ? t("matched") : "legacy"}
                 </span>
               </div>
             ))}
@@ -4291,22 +4448,22 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
                 <div className="tweak-card-name">{entry.manifest.name}</div>
                 <div className="tweak-card-version">{entry.manifest.version} · {entry.manifest.scope ?? "renderer"}</div>
               </div>
-              <span className={`badge ${entry.installed ? "badge-green" : "badge-gray"}`}>{entry.installed ? "Installed" : "Remote"}</span>
+              <span className={`badge ${entry.installed ? "badge-green" : "badge-gray"}`}>{entry.installed ? t("Installed") : t("Remote")}</span>
             </div>
             <p className="tweak-card-desc">{entry.manifest.description ?? entry.repo}</p>
             <div className="tweak-card-tags">
               {(entry.manifest.tags ?? []).map(tag => <span key={tag} className="tweak-tag">{tag}</span>)}
               <span className="tweak-tag">{entry.approvedCommitSha.slice(0, 7)}</span>
-              {entry.installed_version && <span className="tweak-tag">installed {entry.installed_version}</span>}
+              {entry.installed_version && <span className="tweak-tag">{t("Installed")} {entry.installed_version}</span>}
             </div>
             <div className="info-grid" style={{ marginTop: 10, paddingTop: 10 }}>
-              <span className="info-key">Repo</span>
+              <span className="info-key">{t("Repo")}</span>
               <span className="info-val">{entry.repo}</span>
-              <span className="info-key">Archive</span>
-              <span className="info-val">{entry.archiveUrl ?? "Derived after registry validation"}</span>
+              <span className="info-key">{t("Archive")}</span>
+              <span className="info-val">{entry.archiveUrl ?? t("Derived after registry validation")}</span>
               {entry.installedPath && (
                 <>
-                  <span className="info-key">Installed Path</span>
+                  <span className="info-key">{t("Installed Path")}</span>
                   <span className="info-val">{entry.installedPath}</span>
                 </>
               )}
@@ -4315,12 +4472,12 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
               <span className="tweak-card-author">{entry.repo}</span>
               <div className="qa-buttons" style={{ margin: 0, gap: 4 }}>
                 <button className="btn btn-primary" onClick={() => void installCodexPpTweak(entry)} disabled={codexPpLoading}>
-                  {entry.installed ? "Reinstall" : "Install"}
+                  {entry.installed ? t("Reinstall") : t("Install")}
                 </button>
                 <button className="btn" onClick={() => window.open(`https://github.com/${entry.repo}`, "_blank")}>GitHub</button>
-                {entry.archiveUrl && <button className="btn" onClick={() => void copyPath(entry.archiveUrl ?? "")}>Copy URL</button>}
-                {entry.releaseUrl && <button className="btn" onClick={() => window.open(entry.releaseUrl ?? "", "_blank")}>Release</button>}
-                {entry.reviewUrl && <button className="btn" onClick={() => window.open(entry.reviewUrl ?? "", "_blank")}>Review</button>}
+                {entry.archiveUrl && <button className="btn" onClick={() => void copyPath(entry.archiveUrl ?? "")}>{t("Copy URL")}</button>}
+                {entry.releaseUrl && <button className="btn" onClick={() => window.open(entry.releaseUrl ?? "", "_blank")}>{t("Release")}</button>}
+                {entry.reviewUrl && <button className="btn" onClick={() => window.open(entry.reviewUrl ?? "", "_blank")}>{t("Review")}</button>}
               </div>
             </div>
           </div>
@@ -4328,8 +4485,8 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
         {storeEntries.length === 0 && (
           <div className="empty-state">
             <div className="empty-icon">++</div>
-            <h3>No store entries loaded</h3>
-            <p>Click Refresh Store to fetch the approved Codex++ tweak index.</p>
+            <h3>{t("No store entries loaded")}</h3>
+            <p>{t("Click Refresh Store to fetch the approved Codex++ tweak index.")}</p>
           </div>
         )}
       </div>
@@ -4339,20 +4496,20 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
   const CodexPpSessionsPage = () => (
     <div>
       <div className="page-header">
-        <h1>历史会话修复</h1>
+        <h1>{t("Session Repair")}</h1>
         <p>安全版先提供 Codex++ 会话修复指引和维护入口，不直接写未知私有会话数据库。</p>
       </div>
       <div className="two-col">
         <div className="card">
-          <div className="card-title">安全修复策略</div>
+          <div className="card-title">{t("Safe Repair Strategy")}</div>
           <div className="note-grid">
-            <div><strong>自动修复边界</strong><p>Gateway Switch 只调用 codex++ CLI 或管理公开配置，不猜测 IndexedDB/SQLite 私有结构。</p></div>
-            <div><strong>推荐流程</strong><p>先运行 status/doctor，再根据结果执行 repair 或 update-codex，最后重启 Codex。</p></div>
+            <div><strong>{t("Automatic repair boundary")}</strong><p>Gateway Switch 只调用 codex++ CLI 或管理公开配置，不猜测 IndexedDB/SQLite 私有结构。</p></div>
+            <div><strong>{t("Recommended flow")}</strong><p>先运行 status/doctor，再根据结果执行 repair 或 update-codex，最后重启 Codex。</p></div>
           </div>
           <div className="qa-buttons" style={{ marginTop: 16 }}>
             <button className="btn" onClick={() => void runCodexPpCli("status")} disabled={codexPpLoading}>Status</button>
             <button className="btn" onClick={() => void runCodexPpCli("doctor")} disabled={codexPpLoading}>Doctor</button>
-            <button className="btn btn-primary" onClick={() => void runCodexPpCli("repair")} disabled={codexPpLoading}>Repair</button>
+            <button className="btn btn-primary" onClick={() => void runCodexPpCli("repair")} disabled={codexPpLoading}>{t("Repair")}</button>
           </div>
         </div>
         {CodexPpOverviewCard()}
@@ -4364,7 +4521,7 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
     <div>
       <div className="page-header page-header-row">
         <div>
-          <h1>Codex++ 诊断维护</h1>
+          <h1>{t("Codex++ Diagnostics")}</h1>
           <p>检查 watcher、runtime、CLI、safe mode，并提供受控维护命令。</p>
         </div>
         <div className="qa-buttons" style={{ margin: 0 }}>
@@ -4391,21 +4548,22 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
         {CodexPpPreflightCard()}
       </div>
       <div className="card" style={{ marginTop: 16 }}>
-        <div className="card-title">Maintenance Commands</div>
+        <div className="card-title">{t("Maintenance Commands")}</div>
         <div className="qa-buttons" style={{ marginTop: 0 }}>
-          <button className="btn btn-primary" onClick={() => void runCodexPpCli("install")} disabled={codexPpLoading}>Install / Patch</button>
-          <button className="btn" onClick={() => void runCodexPpCli("install-local")} disabled={codexPpLoading}>Install Local</button>
+          <button className="btn btn-primary" onClick={() => void runCodexPpCli("install")} disabled={codexPpLoading}>{t("Install / Patch")}</button>
+          <button className="btn" onClick={() => void runCodexPpCli("install-local")} disabled={codexPpLoading}>{t("Install Local")}</button>
           <button className="btn" onClick={() => void runCodexPpCli("status")} disabled={codexPpLoading}>Status</button>
-          <button className="btn btn-primary" onClick={() => void runCodexPpCli("repair")} disabled={codexPpLoading}>Repair</button>
-          <button className="btn" onClick={() => void runCodexPpCli("repair-local")} disabled={codexPpLoading}>Repair Local</button>
-          <button className="btn" onClick={() => void runCodexPpCli("update")} disabled={codexPpLoading}>Update Codex++</button>
-          <button className="btn" onClick={() => void runCodexPpCli("update-codex")} disabled={codexPpLoading}>Update Codex</button>
-          <button className="btn" onClick={() => void runCodexPpCli("safe-mode-on")} disabled={codexPpLoading}>Safe On</button>
-          <button className="btn" onClick={() => void runCodexPpCli("safe-mode-off")} disabled={codexPpLoading}>Safe Off</button>
+          <button className="btn" onClick={() => void runCodexPpCli("debug")} disabled={codexPpLoading}>{t("Debug")}</button>
+          <button className="btn btn-primary" onClick={() => void runCodexPpCli("repair")} disabled={codexPpLoading}>{t("Repair")}</button>
+          <button className="btn" onClick={() => void runCodexPpCli("repair-local")} disabled={codexPpLoading}>{t("Repair Local")}</button>
+          <button className="btn" onClick={() => void runCodexPpCli("update")} disabled={codexPpLoading}>{t("Update Codex++")}</button>
+          <button className="btn" onClick={() => void runCodexPpCli("update-codex")} disabled={codexPpLoading}>{t("Update Codex")}</button>
+          <button className="btn" onClick={() => void runCodexPpCli("safe-mode-on")} disabled={codexPpLoading}>{t("Safe On")}</button>
+          <button className="btn" onClick={() => void runCodexPpCli("safe-mode-off")} disabled={codexPpLoading}>{t("Safe Off")}</button>
         </div>
         {(codexPpCli || codexPpLogLines.length > 0 || codexPpLoading) && (
           <div className="cli-output">
-            <strong>{codexPpCli?.command ?? "codex++ live output"}</strong>
+            <strong>{codexPpCli?.command ?? t("codex++ live output")}</strong>
             <pre>{codexPpLogText}</pre>
           </div>
         )}
@@ -4418,11 +4576,11 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
       {renderAppWorkbenchOverview("codex")}
       <div className="codex-tabs">
         {[
-          ["routes", "路由"],
-          ["enhance", "页面增强"],
-          ["market", "脚本市场"],
-          ["sessions", "历史会话修复"],
-          ["diagnostics", "诊断维护"],
+          ["routes", t("Routes")],
+          ["enhance", t("Codex++ Page Enhancements")],
+          ["market", t("Codex++ Script Market")],
+          ["sessions", t("Session Repair")],
+          ["diagnostics", t("Codex++ Diagnostics")],
         ].map(([id, label]) => (
           <button key={id} className={`codex-tab ${codexTab === id ? "active" : ""}`} onClick={() => setCodexTab(id as CodexTab)}>
             {label}
@@ -4785,7 +4943,7 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
   // =====================================================
   const HealthCenterPage = () => {
     const report = unifiedDiagnostics ?? MOCK_UNIFIED_DIAGNOSTICS;
-    return <HealthCenterPanel report={report} onRefresh={() => void loadAll()} onExport={() => void exportUnifiedDiagnostics()} onClaudeGatewayCheck={checkHealth} onCodexGatewayCheck={checkCodexHealth} onNavigate={(target) => setPage(target as Page)} />;
+    return <HealthCenterPanel report={report} onRefresh={() => void loadAll()} onExport={() => void exportUnifiedDiagnostics()} onClaudeGatewayCheck={checkHealth} onCodexGatewayCheck={checkCodexHealth} onNavigate={(target) => setPage(target as Page)} t={t} />;
   };
 
   // =====================================================
@@ -4819,7 +4977,7 @@ const needsClaudeCodeGatewayRoute = (provider: Provider | undefined, upstreamMod
             <div className="kpi-info">
               <div className="kpi-label">Overall Status</div>
               <div className="kpi-value">{report.score}</div>
-              <span className={`kpi-badge ${report.status === "healthy" ? "green" : report.status === "critical" ? "red" : "amber"}`}>{report.status}</span>
+              <span className={`kpi-badge ${report.status === "healthy" ? "green" : report.status === "critical" ? "red" : "amber"}`}>{t(report.status)}</span>
             </div>
           </div>
           <div className="kpi-card">

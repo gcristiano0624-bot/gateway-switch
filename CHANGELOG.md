@@ -2,6 +2,15 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.14.0 - 2026-06-12
+
+- Refactored the Claude Gateway runtime into focused backend modules while preserving the existing `/v1/messages`, `/v1/models`, route diagnostics, payload preview, and replay command surfaces.
+- Moved Provider Compatibility Profiles and manual provider policy application into `gateway_strategy.rs`, keeping `gateway::ProviderCompatibilityProfile` and related functions re-exported for Codex Gateway compatibility.
+- Moved Anthropic/OpenAI Chat request conversion, response conversion, tool-call parsing, stream delta extraction, and token estimation into `gateway_protocol.rs`.
+- Moved failure snapshot gating, payload redaction/truncation, fallback status classification, and upstream body preview helpers into `gateway_diagnostics.rs`.
+- Kept runtime behavior intentionally conservative: no route schema change, no Tauri command rename, no frontend API contract change, and no provider strategy behavior change.
+- Verification: `git diff --check`, editor diagnostics. Rust `cargo test` and DMG build are pending in an environment with `cargo` available.
+
 ## 1.13.3 - 2026-06-08
 
 - Reworked the sidebar from 6 nav groups (9 items) into 5 groups: Overview / Apps / Setup / Diagnostics / Advanced, all driven by `t()` for full bilingual coverage.

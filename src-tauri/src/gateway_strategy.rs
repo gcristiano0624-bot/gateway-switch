@@ -1,0 +1,241 @@
+use std::path::PathBuf;
+
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    database,
+    models::{Provider, ProviderCompatibilityPolicy},
+};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderCompatibilityProfile {
+    pub strategy_id: String,
+    pub system_to_user: bool,
+    pub tool_to_user: bool,
+    pub disable_tools: bool,
+    pub strip_unsupported_params: bool,
+    pub direct_provider_safe: bool,
+    pub gateway_route_recommended: bool,
+    pub codex_disable_responses: bool,
+    pub codex_strict_tool_calls: bool,
+    pub codex_strip_reasoning: bool,
+    pub summary: String,
+}
+
+
+pub(crate) fn should_force_chat_fallback(profile: &ProviderCompatibilityProfile) -> bool {
+    matches!(
+        profile.strategy_id.as_str(),
+        "volcengine_deepseek_coding"
+            | "xiaomi_mimo_chat"
+            | "deepseek_official_chat"
+            | "moonshot_kimi_chat"
+            | "qwen_dashscope_chat"
+    )
+}
+
+
+pub fn provider_compatibility_profile(
+    provider: &Provider,
+    upstream_model: &str,
+) -> ProviderCompatibilityProfile {
+    let key = provider_profile_key(provider, upstream_model);
+    let has_anthropic = provider
+        .anthropic_base_url
+        .as_deref()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false);
+    if is_volcengine_deepseek_key(&key) {
+        ProviderCompatibilityProfile {
+            strategy_id: "volcengine_deepseek_coding".into(),
+            system_to_user: true,
+            tool_to_user: true,
+            disable_tools: false,
+            strip_unsupported_params: false,
+            direct_provider_safe: false,
+            gateway_route_recommended: true,
+            codex_disable_responses: true,
+            codex_strict_tool_calls: true,
+            codex_strip_reasoning: true,
+            summary: "Volcengine Ark DeepSeek coding endpoints reject system/tool roles; Gateway Route converts them to user messages.".into(),
+        }
+    } else if key.contains("openrouter") {
+        ProviderCompatibilityProfile {
+            strategy_id: "openrouter_anthropic_or_chat".into(),
+            system_to_user: false,
+            tool_to_user: false,
+            disable_tools: false,
+            strip_unsupported_params: true,
+            direct_provider_safe: has_anthropic,
+            gateway_route_recommended: !has_anthropic,
+            codex_disable_responses: true,
+            codex_strict_tool_calls: false,
+            codex_strip_reasoning: true,
+            summary: "OpenRouter is safest through Gateway Route unless an Anthropic-compatible endpoint is explicitly configured.".into(),
+        }
+    } else if key.contains("xiaomi") || key.contains("mimo") || key.contains("xiaomimimo.com") {
+        ProviderCompatibilityProfile {
+            strategy_id: "xiaomi_mimo_chat".into(),
+            system_to_user: false,
+            tool_to_user: false,
+            disable_tools: false,
+            strip_unsupported_params: true,
+            direct_provider_safe: false,
+            gateway_route_recommended: true,
+            codex_disable_responses: true,
+            codex_strict_tool_calls: false,
+            codex_strip_reasoning: true,
+            summary: "Xiaomi MiMo is treated as an OpenAI Chat provider; Gateway Route and Codex Chat fallback are recommended, with strict Codex tool enforcement disabled to avoid tool-planning loops.".into(),
+        }
+    } else if key.contains("deepseek") {
+        ProviderCompatibilityProfile {
+            strategy_id: "deepseek_official_chat".into(),
+            system_to_user: false,
+            tool_to_user: false,
+            disable_tools: false,
+            strip_unsupported_params: true,
+            direct_provider_safe: false,
+            gateway_route_recommended: true,
+            codex_disable_responses: true,
+            codex_strict_tool_calls: false,
+            codex_strip_reasoning: true,
+            summary: "DeepSeek official endpoints are treated as OpenAI Chat-compatible; Gateway Route is recommended for Claude clients.".into(),
+        }
+    } else if key.contains("moonshot") || key.contains("kimi") {
+        ProviderCompatibilityProfile {
+            strategy_id: "moonshot_kimi_chat".into(),
+            system_to_user: false,
+            tool_to_user: false,
+            disable_tools: false,
+            strip_unsupported_params: true,
+            direct_provider_safe: false,
+            gateway_route_recommended: true,
+            codex_disable_responses: true,
+            codex_strict_tool_calls: false,
+            codex_strip_reasoning: false,
+            summary: "Moonshot/Kimi is treated as OpenAI Chat-compatible; Gateway Route is recommended for Claude clients.".into(),
+        }
+    } else if key.contains("qwen") || key.contains("dashscope") || key.contains("aliyun") {
+        ProviderCompatibilityProfile {
+            strategy_id: "qwen_dashscope_chat".into(),
+            system_to_user: false,
+            tool_to_user: false,
+            disable_tools: false,
+            strip_unsupported_params: true,
+            direct_provider_safe: false,
+            gateway_route_recommended: true,
+            codex_disable_responses: true,
+            codex_strict_tool_calls: false,
+            codex_strip_reasoning: true,
+            summary: "Qwen/DashScope routes use OpenAI Chat compatibility; Gateway Route is recommended for Claude clients.".into(),
+        }
+    } else if has_anthropic {
+        ProviderCompatibilityProfile {
+            strategy_id: "standard_anthropic".into(),
+            system_to_user: false,
+            tool_to_user: false,
+            disable_tools: false,
+            strip_unsupported_params: false,
+            direct_provider_safe: true,
+            gateway_route_recommended: false,
+            codex_disable_responses: false,
+            codex_strict_tool_calls: false,
+            codex_strip_reasoning: false,
+            summary: "Standard Anthropic-compatible route; Direct Provider may be used when the endpoint is truly Anthropic-compatible.".into(),
+        }
+    } else {
+        ProviderCompatibilityProfile {
+            strategy_id: "openai_chat_fallback".into(),
+            system_to_user: false,
+            tool_to_user: false,
+            disable_tools: false,
+            strip_unsupported_params: false,
+            direct_provider_safe: false,
+            gateway_route_recommended: true,
+            codex_disable_responses: true,
+            codex_strict_tool_calls: false,
+            codex_strip_reasoning: false,
+            summary: "OpenAI Chat fallback route; use Gateway Route for Claude and Claude Code."
+                .into(),
+        }
+    }
+}
+
+pub fn effective_provider_compatibility_profile(
+    db: &PathBuf,
+    provider: &Provider,
+    upstream_model: &str,
+) -> ProviderCompatibilityProfile {
+    let base = provider_compatibility_profile(provider, upstream_model);
+    match database::get_provider_policy(db, &provider.id) {
+        Ok(Some(policy)) => apply_provider_policy(base, &policy),
+        _ => base,
+    }
+}
+
+pub fn apply_provider_policy(
+    mut base: ProviderCompatibilityProfile,
+    policy: &ProviderCompatibilityPolicy,
+) -> ProviderCompatibilityProfile {
+    if let Some(v) = policy.system_to_user {
+        base.system_to_user = v;
+    }
+    if let Some(v) = policy.tool_to_user {
+        base.tool_to_user = v;
+    }
+    if let Some(v) = policy.disable_tools {
+        base.disable_tools = v;
+    }
+    if let Some(v) = policy.strip_unsupported_params {
+        base.strip_unsupported_params = v;
+    }
+    if let Some(v) = policy.direct_provider_safe {
+        base.direct_provider_safe = v;
+    }
+    if let Some(v) = policy.gateway_route_recommended {
+        base.gateway_route_recommended = v;
+    }
+    if let Some(v) = policy.codex_disable_responses {
+        base.codex_disable_responses = v;
+    }
+    if let Some(v) = policy.codex_strict_tool_calls {
+        base.codex_strict_tool_calls = v;
+    }
+    if let Some(v) = policy.codex_strip_reasoning {
+        base.codex_strip_reasoning = v;
+    }
+    if policy.system_to_user.is_some()
+        || policy.tool_to_user.is_some()
+        || policy.disable_tools.is_some()
+        || policy.strip_unsupported_params.is_some()
+        || policy.direct_provider_safe.is_some()
+        || policy.gateway_route_recommended.is_some()
+        || policy.codex_disable_responses.is_some()
+        || policy.codex_strict_tool_calls.is_some()
+        || policy.codex_strip_reasoning.is_some()
+    {
+        base.summary = format!(
+            "{} Manual provider policy overrides are active.",
+            base.summary
+        );
+    }
+    base
+}
+
+fn provider_profile_key(provider: &Provider, upstream_model: &str) -> String {
+    format!(
+        "{} {} {} {} {} {}",
+        provider.id,
+        provider.name,
+        provider.base_url,
+        provider.openai_base_url,
+        provider.anthropic_base_url.as_deref().unwrap_or_default(),
+        upstream_model
+    )
+    .to_ascii_lowercase()
+}
+
+fn is_volcengine_deepseek_key(key: &str) -> bool {
+    (key.contains("volc") || key.contains("ark.cn-") || key.contains("火山"))
+        && key.contains("deepseek")
+}

@@ -24,14 +24,15 @@ pub struct ProviderCompatibilityProfile {
 
 
 pub(crate) fn should_force_chat_fallback(profile: &ProviderCompatibilityProfile) -> bool {
-    matches!(
-        profile.strategy_id.as_str(),
-        "volcengine_deepseek_coding"
-            | "xiaomi_mimo_chat"
-            | "deepseek_official_chat"
-            | "moonshot_kimi_chat"
-            | "qwen_dashscope_chat"
-    )
+    !profile.direct_provider_safe
+        && matches!(
+            profile.strategy_id.as_str(),
+            "volcengine_deepseek_coding"
+                | "xiaomi_mimo_chat"
+                | "deepseek_official_chat"
+                | "moonshot_kimi_chat"
+                | "qwen_dashscope_chat"
+        )
 }
 
 
@@ -48,16 +49,20 @@ pub fn provider_compatibility_profile(
     if is_volcengine_deepseek_key(&key) {
         ProviderCompatibilityProfile {
             strategy_id: "volcengine_deepseek_coding".into(),
-            system_to_user: true,
-            tool_to_user: true,
+            system_to_user: !has_anthropic,
+            tool_to_user: !has_anthropic,
             disable_tools: false,
             strip_unsupported_params: false,
-            direct_provider_safe: false,
-            gateway_route_recommended: true,
+            direct_provider_safe: has_anthropic,
+            gateway_route_recommended: !has_anthropic,
             codex_disable_responses: true,
             codex_strict_tool_calls: true,
             codex_strip_reasoning: true,
-            summary: "Volcengine Ark DeepSeek coding endpoints reject system/tool roles; Gateway Route converts them to user messages.".into(),
+            summary: if has_anthropic {
+                "Volcengine Ark DeepSeek has an Anthropic-compatible endpoint configured; Claude clients can use the Anthropic route while Codex keeps OpenAI compatibility.".into()
+            } else {
+                "Volcengine Ark DeepSeek without an Anthropic endpoint falls back through OpenAI Chat and converts unsupported roles.".into()
+            },
         }
     } else if key.contains("openrouter") {
         ProviderCompatibilityProfile {
@@ -80,12 +85,16 @@ pub fn provider_compatibility_profile(
             tool_to_user: false,
             disable_tools: false,
             strip_unsupported_params: true,
-            direct_provider_safe: false,
-            gateway_route_recommended: true,
+            direct_provider_safe: has_anthropic,
+            gateway_route_recommended: !has_anthropic,
             codex_disable_responses: true,
             codex_strict_tool_calls: false,
             codex_strip_reasoning: true,
-            summary: "Xiaomi MiMo is treated as an OpenAI Chat provider; Gateway Route and Codex Chat fallback are recommended, with strict Codex tool enforcement disabled to avoid tool-planning loops.".into(),
+            summary: if has_anthropic {
+                "Xiaomi MiMo has an Anthropic-compatible endpoint configured; Claude clients can use the Anthropic route while Codex keeps OpenAI compatibility.".into()
+            } else {
+                "Xiaomi MiMo without an Anthropic endpoint falls back through OpenAI Chat; strict Codex tool enforcement stays disabled to avoid tool-planning loops.".into()
+            },
         }
     } else if key.contains("deepseek") {
         ProviderCompatibilityProfile {
@@ -94,12 +103,16 @@ pub fn provider_compatibility_profile(
             tool_to_user: false,
             disable_tools: false,
             strip_unsupported_params: true,
-            direct_provider_safe: false,
-            gateway_route_recommended: true,
+            direct_provider_safe: has_anthropic,
+            gateway_route_recommended: !has_anthropic,
             codex_disable_responses: true,
             codex_strict_tool_calls: false,
             codex_strip_reasoning: true,
-            summary: "DeepSeek official endpoints are treated as OpenAI Chat-compatible; Gateway Route is recommended for Claude clients.".into(),
+            summary: if has_anthropic {
+                "DeepSeek has an Anthropic-compatible endpoint configured; Claude clients can use the Anthropic route while Codex keeps OpenAI compatibility.".into()
+            } else {
+                "DeepSeek without an Anthropic endpoint falls back through OpenAI Chat for Claude clients.".into()
+            },
         }
     } else if key.contains("moonshot") || key.contains("kimi") {
         ProviderCompatibilityProfile {

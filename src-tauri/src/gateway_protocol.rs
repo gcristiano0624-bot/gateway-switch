@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     compatibility,
-    loop_guard::{LoopGuard, LoopGuardSummary, TextGuardAction, ToolLoopHint},
+    loop_guard::{LoopGuard, LoopGuardSummary, ToolLoopHint},
 };
 
 pub(crate) struct ChatConversion {
@@ -413,7 +413,10 @@ fn chat_tool_calls_to_anthropic(message: &Value) -> Vec<Value> {
 }
 
 fn extract_chat_message_text(message: &Value) -> String {
-    for key in ["content", "reasoning_content", "reasoning", "text"] {
+    // Claude clients should only receive assistant-visible text. Some Chat
+    // providers stream internal planning through reasoning fields, which can
+    // otherwise leak as repeated user-facing content.
+    for key in ["content", "text"] {
         if let Some(text) = message
             .get(key)
             .and_then(|v| v.as_str())

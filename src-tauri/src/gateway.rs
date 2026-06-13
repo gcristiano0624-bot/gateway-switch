@@ -1192,7 +1192,7 @@ mod tests {
     }
 
     #[test]
-    fn test_gateway_route_resolve_marks_volcengine_deepseek_user_assistant_only() {
+    fn test_gateway_route_resolve_prefers_volcengine_anthropic_endpoint() {
         let tmp = tempfile::tempdir().unwrap();
         let db = tmp.path().join("t.db");
         database::initialize(&db).unwrap();
@@ -1226,12 +1226,12 @@ mod tests {
 
         assert_eq!(route.provider_id, "volcengine");
         assert_eq!(route.upstream_model, "DeepSeek-V4-Pro");
-        assert_eq!(route.chat_role_mode, ChatRoleMode::UserAssistantOnly);
-        assert!(route.force_chat_fallback);
+        assert_eq!(route.chat_role_mode, ChatRoleMode::Standard);
+        assert!(!route.force_chat_fallback);
     }
 
     #[test]
-    fn test_xiaomi_routes_force_chat_fallback_even_with_anthropic_url() {
+    fn test_xiaomi_routes_prefer_anthropic_endpoint_when_configured() {
         let tmp = tempfile::tempdir().unwrap();
         let db = tmp.path().join("t.db");
         database::initialize(&db).unwrap();
@@ -1263,7 +1263,11 @@ mod tests {
 
         let route = resolve(&db, "claude-sonnet-4-6").unwrap();
 
-        assert!(route.force_chat_fallback);
+        assert!(!route.force_chat_fallback);
+        assert_eq!(
+            route.anthropic_base_url,
+            "https://token-plan-sgp.xiaomimimo.com/anthropic"
+        );
         assert_eq!(
             route.openai_base_url,
             "https://token-plan-sgp.xiaomimimo.com/v1"
@@ -1308,8 +1312,8 @@ mod tests {
             diagnostics[0].strategy.strategy_id,
             "volcengine_deepseek_coding"
         );
-        assert!(!diagnostics[0].strategy.direct_provider_safe);
-        assert!(diagnostics[0]
+        assert!(diagnostics[0].strategy.direct_provider_safe);
+        assert!(!diagnostics[0]
             .warnings
             .iter()
             .any(|warning| warning.contains("Direct Provider")));
@@ -1319,7 +1323,7 @@ mod tests {
         assert!(preview
             .roles
             .iter()
-            .all(|role| role == "user" || role == "assistant"));
+            .any(|role| role == "system" || role == "tool"));
     }
 
     #[test]
@@ -1826,6 +1830,17 @@ mod tests {
     }
 
     #[test]
+    fn test_chat_reasoning_delta_is_not_claude_visible_text() {
+        let reasoning = r#"data: {"choices":[{"delta":{"reasoning_content":"Plan docs/superpowers/plans/foo.md\n1. Subagent-Driven\n2. Inline approach?"}}]}"#;
+        let deepseek_reasoning = r#"data: {"choices":[{"delta":{"reasoning":"Let me present this to the user.Good, the plan has been committed."}}]}"#;
+        let content = r#"data: {"choices":[{"delta":{"content":"Done."}}]}"#;
+
+        assert_eq!(extract_chat_delta(reasoning), None);
+        assert_eq!(extract_chat_delta(deepseek_reasoning), None);
+        assert_eq!(extract_chat_delta(content).as_deref(), Some("Done."));
+    }
+
+    #[test]
     fn test_tool_use_conversion_between_anthropic_and_chat() {
         let req = anthropic_to_chat_request(
             &json!({
@@ -2034,7 +2049,7 @@ mod tests {
 
     #[test]
     fn test_volcengine_deepseek_role_mode_detection() {
-        let provider = Provider {
+        let anthropic_provider = Provider {
             id: "Volcengine".into(),
             name: "火山方舟".into(),
             base_url: "https://ark.cn-beijing.volces.com/api/coding/v3".into(),
@@ -2045,13 +2060,21 @@ mod tests {
             api_key: None,
             enabled: true,
         };
+        let chat_only_provider = Provider {
+            anthropic_base_url: None,
+            ..anthropic_provider.clone()
+        };
 
         assert_eq!(
-            chat_role_mode_for(&provider, "DeepSeek-V4-Pro"),
+            chat_role_mode_for(&anthropic_provider, "DeepSeek-V4-Pro"),
+            ChatRoleMode::Standard
+        );
+        assert_eq!(
+            chat_role_mode_for(&chat_only_provider, "DeepSeek-V4-Pro"),
             ChatRoleMode::UserAssistantOnly
         );
         assert_eq!(
-            chat_role_mode_for(&provider, "claude-sonnet-4-5"),
+            chat_role_mode_for(&anthropic_provider, "claude-sonnet-4-5"),
             ChatRoleMode::Standard
         );
     }

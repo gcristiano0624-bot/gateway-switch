@@ -1,4 +1,10 @@
-use std::{collections::HashMap, net::SocketAddr, path::PathBuf, sync::Arc, time::Instant};
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
 use async_stream::stream;
 use axum::{
@@ -36,8 +42,7 @@ use crate::{
 };
 
 pub use crate::gateway_strategy::{
-    apply_provider_policy, effective_provider_compatibility_profile, provider_compatibility_profile,
-    ProviderCompatibilityProfile,
+    effective_provider_compatibility_profile, ProviderCompatibilityProfile,
 };
 
 #[derive(Clone)]
@@ -45,6 +50,7 @@ struct Ctx {
     db: PathBuf,
     client: Client,
     profile: GatewayProfile,
+    cooldowns: Arc<Mutex<HashMap<String, Instant>>>,
 }
 
 struct Route {
@@ -60,6 +66,7 @@ struct Route {
 
 
 const CLAUDE_REQUEST_BODY_LIMIT_BYTES: usize = 64 * 1024 * 1024;
+const PROVIDER_RATE_LIMIT_COOLDOWN: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RouteCompatibilityDiagnostic {
@@ -130,6 +137,7 @@ pub fn start(st: &AppState) -> Result<String, String> {
         db: st.db_path.clone(),
         client: Client::new(),
         profile: profile.clone(),
+        cooldowns: Arc::new(Mutex::new(HashMap::new())),
     };
     let router = build_router(ctx);
 
@@ -313,6 +321,11 @@ async fn messages(
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    if let Some(response) = cooldown_response_if_active(&ctx, &route, &req_id, started, is_stream)
+    {
+        return Err(response);
+    }
+
     if route.force_chat_fallback {
         return chat_completion_fallback(ctx, route, body, req_id, started, is_stream, None).await;
     }
@@ -383,6 +396,7 @@ async fn messages(
         }
         if !should_fallback_from_anthropic_status(status, &bytes) {
             let text = String::from_utf8_lossy(&bytes).to_string();
+            mark_rate_limit_cooldown(&ctx, &route, status);
             record_failed_snapshot(
                 &ctx.db,
                 &req_id,
@@ -431,6 +445,7 @@ async fn messages(
         let bytes = resp.bytes().await.map_err(upstream_err)?;
         if !should_fallback_from_anthropic_status(status, &bytes) {
             let text = String::from_utf8_lossy(&bytes).to_string();
+            mark_rate_limit_cooldown(&ctx, &route, status);
             record_failed_snapshot(
                 &ctx.db,
                 &req_id,
@@ -547,6 +562,10 @@ async fn chat_completion_fallback(
         is_stream,
         route.chat_role_mode,
     );
+    if let Some(response) = cooldown_response_if_active(&ctx, &route, &req_id, started, is_stream)
+    {
+        return Err(response);
+    }
     let chat_req = conversion.payload;
     let request_loop_summary = conversion.loop_summary;
     let resp = ctx
@@ -602,6 +621,7 @@ async fn chat_completion_fallback(
     let status = resp.status();
     if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();
+        mark_rate_limit_cooldown(&ctx, &route, status);
         record_failed_snapshot(
             &ctx.db,
             &req_id,
@@ -1028,7 +1048,10 @@ fn provider_compatibility_profile_for_route(
 
 #[cfg(test)]
 fn chat_role_mode_for(provider: &Provider, upstream_model: &str) -> ChatRoleMode {
-    chat_role_mode_from_profile(&provider_compatibility_profile(provider, upstream_model))
+    chat_role_mode_from_profile(&crate::gateway_strategy::provider_compatibility_profile(
+        provider,
+        upstream_model,
+    ))
 }
 
 fn chat_role_mode_from_profile(profile: &ProviderCompatibilityProfile) -> ChatRoleMode {
@@ -1089,6 +1112,81 @@ fn upstream_url(base_url: &str, endpoint: &str) -> String {
     } else {
         format!("{base}/v1/{endpoint}")
     }
+}
+
+fn cooldown_key(route: &Route) -> String {
+    format!(
+        "{}:{}",
+        route.provider_id.to_ascii_lowercase(),
+        route.upstream_model.to_ascii_lowercase()
+    )
+}
+
+fn cooldown_remaining(ctx: &Ctx, route: &Route) -> Option<Duration> {
+    let key = cooldown_key(route);
+    let now = Instant::now();
+    let mut cooldowns = ctx.cooldowns.lock().ok()?;
+    match cooldowns.get(&key).copied() {
+        Some(until) if until > now => Some(until.saturating_duration_since(now)),
+        Some(_) => {
+            cooldowns.remove(&key);
+            None
+        }
+        None => None,
+    }
+}
+
+fn mark_rate_limit_cooldown(ctx: &Ctx, route: &Route, status: reqwest::StatusCode) {
+    if status != reqwest::StatusCode::TOO_MANY_REQUESTS {
+        return;
+    }
+    if let Ok(mut cooldowns) = ctx.cooldowns.lock() {
+        cooldowns.insert(
+            cooldown_key(route),
+            Instant::now() + PROVIDER_RATE_LIMIT_COOLDOWN,
+        );
+    }
+}
+
+fn cooldown_response_if_active(
+    ctx: &Ctx,
+    route: &Route,
+    req_id: &str,
+    started: Instant,
+    is_stream: bool,
+) -> Option<Response> {
+    let remaining = cooldown_remaining(ctx, route)?;
+    let retry_after_secs = remaining.as_secs().max(1);
+    let message = format!(
+        "Provider is cooling down after upstream 429 Too Many Requests; retry after {retry_after_secs}s."
+    );
+    let _ = database::insert_log(
+        &ctx.db,
+        &RequestLog {
+            request_id: req_id.to_string(),
+            claude_alias: route.display.clone(),
+            provider_id: route.provider_id.clone(),
+            upstream_model: route.upstream_model.clone(),
+            status_code: Some(429),
+            duration_ms: Some(started.elapsed().as_millis() as u64),
+            is_stream,
+            error_summary: Some(format!(
+                "local rate-limit cooldown after upstream 429; retry_after_secs={retry_after_secs}"
+            )),
+            created_at: String::new(),
+        },
+    );
+    Some((
+        StatusCode::TOO_MANY_REQUESTS,
+        [(header::RETRY_AFTER, retry_after_secs.to_string())],
+        Json(json!({
+            "error": {
+                "type": "rate_limit_cooldown",
+                "message": message,
+                "retry_after_seconds": retry_after_secs
+            }
+        })),
+    ).into_response())
 }
 
 fn verify_auth(headers: &HeaderMap, ctx: &Ctx) -> Result<(), Response> {
@@ -1249,6 +1347,15 @@ mod tests {
 
     fn test_client() -> Client {
         Client::builder().no_proxy().build().unwrap()
+    }
+
+    fn test_ctx(db: PathBuf, profile: GatewayProfile) -> Ctx {
+        Ctx {
+            db,
+            client: test_client(),
+            profile,
+            cooldowns: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     #[test]
@@ -1525,15 +1632,14 @@ mod tests {
         )
         .unwrap();
 
-        let app = build_router(Ctx {
+        let app = build_router(test_ctx(
             db,
-            client: test_client(),
-            profile: GatewayProfile {
+            GatewayProfile {
                 listen_host: "127.0.0.1".into(),
                 listen_port: 3456,
                 auth_token: "tok".into(),
             },
-        });
+        ));
 
         let resp = app
             .clone()
@@ -1611,15 +1717,14 @@ mod tests {
         )
         .unwrap();
 
-        let app = build_router(Ctx {
+        let app = build_router(test_ctx(
             db,
-            client: test_client(),
-            profile: GatewayProfile {
+            GatewayProfile {
                 listen_host: "127.0.0.1".into(),
                 listen_port: 3456,
                 auth_token: "tok".into(),
             },
-        });
+        ));
 
         let resp = app.clone().oneshot(
             http::Request::builder().method(http::Method::POST).uri("/v1/messages")
@@ -1703,15 +1808,14 @@ mod tests {
         )
         .unwrap();
 
-        let app = build_router(Ctx {
+        let app = build_router(test_ctx(
             db,
-            client: test_client(),
-            profile: GatewayProfile {
+            GatewayProfile {
                 listen_host: "127.0.0.1".into(),
                 listen_port: 3456,
                 auth_token: "tok".into(),
             },
-        });
+        ));
 
         let resp = app.oneshot(
             http::Request::builder().method(http::Method::POST).uri("/v1/messages")
@@ -1735,15 +1839,14 @@ mod tests {
         let db = tmp.path().join("t.db");
         database::initialize(&db).unwrap();
 
-        let app = build_router(Ctx {
+        let app = build_router(test_ctx(
             db,
-            client: test_client(),
-            profile: GatewayProfile {
+            GatewayProfile {
                 listen_host: "127.0.0.1".into(),
                 listen_port: 3456,
                 auth_token: "tok".into(),
             },
-        });
+        ));
         let large_body = json!({
             "model": "missing-route",
             "messages": [{
@@ -1842,15 +1945,14 @@ mod tests {
         )
         .unwrap();
 
-        let app = build_router(Ctx {
+        let app = build_router(test_ctx(
             db,
-            client: test_client(),
-            profile: GatewayProfile {
+            GatewayProfile {
                 listen_host: "127.0.0.1".into(),
                 listen_port: 3456,
                 auth_token: "tok".into(),
             },
-        });
+        ));
 
         let resp = app
             .oneshot(
@@ -1877,6 +1979,107 @@ mod tests {
             .as_str()
             .unwrap_or_default()
             .contains("Request too large"));
+    }
+
+    #[tokio::test]
+    async fn test_provider_rate_limit_cooldown_blocks_followup_requests() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("t.db");
+        database::initialize(&db).unwrap();
+
+        let upstream_hits = Arc::new(AtomicUsize::new(0));
+        let hits = Arc::clone(&upstream_hits);
+        let upstream = Router::new().route(
+            "/v1/messages",
+            post(move || {
+                let hits = Arc::clone(&hits);
+                async move {
+                    hits.fetch_add(1, Ordering::SeqCst);
+                    (
+                        StatusCode::TOO_MANY_REQUESTS,
+                        Json(json!({
+                            "error": {
+                                "type": "rate_limit_error",
+                                "message": "Too Many Requests"
+                            }
+                        })),
+                    )
+                }
+            }),
+        );
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, upstream).await.unwrap();
+        });
+
+        database::create_provider(
+            &db,
+            &CreateProvider {
+                id: "p1".into(),
+                name: "P".into(),
+                base_url: format!("http://{addr}"),
+                openai_base_url: None,
+                anthropic_base_url: None,
+                auth_header: "Authorization".into(),
+                auth_scheme: Some("Bearer".into()),
+                api_key: Some("k".into()),
+            },
+        )
+        .unwrap();
+        database::create_route(
+            &db,
+            &CreateModelRoute {
+                id: "r1".into(),
+                claude_alias: "claude-sonnet-4-6".into(),
+                display_name: "S".into(),
+                provider_id: "p1".into(),
+                upstream_model: "m".into(),
+            },
+        )
+        .unwrap();
+
+        let app = build_router(test_ctx(
+            db.clone(),
+            GatewayProfile {
+                listen_host: "127.0.0.1".into(),
+                listen_port: 3456,
+                auth_token: "tok".into(),
+            },
+        ));
+
+        let make_request = || {
+            http::Request::builder()
+                .method(http::Method::POST)
+                .uri("/v1/messages")
+                .header("x-api-key", "tok")
+                .header(http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"hi"}],"max_tokens":32})
+                        .to_string(),
+                ))
+                .unwrap()
+        };
+
+        let resp = app.clone().oneshot(make_request()).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(upstream_hits.load(Ordering::SeqCst), 1);
+
+        let resp = app.oneshot(make_request()).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(upstream_hits.load(Ordering::SeqCst), 1);
+
+        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["error"]["type"], "rate_limit_cooldown");
+        assert!(body["error"]["retry_after_seconds"].as_u64().unwrap_or_default() > 0);
+
+        let logs = database::list_logs(&db, 10).unwrap();
+        assert!(logs.iter().any(|log| log
+            .error_summary
+            .as_deref()
+            .unwrap_or_default()
+            .contains("local rate-limit cooldown")));
     }
 
     #[test]

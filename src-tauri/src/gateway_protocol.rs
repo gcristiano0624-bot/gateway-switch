@@ -468,6 +468,22 @@ pub(crate) fn extract_chat_delta(line: &str) -> Option<String> {
         })
 }
 
+pub(crate) fn extract_chat_finish_reason(line: &str) -> Option<String> {
+    if !line.starts_with("data:") {
+        return None;
+    }
+    let payload = line[5..].trim();
+    if payload.is_empty() || payload == "[DONE]" {
+        return None;
+    }
+    let v: Value = serde_json::from_str(payload).ok()?;
+    v["choices"][0]["finish_reason"]
+        .as_str()
+        .or_else(|| v["choices"][0]["delta"]["finish_reason"].as_str())
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+}
+
 pub(crate) fn extract_chat_stream_error(line: &str) -> Option<String> {
     if !line.starts_with("data:") {
         return None;

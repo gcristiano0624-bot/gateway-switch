@@ -484,6 +484,27 @@ pub(crate) fn extract_chat_finish_reason(line: &str) -> Option<String> {
         .map(String::from)
 }
 
+pub(crate) fn extract_anthropic_stop_reason(line: &str) -> Option<String> {
+    if !line.starts_with("data:") {
+        return None;
+    }
+    let payload = line[5..].trim();
+    if payload.is_empty() || payload == "[DONE]" {
+        return None;
+    }
+    let v: Value = serde_json::from_str(payload).ok()?;
+    v.get("delta")
+        .and_then(|delta| delta.get("stop_reason"))
+        .and_then(|reason| reason.as_str())
+        .or_else(|| {
+            v.get("message")
+                .and_then(|message| message.get("stop_reason"))
+                .and_then(|reason| reason.as_str())
+        })
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+}
+
 pub(crate) fn extract_chat_stream_error(line: &str) -> Option<String> {
     if !line.starts_with("data:") {
         return None;

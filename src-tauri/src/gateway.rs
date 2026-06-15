@@ -31,9 +31,9 @@ use crate::{
     },
     gateway_protocol::{
         anthropic_messages_to_text, anthropic_to_chat_conversion, anthropic_to_chat_request,
-        chat_to_anthropic_message, chat_tool_delta_events, estimate_tokens, extract_chat_delta,
-        extract_chat_finish_reason, extract_chat_stream_error, guard_anthropic_request_payload,
-        ChatRoleMode,
+        chat_to_anthropic_message, chat_tool_delta_events, estimate_tokens,
+        extract_anthropic_stop_reason, extract_chat_delta, extract_chat_finish_reason,
+        extract_chat_stream_error, guard_anthropic_request_payload, ChatRoleMode,
     },
     gateway_strategy::should_force_chat_fallback,
     loop_guard::{LoopGuard, TextGuardAction},
@@ -496,6 +496,7 @@ async fn messages(
     let body_stream = resp.bytes_stream();
     let sse = stream! {
         let mut buf = String::new();
+        let mut stop_reason: Option<String> = None;
         let mut stream_error: Option<String> = None;
         tokio::pin!(body_stream);
         while let Some(item) = body_stream.next().await {
@@ -505,6 +506,9 @@ async fn messages(
                     while let Some(pos) = buf.find('\n') {
                         let line = buf[..=pos].to_string();
                         buf = buf[pos + 1..].to_string();
+                        if let Some(reason) = extract_anthropic_stop_reason(&line) {
+                            stop_reason = Some(reason);
+                        }
                         yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(rewrite_sse(&line, &display)));
                     }
                 }
@@ -535,13 +539,18 @@ async fn messages(
             return;
         }
         if !buf.is_empty() {
+            if let Some(reason) = extract_anthropic_stop_reason(&buf) {
+                stop_reason = Some(reason);
+            }
             yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(rewrite_sse(&buf, &display)));
         }
+        let error_summary =
+            append_stop_reason_summary(request_loop_summary.to_log_summary(), stop_reason.as_deref());
         let _ = database::insert_log(&db, &RequestLog {
             request_id: log_req_id, claude_alias: display,
             provider_id, upstream_model, status_code: Some(status.as_u16()),
             duration_ms: Some(started.elapsed().as_millis() as u64),
-            is_stream: true, error_summary: request_loop_summary.to_log_summary(), created_at: String::new(),
+            is_stream: true, error_summary, created_at: String::new(),
         });
     };
 
@@ -798,13 +807,20 @@ async fn chat_completion_fallback(
             return;
         }
         let has_tools = !tool_blocks.is_empty();
+        let final_stop_reason = if has_tools {
+            "tool_use"
+        } else if finish_reason.as_deref() == Some("length") {
+            "max_tokens"
+        } else {
+            "end_turn"
+        };
         for (_, (content_index, _, _, _)) in tool_blocks.iter() {
             let block_stop = json!({"type":"content_block_stop","index":content_index});
             yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!("event: content_block_stop\ndata: {}\n\n", serde_json::to_string(&block_stop).unwrap())));
         }
         let message_delta = json!({
             "type": "message_delta",
-            "delta": {"stop_reason": if has_tools { "tool_use" } else if finish_reason.as_deref() == Some("length") { "max_tokens" } else { "end_turn" },"stop_sequence":null},
+            "delta": {"stop_reason": final_stop_reason,"stop_sequence":null},
             "usage": {"output_tokens": estimate_tokens(&full_text)}
         });
         yield Ok::<Bytes, std::convert::Infallible>(Bytes::from(format!("event: message_delta\ndata: {}\n\n", serde_json::to_string(&message_delta).unwrap())));
@@ -813,7 +829,8 @@ async fn chat_completion_fallback(
 
         let mut combined_loop_summary = request_loop_summary.clone();
         combined_loop_summary.merge(&loop_guard.summary());
-        let loop_warning = combined_loop_summary.to_log_summary();
+        let loop_warning =
+            append_stop_reason_summary(combined_loop_summary.to_log_summary(), Some(final_stop_reason));
         let _ = database::insert_log(&db, &RequestLog {
             request_id: log_req_id, claude_alias: display,
             provider_id, upstream_model, status_code: Some(status.as_u16()),
@@ -1127,6 +1144,18 @@ fn apply_gateway_provider_policy(upstream: &mut Value, route: &Route) {
         obj.remove("thinking");
         obj.remove("reasoning");
         obj.remove("reasoning_effort");
+    }
+}
+
+fn append_stop_reason_summary(summary: Option<String>, stop_reason: Option<&str>) -> Option<String> {
+    match (
+        stop_reason.filter(|s| !s.is_empty()),
+        summary.filter(|s| !s.is_empty()),
+    ) {
+        (Some(stop_reason), Some(summary)) => Some(format!("stop_reason={stop_reason}; {summary}")),
+        (Some(stop_reason), None) => Some(format!("stop_reason={stop_reason}")),
+        (None, Some(summary)) => Some(summary),
+        (None, None) => None,
     }
 }
 
@@ -2257,6 +2286,32 @@ mod tests {
         assert_eq!(extract_chat_finish_reason(top_level).as_deref(), Some("length"));
         assert_eq!(extract_chat_finish_reason(delta_level).as_deref(), Some("stop"));
         assert_eq!(extract_chat_finish_reason("data: [DONE]"), None);
+    }
+
+    #[test]
+    fn test_anthropic_stop_reason_is_detected() {
+        let message_delta = r#"data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null}}"#;
+        let message_start = r#"data: {"type":"message_start","message":{"stop_reason":null}}"#;
+
+        assert_eq!(
+            extract_anthropic_stop_reason(message_delta).as_deref(),
+            Some("end_turn")
+        );
+        assert_eq!(extract_anthropic_stop_reason(message_start), None);
+        assert_eq!(extract_anthropic_stop_reason("data: [DONE]"), None);
+    }
+
+    #[test]
+    fn test_stop_reason_is_appended_to_log_summary() {
+        assert_eq!(
+            append_stop_reason_summary(Some("loop_guard: duplicate_tool_calls=1".into()), Some("end_turn"))
+                .as_deref(),
+            Some("stop_reason=end_turn; loop_guard: duplicate_tool_calls=1")
+        );
+        assert_eq!(
+            append_stop_reason_summary(None, Some("tool_use")).as_deref(),
+            Some("stop_reason=tool_use")
+        );
     }
 
     #[test]

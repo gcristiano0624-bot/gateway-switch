@@ -57,6 +57,7 @@ struct Route {
     display: String,
     provider_id: String,
     upstream_model: String,
+    strategy: ProviderCompatibilityProfile,
     openai_base_url: String,
     anthropic_base_url: String,
     force_chat_fallback: bool,
@@ -281,6 +282,7 @@ async fn count_tokens(
     let route = resolve(&ctx.db, model).map_err(bad_req)?;
     let mut upstream = body.clone();
     upstream["model"] = json!(route.upstream_model);
+    apply_gateway_provider_policy(&mut upstream, &route);
     let resp = ctx
         .client
         .post(upstream_url(
@@ -334,6 +336,7 @@ async fn messages(
     let mut upstream = guarded.payload;
     let request_loop_summary = guarded.loop_summary;
     upstream["model"] = json!(route.upstream_model);
+    apply_gateway_provider_policy(&mut upstream, &route);
 
     let resp = ctx
         .client
@@ -839,21 +842,23 @@ fn resolve(db: &PathBuf, model: &str) -> Result<Route, String> {
         .find(|p| p.enabled && p.id == route.provider_id)
         .ok_or_else(|| format!("Provider '{}' not found", route.provider_id))?;
     let strategy = effective_provider_compatibility_profile(db, &provider, &route.upstream_model);
+    let chat_role_mode = chat_role_mode_from_profile(&strategy);
     let force_chat_fallback = should_force_chat_fallback(&strategy);
     Ok(Route {
         display: route.claude_alias,
         provider_id: provider.id.clone(),
         upstream_model: route.upstream_model.trim().to_string(),
+        strategy,
         openai_base_url: provider.openai_base_url.trim_end_matches('/').to_string(),
         anthropic_base_url: provider
             .anthropic_base_url
             .as_deref()
             .filter(|s| !s.trim().is_empty())
-            .unwrap_or(&provider.openai_base_url)
-            .trim_end_matches('/')
-            .to_string(),
+        .unwrap_or(&provider.openai_base_url)
+        .trim_end_matches('/')
+        .to_string(),
         force_chat_fallback,
-        chat_role_mode: chat_role_mode_from_profile(&strategy),
+        chat_role_mode,
         headers: auth_headers(&provider),
     })
 }
@@ -1111,6 +1116,17 @@ fn upstream_url(base_url: &str, endpoint: &str) -> String {
         format!("{base}/{endpoint}")
     } else {
         format!("{base}/v1/{endpoint}")
+    }
+}
+
+fn apply_gateway_provider_policy(upstream: &mut Value, route: &Route) {
+    if !route.strategy.strip_unsupported_params {
+        return;
+    }
+    if let Some(obj) = upstream.as_object_mut() {
+        obj.remove("thinking");
+        obj.remove("reasoning");
+        obj.remove("reasoning_effort");
     }
 }
 
@@ -1443,6 +1459,43 @@ mod tests {
     }
 
     #[test]
+    fn test_volcengine_minimax_routes_strip_unsupported_params() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("t.db");
+        database::initialize(&db).unwrap();
+        database::create_provider(
+            &db,
+            &CreateProvider {
+                id: "volcengine".into(),
+                name: "火山方舟".into(),
+                base_url: "https://ark.cn-beijing.volces.com/api/coding/v3".into(),
+                openai_base_url: Some("https://ark.cn-beijing.volces.com/api/coding/v3".into()),
+                anthropic_base_url: Some("https://ark.cn-beijing.volces.com/api/coding".into()),
+                auth_header: "Authorization".into(),
+                auth_scheme: Some("Bearer".into()),
+                api_key: Some("k".into()),
+            },
+        )
+        .unwrap();
+        database::create_route(
+            &db,
+            &CreateModelRoute {
+                id: "minimax".into(),
+                claude_alias: "claude-opus-4-8".into(),
+                display_name: "MiniMax M3".into(),
+                provider_id: "volcengine".into(),
+                upstream_model: "MiniMax-M3".into(),
+            },
+        )
+        .unwrap();
+
+        let route = resolve(&db, "claude-opus-4-8").unwrap();
+        assert!(route.strategy.strip_unsupported_params);
+        assert!(route.strategy.codex_strip_reasoning);
+        assert!(!route.force_chat_fallback);
+    }
+
+    #[test]
     fn test_route_diagnostics_and_payload_preview_for_volcengine_deepseek() {
         let tmp = tempfile::tempdir().unwrap();
         let db = tmp.path().join("t.db");
@@ -1748,6 +1801,99 @@ mod tests {
         ).await.unwrap();
 
         assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_volcengine_minimax_strips_thinking_from_upstream_payload() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("t.db");
+        database::initialize(&db).unwrap();
+
+        let upstream = Router::new().route(
+            "/v1/messages",
+            post(|Json(body): Json<Value>| async move {
+                assert_eq!(body["model"], "MiniMax-M3");
+                assert!(body.get("thinking").is_none());
+                assert!(body.get("reasoning").is_none());
+                assert!(body.get("reasoning_effort").is_none());
+                Json(json!({
+                    "id":"m1",
+                    "type":"message",
+                    "role":"assistant",
+                    "model":"MiniMax-M3",
+                    "content":[{"type":"text","text":"ok"}],
+                    "stop_reason":"end_turn",
+                    "usage":{"input_tokens":1,"output_tokens":1}
+                }))
+            }),
+        );
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, upstream).await.unwrap();
+        });
+
+        database::create_provider(
+            &db,
+            &CreateProvider {
+                id: "volcengine".into(),
+                name: "火山方舟".into(),
+                base_url: format!("http://{addr}"),
+                openai_base_url: Some(format!("http://{addr}")),
+                anthropic_base_url: Some(format!("http://{addr}")),
+                auth_header: "Authorization".into(),
+                auth_scheme: Some("Bearer".into()),
+                api_key: Some("k".into()),
+            },
+        )
+        .unwrap();
+        database::create_route(
+            &db,
+            &CreateModelRoute {
+                id: "minimax".into(),
+                claude_alias: "claude-opus-4-8".into(),
+                display_name: "MiniMax M3".into(),
+                provider_id: "volcengine".into(),
+                upstream_model: "MiniMax-M3".into(),
+            },
+        )
+        .unwrap();
+
+        let app = build_router(test_ctx(
+            db,
+            GatewayProfile {
+                listen_host: "127.0.0.1".into(),
+                listen_port: 3456,
+                auth_token: "tok".into(),
+            },
+        ));
+
+        let resp = app
+            .oneshot(
+                http::Request::builder()
+                    .method(http::Method::POST)
+                    .uri("/v1/messages")
+                    .header("x-api-key", "tok")
+                    .header(http::header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        json!({
+                            "model":"claude-opus-4-8",
+                            "messages":[{"role":"user","content":"hi"}],
+                            "max_tokens":32,
+                            "thinking":{"type":"adaptive"},
+                            "output_config":{"effort":"max"}
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["content"][0]["text"], "ok");
     }
 
     #[tokio::test]

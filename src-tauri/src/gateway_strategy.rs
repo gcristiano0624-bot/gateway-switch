@@ -46,7 +46,25 @@ pub fn provider_compatibility_profile(
         .as_deref()
         .map(|s| !s.trim().is_empty())
         .unwrap_or(false);
-    if is_volcengine_deepseek_key(&key) {
+    if is_volcengine_minimax_key(&key) {
+        ProviderCompatibilityProfile {
+            strategy_id: "volcengine_minimax_anthropic".into(),
+            system_to_user: false,
+            tool_to_user: false,
+            disable_tools: false,
+            strip_unsupported_params: true,
+            direct_provider_safe: has_anthropic,
+            gateway_route_recommended: !has_anthropic,
+            codex_disable_responses: true,
+            codex_strict_tool_calls: false,
+            codex_strip_reasoning: true,
+            summary: if has_anthropic {
+                "Volcengine MiniMax has an Anthropic-compatible endpoint configured, but Claude thinking/reasoning parameters are stripped for compatibility.".into()
+            } else {
+                "Volcengine MiniMax without an Anthropic endpoint falls back through OpenAI Chat and strips unsupported thinking/reasoning parameters.".into()
+            },
+        }
+    } else if is_volcengine_deepseek_key(&key) {
         ProviderCompatibilityProfile {
             strategy_id: "volcengine_deepseek_coding".into(),
             system_to_user: !has_anthropic,
@@ -251,4 +269,9 @@ fn provider_profile_key(provider: &Provider, upstream_model: &str) -> String {
 fn is_volcengine_deepseek_key(key: &str) -> bool {
     (key.contains("volc") || key.contains("ark.cn-") || key.contains("火山"))
         && key.contains("deepseek")
+}
+
+fn is_volcengine_minimax_key(key: &str) -> bool {
+    (key.contains("volc") || key.contains("ark.cn-") || key.contains("火山"))
+        && key.contains("minimax")
 }

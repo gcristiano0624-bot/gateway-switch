@@ -41,3 +41,12 @@ src-tauri/gen/
 
 # OS
 Thumbs.db
+
+# Agent / CLI tool runtime side effects (not project source)
+.swarm/
+.superpowers/
+ruvector.db
+AGENTS.md
+streamer-edu-workbench-demo.html
+同步功能/
+pnpm-workspace.yaml

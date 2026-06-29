@@ -417,14 +417,13 @@ If the provider does not have an Anthropic Base URL, use `Gateway Route` so the 
 
 ### Codex App Routing
 
-1. Open `Providers` and add a provider that supports OpenAI Chat Completions.
-2. Open `Codex` and add or select a Codex model, such as `gpt-5.5`.
-3. Create a route and enter the real upstream model name.
-4. Select the default Codex model.
-5. Click `Start & Bind Codex App`.
-6. Restart Codex App and start using it.
+1. Open `Providers` and add an OpenAI-Chat-compatible provider (e.g. `DeepSeek-V4-Pro` via Volcengine, `Kimi-K2.7-Code` via Volcengine, `mimo-v2.5-pro` via Xiaomi).
+2. Open `Codex` and add a Codex route. Set `codex_model` to an **OpenAI official name** such as `gpt-5.1` / `gpt-5.2` / `gpt-5.3`, set `upstream_model` to the real Chinese model id, and link `provider_id` to the provider from step 1.
+3. On the `Codex` page, pick the default model (e.g. `gpt-5.1`).
+4. Click `Start & Bind Codex App`.
+5. Restart the Codex App. Continue to pick `gpt-5.1` in the Codex App model picker — the local gateway rewrites it to the configured upstream on every request.
 
-Binding writes:
+The binding writes:
 
 ```toml
 model_provider = "gateway-switch"

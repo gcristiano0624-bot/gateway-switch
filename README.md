@@ -417,14 +417,13 @@ http://127.0.0.1:3457
 
 ### Codex App 路由
 
-1. 打开 `Providers`，添加一个支持 OpenAI Chat Completions 的 Provider。
-2. 打开 `Codex`，添加或选择 Codex Model，例如 `gpt-5.5`。
-3. 创建路由，填写真实上游模型名。
-4. 在 `Codex` 页面选择默认模型。
-5. 点击 `Start & Bind Codex App`。
-6. 重启 Codex App 后开始使用。
+1. 打开 `Providers`，添加一个支持 OpenAI Chat Completions 的 Provider(例如 `DeepSeek-V4-Pro` via Volcengine、`Kimi-K2.7-Code` via Volcengine、`mimo-v2.5-pro` via Xiaomi)。
+2. 打开 `Codex`，添加 Codex 路由,`codex_model` 字段填 **OpenAI 官方名字**(`gpt-5.1` / `gpt-5.2` / `gpt-5.3`),`upstream_model` 填真实国产模型名,`provider_id` 关联到步骤 1 的 Provider。
+3. 在 `Codex` 页面选择默认模型(例如 `gpt-5.1`)。
+4. 点击 `Start & Bind Codex App`。
+5. 重启 Codex App 后开始使用 — 在 Codex App 模型下拉里**仍选 `gpt-5.1`**,本地 gateway 在请求时把它重写到国产 model。
 
-绑定后会写入：
+绑定后会写入:
 
 ```toml
 model_provider = "gateway-switch"

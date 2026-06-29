@@ -951,11 +951,11 @@ Binding writes to:
 ~/.codex/config.toml
 ```
 
-Gateway Switch writes:
+Gateway Switch writes (v1.15.0, OSS-Mode-style without `custom_models`):
 
 ```toml
 model_provider = "gateway-switch"
-model = "gpt-5.5"
+model = "gpt-5.1"
 preferred_auth_method = "apikey"
 
 [model_providers.gateway-switch]
@@ -969,13 +969,26 @@ experimental_bearer_token = "gateway-switch-token"
 Important fields:
 
 - `model_provider = "gateway-switch"` makes Codex use the local provider.
-- `model` selects the default Codex model exposed by Gateway Switch.
+- `model` selects the default Codex model exposed by Gateway Switch (use an OpenAI official name such as `gpt-5.1` — the gateway rewrites it to the configured upstream on every request).
 - `preferred_auth_method = "apikey"` makes Codex prefer API-key mode over OAuth for this local provider.
 - `wire_api = "responses"` tells Codex to use the Responses API surface.
 - `requires_openai_auth = false` prevents OpenAI OAuth from being required for this provider.
 - `experimental_bearer_token` lets Codex App launched from Finder carry the local gateway token without terminal environment variables.
+- **No `custom_models` block is written** — the Codex App shows its own OpenAI official model list, and the gateway does the rewrite at request time. Provider mappings (e.g. `gpt-5.1` → `DeepSeek-V4-Pro`) live in the `codex_routes` SQLite table. See "Recommended Codex routes" below.
+
+Recommended Codex routes (v1.15.0 default):
+
+| `codex_model` (Codex App) | upstream | provider | rationale |
+|---|---|---|---|
+| `gpt-5.1` | `DeepSeek-V4-Pro` | Volcengine | deep reasoning |
+| `gpt-5.2` | `Kimi-K2.7-Code` | Volcengine | coding |
+| `gpt-5.3` | `mimo-v2.5-pro` | Xiaomi | tool use |
+
+The Codex App's model picker still only shows the OpenAI official list (since no `custom_models` block is written), so the user picks `gpt-5.1` in Codex App and the gateway replaces it with `DeepSeek-V4-Pro` on the wire.
 
 Restore returns to the latest unmanaged backup. If no clean backup exists, Gateway Switch removes its managed `gateway-switch` config block while preserving unrelated Codex config sections.
+
+**Note**: v1.14.2 was an experimental OSS-Mode branch that wrote a `custom_models` block. v1.15.0 skips that path. v1.14.1 is kept in `release-artifacts/v1.14.1/` as a stable fallback.
 
 ## 20. Reasoning Behavior With Third-Party Models
 

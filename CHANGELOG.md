@@ -2,6 +2,14 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.15.0 - 2026-06-29
+
+- **Stripped upstream `reasoning_content` from the Codex text stream** in `codex_gateway.rs::extract_text_from_delta` and `extract_chat_message_text`, so reasoning models (e.g. DeepSeek-R1, Kimi K2) no longer leak their internal chain-of-thought into the Codex App chat UI. Only `content` and `text` are now used as user-facing text; the previous fall-back through `reasoning_content` / `reasoning` was the root cause of the "User is just saying hello. No tools needed." text showing up as the assistant's reply.
+- **Documented the v1.13.3-style Codex routing** in `docs/project.md` section 19 and `README.md` / `README_EN.md`: the Codex App binding writes `model_provider = "gateway-switch"` with `requires_openai_auth = false` and an `experimental_bearer_token`. All provider mapping is read from the `codex_routes` SQLite table on every request, so users select `gpt-5.1` / `gpt-5.2` / `gpt-5.3` in the Codex App and the gateway rewrites them to the configured upstream (`DeepSeek-V4-Pro`, `Kimi-K2.7-Code`, `mimo-v2.5-pro`, etc.).
+- Clarified that the `~/.codex/config.toml` is intentionally written without a `custom_models` block: the Codex App shows its own OpenAI official model list, and `codex_routes` does the rewrite at the gateway. v1.14.2's "OSS Mode with `custom_models`" path is explicitly skipped.
+- Bumped project version: `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` all read `1.15.0`. The `release-artifacts/v1.14.2/` directory is removed; `v1.14.1/` is kept as a stable fallback release.
+- Verification: `cargo test --lib` (82 passed), `tsc && vite build`, `pnpm tauri build`, DMG ~7.6 MB.
+
 ## 1.14.1 - 2026-06-29
 
 - Fixed Claude routing for Anthropic-compatible third-party providers so requests correctly resolve to the intended upstream endpoint instead of falling back to the default Anthropic route.

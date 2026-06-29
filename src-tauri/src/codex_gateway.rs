@@ -1310,7 +1310,11 @@ fn extract_chat_delta(line: &str) -> Option<String> {
 }
 
 fn extract_text_from_delta(delta: &Value) -> Option<String> {
-    for key in ["content", "reasoning_content", "reasoning", "text"] {
+    // Only look at user-facing text fields. `reasoning_content` is the model's
+    // internal monologue (e.g. "User is just saying hello. No tools needed.")
+    // and must NOT be exposed as the assistant's text reply — that would leak
+    // private chain-of-thought into the Codex App chat UI.
+    for key in ["content", "text"] {
         if let Some(text) = delta
             .get(key)
             .and_then(|v| v.as_str())
@@ -1338,7 +1342,8 @@ fn extract_text_from_delta(delta: &Value) -> Option<String> {
 }
 
 fn extract_chat_message_text(message: &Value) -> Option<String> {
-    for key in ["content", "reasoning_content", "reasoning", "text"] {
+    // See extract_text_from_delta: do not fall back to `reasoning_content`.
+    for key in ["content", "text"] {
         if let Some(text) = message
             .get(key)
             .and_then(|v| v.as_str())
@@ -1994,11 +1999,14 @@ mod tests {
     #[test]
     fn test_extracts_provider_delta_variants() {
         let content = r#"data: {"choices":[{"delta":{"content":"hello"}}]}"#;
+        // `reasoning_content` is the model's internal monologue and must NOT
+        // be exposed as the assistant's text reply; strip it from the text
+        // stream so the Codex App chat UI never shows chain-of-thought.
         let reasoning = r#"data: {"choices":[{"delta":{"reasoning_content":"thinking"}}]}"#;
         let text = r#"data: {"choices":[{"delta":{"text":"plain"}}]}"#;
 
         assert_eq!(extract_chat_delta(content).as_deref(), Some("hello"));
-        assert_eq!(extract_chat_delta(reasoning).as_deref(), Some("thinking"));
+        assert_eq!(extract_chat_delta(reasoning).as_deref(), None);
         assert_eq!(extract_chat_delta(text).as_deref(), Some("plain"));
         assert_eq!(extract_chat_delta("data: [DONE]"), None);
     }

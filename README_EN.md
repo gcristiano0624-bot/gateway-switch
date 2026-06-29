@@ -6,7 +6,7 @@
 
 > Gateway Switch is not just a model router. It is a **runtime compatibility layer** that sits between AI-native desktop applications and third-party model providers, bridging protocol gaps, repairing malformed tool calls, enforcing safety boundaries, and degrading gracefully when upstream providers misbehave.
 
-[![Version](https://img.shields.io/badge/Version-1.13.1-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.14.1-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -16,6 +16,14 @@ English | [中文](./README.md)
 </div>
 
 ---
+
+## 1.14.1 Routing Robustness Update
+
+- **Anthropic-compatible provider routing fix.** Third-party Anthropic-compatible providers now correctly resolve to the intended upstream endpoint instead of falling back to the default Anthropic route.
+- **Upstream stream truncation detection.** When an upstream provider cuts off a streaming response mid-flight, the gateway surfaces a clear truncation event rather than silently completing.
+- **Rate-limit automatic throttling.** Automatic provider throttling after 429 responses prevents rapid-fire retries that worsen backpressure.
+- **MiniMax thinking param stripping.** Unsupported thinking parameters are stripped before forwarding to MiniMax-compatible providers, avoiding 400-level rejections.
+- **Stream stop-reason logging.** `finish_reason` and upstream cutoff causes are now recorded in diagnostics for post-mortem analysis.
 
 ## 1.13.0 Unified Loop Guard Update
 

@@ -2,6 +2,15 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.14.1 - 2026-06-29
+
+- Fixed Claude routing for Anthropic-compatible third-party providers so requests correctly resolve to the intended upstream endpoint instead of falling back to the default Anthropic route.
+- Added upstream stream truncation detection: when an upstream provider cuts off a streaming response mid-flight, the gateway now surfaces a clear truncation event rather than silently completing.
+- Added automatic provider throttling after upstream rate-limit (429) responses, preventing rapid-fire retries that would worsen backpressure.
+- Stripped unsupported MiniMax thinking parameters before forwarding to providers that reject them, avoiding 400-level rejections on MiniMax-compatible routes.
+- Added stream stop-reason logging to diagnostics so `finish_reason` and upstream cutoff causes are recorded for post-mortem analysis.
+- Verification: `cargo test` (82 passed), `tsc && vite build`, `pnpm tauri build`, DMG 7.2 MB.
+
 ## 1.14.0 - 2026-06-12
 
 - Refactored the Claude Gateway runtime into focused backend modules while preserving the existing `/v1/messages`, `/v1/models`, route diagnostics, payload preview, and replay command surfaces.

@@ -6,7 +6,7 @@
 
 > Gateway Switch 不仅仅是一个模型路由器。它是一个**运行时兼容性层**，驻留在 AI 原生桌面应用与第三方模型服务之间，弥合协议鸿沟、修复畸形工具调用、强制安全边界，并在上游 Provider 异常时优雅降级。
 
-[![Version](https://img.shields.io/badge/Version-1.13.1-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
+[![Version](https://img.shields.io/badge/Version-1.14.1-blue?style=flat-square)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple)](https://github.com/gcristiano0624-bot/gateway-switch/releases)
 [![Tauri](https://img.shields.io/badge/Built_with-Tauri_2-ffc131?style=flat-square&logo=tauri)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -16,6 +16,14 @@
 </div>
 
 ---
+
+## 1.14.1 路由健壮性更新重点
+
+- **Anthropic 兼容 Provider 路由修复。** 第三方 Anthropic-compatible Provider 现在正确解析到目标上游端点，不再回退到默认 Anthropic 路由。
+- **上游流截断检测。** 当上游 Provider 在流式响应中途断开时，网关会发出明确的截断事件，而不是静默完成。
+- **Rate Limit 自动节流。** 上游返回 429 后自动对 Provider 节流，防止快速重试加剧背压。
+- **MiniMax thinking 参数剥离。** 在转发到不支持 thinking 参数的 Provider 之前剥离，避免 400 错误。
+- **流停止原因记录。** `finish_reason` 和上游中断原因现在记录到诊断日志，便于事后分析。
 
 ## 1.13.0 Unified Loop Guard 更新重点
 

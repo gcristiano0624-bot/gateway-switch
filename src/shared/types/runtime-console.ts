@@ -400,3 +400,12 @@ export type SafeInstallPlan = {
   steps: string[];
   warning: string | null;
 };
+
+export type RuntimeConsoleBundle = {
+  generated_at: string;
+  dashboard: RuntimeDashboardReport;
+  usage: UsageInsightsReport;
+  provider_console: ProviderConsoleReport;
+  unified_diagnostics: UnifiedDiagnosticsReport;
+  workbenches: Record<string, AppWorkbenchReport>;
+};

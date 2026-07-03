@@ -7,6 +7,112 @@ use crate::{
     models::{Provider, ProviderCompatibilityPolicy},
 };
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CodexThinkingParam {
+    Thinking,
+    EnableThinking,
+    ReasoningSplit,
+    ReasoningDotEffort,
+    None,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CodexEffortParam {
+    None,
+    Passthrough,
+    ForceHigh,
+}
+
+#[derive(Debug, Clone)]
+pub struct CodexChatReasoningConfig {
+    pub thinking_param: CodexThinkingParam,
+    pub effort_param: CodexEffortParam,
+    pub max_effort_override: Option<&'static str>,
+}
+
+pub fn infer_codex_chat_reasoning_config(
+    provider: &Provider,
+    upstream_model: &str,
+) -> CodexChatReasoningConfig {
+    let key = format!(
+        "{} {} {} {}",
+        provider.id, provider.name, provider.base_url, upstream_model
+    )
+    .to_ascii_lowercase();
+
+    if key.contains("volcengine")
+        || key.contains("volc")
+        || key.contains("ark.cn-")
+        || key.contains("火山")
+    {
+        return CodexChatReasoningConfig {
+            thinking_param: CodexThinkingParam::None,
+            effort_param: CodexEffortParam::None,
+            max_effort_override: None,
+        };
+    }
+
+    if key.contains("openrouter") {
+        return CodexChatReasoningConfig {
+            thinking_param: CodexThinkingParam::ReasoningDotEffort,
+            effort_param: CodexEffortParam::Passthrough,
+            max_effort_override: Some("xhigh"),
+        };
+    }
+
+    if key.contains("siliconflow") {
+        return CodexChatReasoningConfig {
+            thinking_param: CodexThinkingParam::EnableThinking,
+            effort_param: CodexEffortParam::ForceHigh,
+            max_effort_override: None,
+        };
+    }
+
+    if key.contains("moonshot") || key.contains("kimi") {
+        return CodexChatReasoningConfig {
+            thinking_param: CodexThinkingParam::EnableThinking,
+            effort_param: CodexEffortParam::ForceHigh,
+            max_effort_override: None,
+        };
+    }
+
+    if key.contains("stepfun") || key.contains("step") {
+        return CodexChatReasoningConfig {
+            thinking_param: CodexThinkingParam::ReasoningSplit,
+            effort_param: CodexEffortParam::ForceHigh,
+            max_effort_override: None,
+        };
+    }
+
+    if key.contains("deepseek")
+        || key.contains("glm")
+        || key.contains("zhipu")
+        || key.contains("qwen")
+        || key.contains("dashscope")
+        || key.contains("aliyun")
+    {
+        return CodexChatReasoningConfig {
+            thinking_param: CodexThinkingParam::Thinking,
+            effort_param: CodexEffortParam::ForceHigh,
+            max_effort_override: None,
+        };
+    }
+
+    if key.contains("xiaomi") || key.contains("mimo") || key.contains("xiaomimimo") {
+        return CodexChatReasoningConfig {
+            thinking_param: CodexThinkingParam::None,
+            effort_param: CodexEffortParam::None,
+            max_effort_override: None,
+        };
+    }
+
+    CodexChatReasoningConfig {
+        thinking_param: CodexThinkingParam::None,
+        effort_param: CodexEffortParam::None,
+        max_effort_override: None,
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderCompatibilityProfile {
     pub strategy_id: String,

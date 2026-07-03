@@ -5,10 +5,7 @@ import "./App.css";
 import {
   applyProviderWizard as applyProviderWizardApi,
   applyRouteBuilder as applyRouteBuilderApi,
-  getAppWorkbench,
-  getProviderConsole,
-  getRuntimeDashboard,
-  getUsageInsights,
+  getRuntimeConsoleBundle,
 } from "./shared/api/runtime-console";
 import { AppWorkbenchOverview } from "./features/app-workbench/AppWorkbenchOverview";
 import { AppWorkbenchGrid } from "./features/dashboard/AppWorkbenchGrid";
@@ -1871,7 +1868,7 @@ function App() {
     }
 
     try {
-      const [s, p, r, d, cc, l, rd, rs, policies, failed, codexDiag, installPlan, unified, usage, providerConsoleData, dashboardData, claudeWorkbench, claudeCodeWorkbench, codexWorkbench, presets, cfg, cs, cr, cb, cold, mcp, ca, cma, cppInstall, cppTweaks, cppHealth, cppPreflight, cppScripts] = await Promise.all([
+      const [s, p, r, d, cc, l, rd, rs, policies, failed, codexDiag, installPlan, bundle, presets, cfg, cs, cr, cb, cold, mcp, ca, cma, cppInstall, cppTweaks, cppHealth, cppPreflight, cppScripts] = await Promise.all([
         invoke<Status>("get_status"),
         invoke<Provider[]>("list_providers"),
         invoke<ModelRoute[]>("list_routes"),
@@ -1884,13 +1881,7 @@ function App() {
         invoke<FailedRequestDiagnosticCandidate[]>("list_failed_request_diagnostics"),
         invoke<CodexRouteDiagnostic[]>("get_codex_route_diagnostics"),
         invoke<SafeInstallPlan>("get_safe_install_plan"),
-        invoke<UnifiedDiagnosticsReport>("get_unified_diagnostics"),
-        getUsageInsights(),
-        getProviderConsole(),
-        getRuntimeDashboard(),
-        getAppWorkbench("claude_desktop"),
-        getAppWorkbench("claude_code"),
-        getAppWorkbench("codex"),
+        getRuntimeConsoleBundle(),
         invoke<BackendProviderPreset[]>("list_provider_presets"),
         invoke<Settings>("get_settings"),
         invoke<CodexGatewayStatus>("get_codex_status"),
@@ -1918,14 +1909,14 @@ function App() {
       setFailedDiagnostics(failed);
       setCodexRouteDiagnostics(codexDiag);
       setSafeInstallPlan(installPlan);
-      setUnifiedDiagnostics(unified);
-      setUsageInsights(usage);
-      setProviderConsole(providerConsoleData);
-      setRuntimeDashboard(dashboardData);
+      setUnifiedDiagnostics(bundle.unified_diagnostics);
+      setUsageInsights(bundle.usage);
+      setProviderConsole(bundle.provider_console);
+      setRuntimeDashboard(bundle.dashboard);
       setAppWorkbenches({
-        claude_desktop: claudeWorkbench,
-        claude_code: claudeCodeWorkbench,
-        codex: codexWorkbench,
+        claude_desktop: bundle.workbenches["claude_desktop"],
+        claude_code: bundle.workbenches["claude_code"],
+        codex: bundle.workbenches["codex"],
       });
       setProviderPresets(presets);
       setSettings(cfg);

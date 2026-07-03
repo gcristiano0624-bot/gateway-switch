@@ -2,6 +2,76 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.19.0 - 2026-07-03
+
+- **CodexToolContext + bidirectional tool restore (Improvement 1)**: Adds full round-trip support for all 4 Codex tool types (`function`, `custom`, `tool_search`, `namespace`). Previously only `function` tools were forwarded (others silently dropped); now all tool types are downgraded to `function` on the way out (lossless, with original spec embedded in `description`) and restored to their original type on the way back.
+  - New module: [codex_tools.rs](file:///Users/hugoguan/Documents/01.%20AI_Projects/03.%20Trae_Projects/gateway-switch/src-tauri/src/codex_tools.rs) with `CodexToolKind`, `CodexToolSpec`, and `CodexToolContext`.
+  - Request side: `CodexToolContext::from_request()` parses all tool types; `downgrade_to_function()` embeds original spec as `__codex_<type>__:<json>` marker in description.
+  - Response side: `restore_response_item()` recognizes the tool by chat_name and emits the correct Codex output item type:
+    - `custom` → `type: "custom_tool_call"` with `name` + `arguments`
+    - `tool_search` → `type: "tool_search_call"` with `query`
+    - `namespace` → `type: "function_call"` with original name preserved
+    - `function` → unchanged (passthrough)
+  - Applied to both sync (`convert_sync_response`) and streaming paths.
+  - Backward compatible: existing `function`-only workflows are unaffected.
+- **Cross-request function_call history (Improvement 2)**: Adds an in-memory LRU cache of function_call output items keyed by response_id, so multi-round Codex CLI sessions that send `previous_response_id` + `function_call_output` items have missing tool calls reconstructed before forwarding to Chat Completions providers.
+  - New module: [codex_history.rs](file:///Users/hugoguan/Documents/01.%20AI_Projects/03.%20Trae_Projects/gateway-switch/src-tauri/src/codex_history.rs) with `CodexChatHistoryStore`.
+  - Cache size: 512 responses (LRU eviction), per gateway instance (in-memory only, lost on restart).
+- **Platform-aware reasoning translation (Improvement 4)**: Translates Codex `reasoning.effort` to each provider's native field:
+  - DeepSeek / GLM / Qwen → `thinking: { type: "enabled" }`
+  - Kimi (Moonshot) / SiliconFlow → `enable_thinking: true`
+  - StepFun → `reasoning_split: true`
+  - OpenRouter → `reasoning: { effort: "..." }` with `max` → `xhigh` clamp
+  - Xiaomi MiMo → no injection
+  - **Volcengine/火山引擎 → no injection** (new in 1.19.0 patch)
+- **Reasoning panel restoration (Improvement 3)**: Routes `reasoning_content` to a proper Codex Responses `type: "reasoning"` output item instead of dropping it. The Codex App reasoning panel now shows DeepSeek-R1, Kimi K2, and other reasoning models' chain-of-thought separately from the assistant answer.
+- **vLLM/enterprise gateway compatibility**: Strip dangling `tool_choice` and `parallel_tool_calls` when a request has no tools after policy application.
+- **Streaming usage tracking**: Automatically inject `stream_options.include_usage = true` for streaming requests (skipped when `strip_unsupported_params` is set).
+- **Volcengine compatibility fixes** (patch):
+  - Added Volcengine detection in `infer_codex_chat_reasoning_config` — no reasoning parameters are injected for 火山引擎 routes, preventing `InvalidParameter` rejections.
+  - `apply_codex_post_policy_cleanup` now gates `stream_options.include_usage` injection on `!route.strategy.strip_unsupported_params`, so strict providers don't get unsupported fields.
+  - Tightened tool name sanitization: namespace/custom/tool_search tools are downgraded with OpenAI-compatible function names (`[a-zA-Z0-9_-]` only), fixing 400 errors on Kimi/Volcengine when MCP namespace tools contain colons or dots.
+  - `force_when_tools_present` tool-call mode now uses a system prompt hint instead of `tool_choice = "required"`, so models with MCP tools can still produce final text answers instead of looping in tool-call mode. Only `strict_execution` mode enforces `required`.
+- Added 20+ unit tests across codex_tools, codex_history, gateway_strategy, and codex_gateway.
+- Verification: `cargo test --lib` (116 passed, 3 ignored).
+
+## 1.18.0 - 2026-07-01
+
+- **Cross-request function_call history (Improvement 2)**: Adds an in-memory LRU cache of function_call output items keyed by response_id, so multi-round Codex CLI sessions that send `previous_response_id` + `function_call_output` items (without the full assistant `tool_calls`) have the missing tool calls reconstructed before forwarding to Chat Completions providers.
+  - New module: [codex_history.rs](file:///Users/hugoguan/Documents/01.%20AI_Projects/03.%20Trae_Projects/gateway-switch/src-tauri/src/codex_history.rs) with `CodexChatHistoryStore`.
+  - Cache size: 512 responses (LRU eviction), per gateway instance (in-memory only, lost on restart).
+  - Recording: both sync and streaming paths call `record_response()` with the final `output` array on successful completion.
+  - Enrichment: `enrich_request()` runs before `convert_request()` and inserts reconstructed `function_call` items plus an assistant message before the first `function_call_output` item in `input`.
+  - Safe default: when `previous_response_id` is unknown (e.g. after gateway restart), the request passes through unchanged — the client will see the upstream's error and retry with full payload.
+- Added 6 unit tests covering record/lookup, no-call skip, LRU eviction at 512, enrichment reconstruction, no-prev-id noop, and duplicate-record LRU refresh.
+- Verification: `cargo test --lib` (109 passed, 3 ignored).
+
+## 1.17.0 - 2026-07-01
+
+- **Platform-aware reasoning translation (Improvement 4)**: Translates Codex `reasoning.effort` / `reasoning_effort` to each provider's native field, eliminating `400 Invalid option: reasoning_effort` errors on reasoning models.
+  - DeepSeek / GLM / Qwen → `thinking: { type: "enabled" }`
+  - Kimi (Moonshot) / SiliconFlow → `enable_thinking: true`
+  - StepFun → `reasoning_split: true`
+  - OpenRouter → `reasoning: { effort: "..." }` with `max` → `xhigh` clamp
+  - Xiaomi MiMo → no injection (handled internally by MiMo)
+- Added `CodexChatReasoningConfig` + `infer_codex_chat_reasoning_config()` in [gateway_strategy.rs](file:///Users/hugoguan/Documents/01.%20AI_Projects/03.%20Trae_Projects/gateway-switch/src-tauri/src/gateway_strategy.rs) to detect platform from provider id/name/base_url/upstream_model.
+- Added `apply_codex_reasoning_translation()` in [codex_gateway.rs](file:///Users/hugoguan/Documents/01.%20AI_Projects/03.%20Trae_Projects/gateway-switch/src-tauri/src/codex_gateway.rs) called after `apply_codex_provider_policy`.
+- `codex_strip_reasoning` strategy flag still takes precedence: when set, all reasoning fields are stripped regardless of platform.
+- Added 9 unit tests covering DeepSeek, Kimi, OpenRouter (max→xhigh, none passthrough), MiMo, StepFun, SiliconFlow, Qwen, and strip-reasoning override.
+- Verification: `cargo test --lib` (103 passed, 3 ignored).
+
+## 1.16.0 - 2026-07-01
+
+- **vLLM/enterprise gateway compatibility**: Strip dangling `tool_choice` and `parallel_tool_calls` fields when a request has no tools after policy application, preventing `400 tool_choice not allowed without tools` errors from vLLM-style gateways. Source: cc-switch `transform_codex_chat.rs:322-334`.
+- **Streaming usage tracking**: Automatically inject `stream_options.include_usage = true` for streaming requests so OpenAI-compatible upstreams return token usage (`prompt_tokens`, `completion_tokens`, `cache_read_input_tokens`) in the final SSE chunk, enabling accurate cost accounting in `request_logs`. Source: cc-switch `transform_codex_chat.rs:335-340`.
+- **Reasoning panel restoration (Improvement 3)**: Instead of dropping `reasoning_content` entirely (v1.15.0 fix), now route it to a proper Codex Responses `type: "reasoning"` output item. The Codex App reasoning panel now shows DeepSeek-R1, Kimi K2, and other reasoning models' chain-of-thought separately from the assistant answer, without leaking CoT into the chat message text.
+  - Non-streaming: emits `reasoning` item before `message` item with summary text.
+  - Streaming: emits `response.reasoning_summary_text.delta` SSE events with proper `.added`/`.done` lifecycle.
+  - Added `<think>...</think>` block parsing: models that emit thinking in XML tags (e.g. DeepSeek R1 distill) have the think block extracted to reasoning and the remainder kept as answer text.
+  - `output_tokens_details.reasoning_tokens` is populated for both sync and streaming responses.
+- Added 12 new unit tests covering post-policy cleanup, think-block splitting, reasoning item generation, and delta extraction.
+- Verification: `cargo test --lib` (94 passed, 3 ignored), `tsc && vite build` (pending in full build).
+
 ## 1.15.0 - 2026-06-29
 
 - **Stripped upstream `reasoning_content` from the Codex text stream** in `codex_gateway.rs::extract_text_from_delta` and `extract_chat_message_text`, so reasoning models (e.g. DeepSeek-R1, Kimi K2) no longer leak their internal chain-of-thought into the Codex App chat UI. Only `content` and `text` are now used as user-facing text; the previous fall-back through `reasoning_content` / `reasoning` was the root cause of the "User is just saying hello. No tools needed." text showing up as the assistant's reply.

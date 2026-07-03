@@ -1,7 +1,9 @@
 mod claude_code_binding;
 mod codex_binding;
 mod codex_gateway;
+mod codex_history;
 mod codex_pp;
+mod codex_tools;
 mod coldstart;
 mod commands;
 mod compatibility;
@@ -98,6 +100,7 @@ pub fn run() {
             commands::get_app_workbench,
             commands::get_provider_console,
             commands::get_usage_insights,
+            commands::get_runtime_console_bundle,
             commands::preview_route_builder,
             commands::apply_route_builder,
             commands::preview_provider_wizard,

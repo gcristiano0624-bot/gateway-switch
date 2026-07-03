@@ -275,6 +275,38 @@ pub struct ProviderWizardApplyReport {
     pub route_report: Option<RouteBuilderApplyReport>,
 }
 
+#[derive(Debug, Clone)]
+struct RuntimeSnapshot {
+    providers: Vec<Provider>,
+    routes: Vec<ModelRoute>,
+    codex_routes: Vec<CodexRoute>,
+    policies: Vec<ProviderCompatibilityPolicy>,
+    logs: Vec<RequestLog>,
+    failed_snapshots: Vec<FailedRequestDiagnosticCandidate>,
+    desktop: Option<desktop_binding::DesktopInfo>,
+    claude_code: Option<ClaudeCodeInfo>,
+    codex_binding: Option<CodexBindingInfo>,
+    codex_pp_install: codex_pp::CodexPpInstall,
+    codex_pp_health: codex_pp::CodexPpHealth,
+    claude_gateway_health: HealthStatus,
+    codex_gateway_health: HealthStatus,
+    claude_gateway_status: GatewayStatus,
+    codex_gateway_status: GatewayStatus,
+    route_diagnostics: Vec<gateway::RouteCompatibilityDiagnostic>,
+    codex_diagnostics: Vec<codex_gateway::CodexRouteDiagnostic>,
+    runtime_source: RuntimeSourceReport,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RuntimeConsoleBundle {
+    pub generated_at: String,
+    pub dashboard: RuntimeDashboardReport,
+    pub usage: UsageInsightsReport,
+    pub provider_console: ProviderConsoleReport,
+    pub unified_diagnostics: UnifiedDiagnosticsReport,
+    pub workbenches: HashMap<String, AppWorkbenchReport>,
+}
+
 fn request_failed(log: &RequestLog) -> bool {
     log.status_code.map(|code| code >= 400).unwrap_or(true)
 }
@@ -751,274 +783,29 @@ pub fn reveal_safe_install_locations() -> Result<String, String> {
 pub async fn get_runtime_dashboard(
     st: State<'_, AppState>,
 ) -> Result<RuntimeDashboardReport, String> {
-    let providers = database::list_providers(&st.db_path)?;
-    let routes = database::list_routes(&st.db_path)?;
-    let codex_routes = database::list_codex_routes(&st.db_path)?;
-    let logs = database::list_logs(&st.db_path, 40)?;
-    let desktop = desktop_binding::inspect(&dirs::home_dir().ok_or("no home")?)?;
-    let claude_code = claude_code_binding::inspect(&dirs::home_dir().ok_or("no home")?)?;
-    let codex_binding = codex_binding::inspect(&dirs::home_dir().ok_or("no home")?)?;
-    let profile = database::get_profile(&st.db_path)?;
-    let codex_profile = database::get_codex_profile(&st.db_path)?;
-    let claude_gateway = probe_gateway_health(&profile).await;
-    let codex_gateway = probe_codex_gateway_health(&codex_profile).await;
-    let recent_failures = logs
-        .iter()
-        .filter(|log| request_failed(log))
-        .take(10)
-        .cloned()
-        .collect::<Vec<_>>();
-    let provider_ids = route_provider_ids(&routes, &codex_routes);
-    let active_provider_count = providers
-        .iter()
-        .filter(|provider| provider_ids.iter().any(|id| id == &provider.id))
-        .count();
-    let apps = app_summaries(
-        &desktop,
-        &claude_code,
-        &codex_binding,
-        claude_gateway.ok,
-        codex_gateway.ok,
-        &routes,
-        &codex_routes,
-        &providers,
-        &logs,
-    );
-    let healthy_apps = apps
-        .iter()
-        .filter(|app| app.managed && app.gateway_running)
-        .count();
-    let mut overall_score = 30
-        + (healthy_apps as u8 * 15)
-        + if active_provider_count > 0 { 10 } else { 0 }
-        + if recent_failures.is_empty() { 15 } else { 0 };
-    overall_score = overall_score.min(100);
-    let overall_status = if overall_score >= 85 {
-        "healthy"
-    } else if overall_score >= 65 {
-        "attention"
-    } else if overall_score >= 40 {
-        "degraded"
-    } else {
-        "critical"
-    }
-    .to_string();
-
-    Ok(RuntimeDashboardReport {
-        generated_at: Utc::now().to_rfc3339(),
-        overall_status,
-        overall_score,
-        claude_gateway,
-        codex_gateway,
-        provider_count: providers.len(),
-        claude_route_count: routes.len(),
-        codex_route_count: codex_routes.len(),
-        apps,
-        recent_failures,
-        recent_activity: logs.into_iter().take(10).collect(),
-        runtime_source: get_runtime_source_report(),
-    })
+    let snapshot = load_runtime_snapshot(&st, 40).await?;
+    Ok(build_runtime_dashboard_from_snapshot(&snapshot))
 }
 
 #[tauri::command]
-pub fn get_app_workbench(
+pub async fn get_app_workbench(
     st: State<'_, AppState>,
     app_id: String,
 ) -> Result<AppWorkbenchReport, String> {
-    if !matches!(app_id.as_str(), "claude_desktop" | "claude_code" | "codex") {
-        return Err(format!("Unsupported app_id: {app_id}"));
-    }
-    let providers = database::list_providers(&st.db_path)?;
-    let routes = database::list_routes(&st.db_path)?;
-    let codex_routes = database::list_codex_routes(&st.db_path)?;
-    let logs = database::list_logs(&st.db_path, 80)?;
-    let desktop = desktop_binding::inspect(&dirs::home_dir().ok_or("no home")?)?;
-    let claude_code = claude_code_binding::inspect(&dirs::home_dir().ok_or("no home")?)?;
-    let codex_binding = codex_binding::inspect(&dirs::home_dir().ok_or("no home")?)?;
-    let gateway_running = gateway::status(&st)
-        .map(|status| status.running)
-        .unwrap_or(false);
-    let codex_gateway_running = codex_gateway::status(&st)
-        .map(|status| status.running)
-        .unwrap_or(false);
-    let apps = app_summaries(
-        &desktop,
-        &claude_code,
-        &codex_binding,
-        gateway_running,
-        codex_gateway_running,
-        &routes,
-        &codex_routes,
-        &providers,
-        &logs,
-    );
-    let app = apps
-        .into_iter()
-        .find(|summary| summary.app_id == app_id)
-        .ok_or_else(|| format!("Unsupported app_id: {app_id}"))?;
-    let recent_logs = logs
-        .into_iter()
-        .filter(|log| match app_id.as_str() {
-            "codex" => codex_routes
-                .iter()
-                .any(|route| route.codex_model == log.claude_alias),
-            _ => routes
-                .iter()
-                .any(|route| route.claude_alias == log.claude_alias),
-        })
-        .take(30)
-        .collect();
-
-    Ok(AppWorkbenchReport {
-        generated_at: Utc::now().to_rfc3339(),
-        app,
-        desktop: (app_id == "claude_desktop").then_some(desktop),
-        claude_code: (app_id == "claude_code").then_some(claude_code),
-        codex_binding: (app_id == "codex").then_some(codex_binding),
-        claude_routes: routes,
-        codex_routes,
-        providers,
-        recent_logs,
-        diagnostics: unified_diagnostics_report(&st)?,
-    })
+    let snapshot = load_runtime_snapshot(&st, 80).await?;
+    build_app_workbench_report_from_snapshot(&snapshot, &app_id)
 }
 
 #[tauri::command]
-pub fn get_provider_console(st: State<'_, AppState>) -> Result<ProviderConsoleReport, String> {
-    let providers = database::list_providers(&st.db_path)?;
-    let routes = database::list_routes(&st.db_path)?;
-    let codex_routes = database::list_codex_routes(&st.db_path)?;
-    let policies = database::list_provider_policies(&st.db_path)?;
-    let logs = database::list_logs(&st.db_path, 200)?;
-    let items = providers
-        .iter()
-        .cloned()
-        .map(|provider| {
-            let linked_claude_routes = routes
-                .iter()
-                .filter(|route| route.provider_id == provider.id)
-                .count();
-            let linked_codex_routes = codex_routes
-                .iter()
-                .filter(|route| route.provider_id == provider.id)
-                .count();
-            let recent_request_count = logs
-                .iter()
-                .filter(|log| log.provider_id == provider.id)
-                .count();
-            let recent_failure_count = logs
-                .iter()
-                .filter(|log| log.provider_id == provider.id && request_failed(log))
-                .count();
-            let policy = policies
-                .iter()
-                .find(|policy| policy.provider_id == provider.id);
-            let health_score = if !provider.enabled {
-                0
-            } else if recent_request_count == 0 {
-                75
-            } else {
-                let success_count = recent_request_count.saturating_sub(recent_failure_count);
-                ((success_count * 100) / recent_request_count) as u8
-            };
-            ProviderConsoleItem {
-                supports_claude: provider.anthropic_base_url.is_some() || linked_claude_routes > 0,
-                supports_codex: !provider.openai_base_url.trim().is_empty(),
-                linked_claude_routes,
-                linked_codex_routes,
-                recent_request_count,
-                recent_failure_count,
-                health_score,
-                policy_tags: policy_tags(policy),
-                provider,
-            }
-        })
-        .collect();
-
-    Ok(ProviderConsoleReport {
-        generated_at: Utc::now().to_rfc3339(),
-        providers: items,
-        presets: built_in_provider_presets(),
-        policies,
-    })
+pub async fn get_provider_console(st: State<'_, AppState>) -> Result<ProviderConsoleReport, String> {
+    let snapshot = load_runtime_snapshot(&st, 200).await?;
+    Ok(build_provider_console_from_snapshot(&snapshot))
 }
 
 #[tauri::command]
-pub fn get_usage_insights(st: State<'_, AppState>) -> Result<UsageInsightsReport, String> {
-    let providers = database::list_providers(&st.db_path)?;
-    let logs = database::list_logs(&st.db_path, 500)?;
-    let total_requests = logs.len();
-    let failure_count = logs.iter().filter(|log| request_failed(log)).count();
-    let success_rate = if total_requests == 0 {
-        0
-    } else {
-        (((total_requests - failure_count) * 100) / total_requests) as u8
-    };
-    let mut durations = logs
-        .iter()
-        .filter_map(|log| log.duration_ms)
-        .collect::<Vec<_>>();
-    durations.sort_unstable();
-    let average_latency_ms = if durations.is_empty() {
-        None
-    } else {
-        Some(durations.iter().sum::<u64>() / durations.len() as u64)
-    };
-    let p95_latency_ms = if durations.is_empty() {
-        None
-    } else {
-        Some(durations[((durations.len() as f64 * 0.95).floor() as usize).min(durations.len() - 1)])
-    };
-    let provider_stats = providers
-        .iter()
-        .map(|provider| {
-            let request_count = logs
-                .iter()
-                .filter(|log| log.provider_id == provider.id)
-                .count();
-            let failure_count = logs
-                .iter()
-                .filter(|log| log.provider_id == provider.id && request_failed(log))
-                .count();
-            let success_rate = if request_count == 0 {
-                0
-            } else {
-                (((request_count - failure_count) * 100) / request_count) as u8
-            };
-            UsageProviderStat {
-                provider_id: provider.id.clone(),
-                provider_name: provider.name.clone(),
-                request_count,
-                failure_count,
-                success_rate,
-            }
-        })
-        .collect();
-    let mut buckets = HashMap::<String, usize>::new();
-    for log in &logs {
-        let key = log
-            .status_code
-            .map(|code| code.to_string())
-            .unwrap_or_else(|| "network".into());
-        *buckets.entry(key).or_default() += 1;
-    }
-    let mut status_buckets = buckets
-        .into_iter()
-        .map(|(status, count)| UsageStatusBucket { status, count })
-        .collect::<Vec<_>>();
-    status_buckets.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.status.cmp(&b.status)));
-
-    Ok(UsageInsightsReport {
-        generated_at: Utc::now().to_rfc3339(),
-        total_requests,
-        success_rate,
-        failure_count,
-        average_latency_ms,
-        p95_latency_ms,
-        provider_stats,
-        status_buckets,
-        recent_logs: logs.into_iter().take(80).collect(),
-    })
+pub async fn get_usage_insights(st: State<'_, AppState>) -> Result<UsageInsightsReport, String> {
+    let snapshot = load_runtime_snapshot(&st, 500).await?;
+    Ok(build_usage_insights_from_snapshot(&snapshot))
 }
 
 #[tauri::command]
@@ -1220,15 +1007,17 @@ pub fn apply_provider_wizard(
 }
 
 #[tauri::command]
-pub fn get_unified_diagnostics(
+pub async fn get_unified_diagnostics(
     st: State<'_, AppState>,
 ) -> Result<UnifiedDiagnosticsReport, String> {
-    unified_diagnostics_report(&st)
+    let snapshot = load_runtime_snapshot(&st, 200).await?;
+    Ok(build_unified_diagnostics_from_snapshot(&snapshot))
 }
 
 #[tauri::command]
-pub fn export_unified_diagnostics_bundle(st: State<'_, AppState>) -> Result<String, String> {
-    let report = unified_diagnostics_report(&st)?;
+pub async fn export_unified_diagnostics_bundle(st: State<'_, AppState>) -> Result<String, String> {
+    let snapshot = load_runtime_snapshot(&st, 200).await?;
+    let report = build_unified_diagnostics_from_snapshot(&snapshot);
     let path = st.backups_dir.join(format!(
         "unified-diagnostics-{}.json",
         chrono::Utc::now().timestamp_millis()
@@ -1297,67 +1086,6 @@ pub fn apply_provider_preset(
     }
     database::upsert_provider_policy(&st.db_path, &preset.recommended_policy)?;
     database::list_providers(&st.db_path)
-}
-
-fn unified_diagnostics_report(
-    st: &State<'_, AppState>,
-) -> Result<UnifiedDiagnosticsReport, String> {
-    let providers = database::list_providers(&st.db_path)?;
-    let routes = database::list_routes(&st.db_path)?;
-    let codex_routes = database::list_codex_routes(&st.db_path)?;
-    let logs = database::list_logs(&st.db_path, 200)?;
-    let failed = database::list_failed_request_snapshots(&st.db_path, 100)?;
-    let route_diagnostics = gateway::route_diagnostics(&st.db_path).unwrap_or_default();
-    let codex_diagnostics = codex_gateway::route_diagnostics(&st.db_path).unwrap_or_default();
-    let runtime = runtime_source_report_for_path(
-        std::env::current_exe()
-            .map(|path| path.display().to_string())
-            .unwrap_or_else(|e| format!("unknown: {e}")),
-    );
-    let desktop = desktop_binding::inspect(&dirs::home_dir().ok_or("no home")?).ok();
-    let claude_code = claude_code_binding::inspect(&dirs::home_dir().ok_or("no home")?).ok();
-    let codex_status = codex_gateway::status(st).unwrap_or_default();
-    let codex_binding = codex_binding::inspect(&dirs::home_dir().ok_or("no home")?).ok();
-    let codex_pp_install = codex_pp::detect();
-    let codex_pp_health = codex_pp::health();
-    let failure_clusters = failure_clusters_from_snapshots(&failed);
-
-    let sections = vec![
-        claude_desktop_section(desktop.as_ref(), &routes, &route_diagnostics, &logs),
-        claude_code_section(claude_code.as_ref(), &route_diagnostics),
-        codex_gateway_section(
-            &codex_status,
-            codex_binding.as_ref(),
-            &codex_routes,
-            &codex_diagnostics,
-        ),
-        codex_pp_section(&codex_pp_install, &codex_pp_health),
-        providers_section(
-            &providers,
-            &route_diagnostics,
-            &codex_diagnostics,
-            &failure_clusters,
-        ),
-        install_runtime_section(&runtime),
-    ];
-    let score = if sections.is_empty() {
-        0
-    } else {
-        (sections.iter().map(|s| s.score as u16).sum::<u16>() / sections.len() as u16) as u8
-    };
-    let status = overall_status(&sections);
-    Ok(UnifiedDiagnosticsReport {
-        generated_at: chrono::Utc::now().to_rfc3339(),
-        summary: format!(
-            "{} sections checked, {} issue clusters found.",
-            sections.len(),
-            failure_clusters.len()
-        ),
-        status,
-        score,
-        sections,
-        failure_clusters,
-    })
 }
 
 fn metric(label: &str, value: impl Into<String>, status: &str) -> DiagnosticsMetric {
@@ -2549,6 +2277,464 @@ async fn probe_codex_gateway_health(profile: &GatewayProfile) -> HealthStatus {
             latency_ms: Some(start.elapsed().as_millis() as u64),
         },
     }
+}
+
+async fn load_runtime_snapshot(st: &AppState, log_limit: usize) -> Result<RuntimeSnapshot, String> {
+    let home = dirs::home_dir().ok_or("no home")?;
+    let providers = database::list_providers(&st.db_path)?;
+    let routes = database::list_routes(&st.db_path)?;
+    let codex_routes = database::list_codex_routes(&st.db_path)?;
+    let policies = database::list_provider_policies(&st.db_path)?;
+    let logs = database::list_logs(&st.db_path, log_limit)?;
+    let failed_snapshots = database::list_failed_request_snapshots(&st.db_path, 100)?;
+    let desktop = desktop_binding::inspect(&home).ok();
+    let claude_code = claude_code_binding::inspect(&home).ok();
+    let codex_binding = codex_binding::inspect(&home).ok();
+    let codex_pp_install = codex_pp::detect();
+    let codex_pp_health = codex_pp::health();
+    let profile = database::get_profile(&st.db_path)?;
+    let codex_profile = database::get_codex_profile(&st.db_path)?;
+    let (claude_gateway_health, codex_gateway_health) = tokio::join!(
+        probe_gateway_health(&profile),
+        probe_codex_gateway_health(&codex_profile)
+    );
+    let claude_gateway_status = gateway::status(st).unwrap_or_default();
+    let codex_gateway_status = codex_gateway::status(st).unwrap_or_default();
+    let route_diagnostics = gateway::route_diagnostics(&st.db_path).unwrap_or_default();
+    let codex_diagnostics = codex_gateway::route_diagnostics(&st.db_path).unwrap_or_default();
+    let runtime_source = runtime_source_report_for_path(
+        std::env::current_exe()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|e| format!("unknown: {e}")),
+    );
+    Ok(RuntimeSnapshot {
+        providers,
+        routes,
+        codex_routes,
+        policies,
+        logs,
+        failed_snapshots,
+        desktop,
+        claude_code,
+        codex_binding,
+        codex_pp_install,
+        codex_pp_health,
+        claude_gateway_health,
+        codex_gateway_health,
+        claude_gateway_status,
+        codex_gateway_status,
+        route_diagnostics,
+        codex_diagnostics,
+        runtime_source,
+    })
+}
+
+fn build_runtime_dashboard_from_snapshot(snapshot: &RuntimeSnapshot) -> RuntimeDashboardReport {
+    let providers = &snapshot.providers;
+    let routes = &snapshot.routes;
+    let codex_routes = &snapshot.codex_routes;
+    let logs = &snapshot.logs;
+    let desktop = &snapshot.desktop;
+    let claude_code = &snapshot.claude_code;
+    let codex_binding = &snapshot.codex_binding;
+    let claude_gateway = &snapshot.claude_gateway_health;
+    let codex_gateway = &snapshot.codex_gateway_health;
+    let recent_failures = logs
+        .iter()
+        .filter(|log| request_failed(log))
+        .take(10)
+        .cloned()
+        .collect::<Vec<_>>();
+    let provider_ids = route_provider_ids(routes, codex_routes);
+    let active_provider_count = providers
+        .iter()
+        .filter(|provider| provider_ids.iter().any(|id| id == &provider.id))
+        .count();
+    let apps = app_summaries(
+        desktop.as_ref().unwrap_or(&desktop_binding::DesktopInfo {
+            config_path: String::new(),
+            config_exists: false,
+            managed: false,
+            base_url: None,
+            auth_scheme: None,
+            models: Vec::new(),
+            backup_path: None,
+        }),
+        claude_code.as_ref().unwrap_or(&ClaudeCodeInfo {
+            config_path: String::new(),
+            config_exists: false,
+            managed: false,
+            base_url: None,
+            model: None,
+            auth_env: None,
+            backup_path: None,
+        }),
+        codex_binding.as_ref().unwrap_or(&CodexBindingInfo {
+            config_path: String::new(),
+            config_exists: false,
+            managed: false,
+            model_provider: None,
+            model: None,
+            base_url: None,
+            backup_path: None,
+        }),
+        claude_gateway.ok,
+        codex_gateway.ok,
+        routes,
+        codex_routes,
+        providers,
+        logs,
+    );
+    let healthy_apps = apps
+        .iter()
+        .filter(|app| app.managed && app.gateway_running)
+        .count();
+    let mut overall_score = 30
+        + (healthy_apps as u8 * 15)
+        + if active_provider_count > 0 { 10 } else { 0 }
+        + if recent_failures.is_empty() { 15 } else { 0 };
+    overall_score = overall_score.min(100);
+    let overall_status = if overall_score >= 85 {
+        "healthy"
+    } else if overall_score >= 65 {
+        "attention"
+    } else if overall_score >= 40 {
+        "degraded"
+    } else {
+        "critical"
+    }
+    .to_string();
+
+    RuntimeDashboardReport {
+        generated_at: Utc::now().to_rfc3339(),
+        overall_status,
+        overall_score,
+        claude_gateway: claude_gateway.clone(),
+        codex_gateway: codex_gateway.clone(),
+        provider_count: providers.len(),
+        claude_route_count: routes.len(),
+        codex_route_count: codex_routes.len(),
+        apps,
+        recent_failures,
+        recent_activity: logs.iter().take(10).cloned().collect(),
+        runtime_source: snapshot.runtime_source.clone(),
+    }
+}
+
+fn build_app_workbench_report_from_snapshot(
+    snapshot: &RuntimeSnapshot,
+    app_id: &str,
+) -> Result<AppWorkbenchReport, String> {
+    if !matches!(app_id, "claude_desktop" | "claude_code" | "codex") {
+        return Err(format!("Unsupported app_id: {app_id}"));
+    }
+    let providers = &snapshot.providers;
+    let routes = &snapshot.routes;
+    let codex_routes = &snapshot.codex_routes;
+    let logs = &snapshot.logs;
+    let desktop = &snapshot.desktop;
+    let claude_code = &snapshot.claude_code;
+    let codex_binding = &snapshot.codex_binding;
+    let gateway_running = snapshot.claude_gateway_status.running;
+    let codex_gateway_running = snapshot.codex_gateway_status.running;
+    let default_desktop = desktop_binding::DesktopInfo {
+        config_path: String::new(),
+        config_exists: false,
+        managed: false,
+        base_url: None,
+        auth_scheme: None,
+        models: Vec::new(),
+        backup_path: None,
+    };
+    let default_claude_code = ClaudeCodeInfo {
+        config_path: String::new(),
+        config_exists: false,
+        managed: false,
+        base_url: None,
+        model: None,
+        auth_env: None,
+        backup_path: None,
+    };
+    let default_codex_binding = CodexBindingInfo {
+        config_path: String::new(),
+        config_exists: false,
+        managed: false,
+        model_provider: None,
+        model: None,
+        base_url: None,
+        backup_path: None,
+    };
+    let apps = app_summaries(
+        desktop.as_ref().unwrap_or(&default_desktop),
+        claude_code.as_ref().unwrap_or(&default_claude_code),
+        codex_binding.as_ref().unwrap_or(&default_codex_binding),
+        gateway_running,
+        codex_gateway_running,
+        routes,
+        codex_routes,
+        providers,
+        logs,
+    );
+    let app = apps
+        .into_iter()
+        .find(|summary| summary.app_id == app_id)
+        .ok_or_else(|| format!("Unsupported app_id: {app_id}"))?;
+    let recent_logs = logs
+        .iter()
+        .filter(|log| match app_id {
+            "codex" => codex_routes
+                .iter()
+                .any(|route| route.codex_model == log.claude_alias),
+            _ => routes
+                .iter()
+                .any(|route| route.claude_alias == log.claude_alias),
+        })
+        .take(30)
+        .cloned()
+        .collect();
+
+    Ok(AppWorkbenchReport {
+        generated_at: Utc::now().to_rfc3339(),
+        app,
+        desktop: if app_id == "claude_desktop" {
+            desktop.clone()
+        } else {
+            None
+        },
+        claude_code: if app_id == "claude_code" {
+            claude_code.clone()
+        } else {
+            None
+        },
+        codex_binding: if app_id == "codex" {
+            codex_binding.clone()
+        } else {
+            None
+        },
+        claude_routes: routes.clone(),
+        codex_routes: codex_routes.clone(),
+        providers: providers.clone(),
+        recent_logs,
+        diagnostics: build_unified_diagnostics_from_snapshot(snapshot),
+    })
+}
+
+fn build_provider_console_from_snapshot(snapshot: &RuntimeSnapshot) -> ProviderConsoleReport {
+    let providers = &snapshot.providers;
+    let routes = &snapshot.routes;
+    let codex_routes = &snapshot.codex_routes;
+    let policies = &snapshot.policies;
+    let logs = &snapshot.logs;
+    let items = providers
+        .iter()
+        .cloned()
+        .map(|provider| {
+            let linked_claude_routes = routes
+                .iter()
+                .filter(|route| route.provider_id == provider.id)
+                .count();
+            let linked_codex_routes = codex_routes
+                .iter()
+                .filter(|route| route.provider_id == provider.id)
+                .count();
+            let recent_request_count = logs
+                .iter()
+                .filter(|log| log.provider_id == provider.id)
+                .count();
+            let recent_failure_count = logs
+                .iter()
+                .filter(|log| log.provider_id == provider.id && request_failed(log))
+                .count();
+            let policy = policies
+                .iter()
+                .find(|policy| policy.provider_id == provider.id);
+            let health_score = if !provider.enabled {
+                0
+            } else if recent_request_count == 0 {
+                75
+            } else {
+                let success_count = recent_request_count.saturating_sub(recent_failure_count);
+                ((success_count * 100) / recent_request_count) as u8
+            };
+            ProviderConsoleItem {
+                supports_claude: provider.anthropic_base_url.is_some() || linked_claude_routes > 0,
+                supports_codex: !provider.openai_base_url.trim().is_empty(),
+                linked_claude_routes,
+                linked_codex_routes,
+                recent_request_count,
+                recent_failure_count,
+                health_score,
+                policy_tags: policy_tags(policy),
+                provider,
+            }
+        })
+        .collect();
+
+    ProviderConsoleReport {
+        generated_at: Utc::now().to_rfc3339(),
+        providers: items,
+        presets: built_in_provider_presets(),
+        policies: policies.clone(),
+    }
+}
+
+fn build_usage_insights_from_snapshot(snapshot: &RuntimeSnapshot) -> UsageInsightsReport {
+    let providers = &snapshot.providers;
+    let logs = &snapshot.logs;
+    let total_requests = logs.len();
+    let failure_count = logs.iter().filter(|log| request_failed(log)).count();
+    let success_rate = if total_requests == 0 {
+        0
+    } else {
+        (((total_requests - failure_count) * 100) / total_requests) as u8
+    };
+    let mut durations = logs
+        .iter()
+        .filter_map(|log| log.duration_ms)
+        .collect::<Vec<_>>();
+    durations.sort_unstable();
+    let average_latency_ms = if durations.is_empty() {
+        None
+    } else {
+        Some(durations.iter().sum::<u64>() / durations.len() as u64)
+    };
+    let p95_latency_ms = if durations.is_empty() {
+        None
+    } else {
+        Some(durations[((durations.len() as f64 * 0.95).floor() as usize).min(durations.len() - 1)])
+    };
+    let provider_stats = providers
+        .iter()
+        .map(|provider| {
+            let request_count = logs
+                .iter()
+                .filter(|log| log.provider_id == provider.id)
+                .count();
+            let failure_count = logs
+                .iter()
+                .filter(|log| log.provider_id == provider.id && request_failed(log))
+                .count();
+            let success_rate = if request_count == 0 {
+                0
+            } else {
+                (((request_count - failure_count) * 100) / request_count) as u8
+            };
+            UsageProviderStat {
+                provider_id: provider.id.clone(),
+                provider_name: provider.name.clone(),
+                request_count,
+                failure_count,
+                success_rate,
+            }
+        })
+        .collect();
+    let mut buckets = HashMap::<String, usize>::new();
+    for log in logs {
+        let key = log
+            .status_code
+            .map(|code| code.to_string())
+            .unwrap_or_else(|| "network".into());
+        *buckets.entry(key).or_default() += 1;
+    }
+    let mut status_buckets = buckets
+        .into_iter()
+        .map(|(status, count)| UsageStatusBucket { status, count })
+        .collect::<Vec<_>>();
+    status_buckets.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.status.cmp(&b.status)));
+
+    UsageInsightsReport {
+        generated_at: Utc::now().to_rfc3339(),
+        total_requests,
+        success_rate,
+        failure_count,
+        average_latency_ms,
+        p95_latency_ms,
+        provider_stats,
+        status_buckets,
+        recent_logs: logs.iter().take(80).cloned().collect(),
+    }
+}
+
+fn build_unified_diagnostics_from_snapshot(
+    snapshot: &RuntimeSnapshot,
+) -> UnifiedDiagnosticsReport {
+    let providers = &snapshot.providers;
+    let routes = &snapshot.routes;
+    let codex_routes = &snapshot.codex_routes;
+    let logs = &snapshot.logs;
+    let failed = &snapshot.failed_snapshots;
+    let route_diagnostics = &snapshot.route_diagnostics;
+    let codex_diagnostics = &snapshot.codex_diagnostics;
+    let runtime = &snapshot.runtime_source;
+    let desktop = &snapshot.desktop;
+    let claude_code = &snapshot.claude_code;
+    let codex_status = &snapshot.codex_gateway_status;
+    let codex_binding = &snapshot.codex_binding;
+    let codex_pp_install = &snapshot.codex_pp_install;
+    let codex_pp_health = &snapshot.codex_pp_health;
+    let failure_clusters = failure_clusters_from_snapshots(failed);
+
+    let sections = vec![
+        claude_desktop_section(desktop.as_ref(), routes, route_diagnostics, logs),
+        claude_code_section(claude_code.as_ref(), route_diagnostics),
+        codex_gateway_section(
+            codex_status,
+            codex_binding.as_ref(),
+            codex_routes,
+            codex_diagnostics,
+        ),
+        codex_pp_section(codex_pp_install, codex_pp_health),
+        providers_section(
+            providers,
+            route_diagnostics,
+            codex_diagnostics,
+            &failure_clusters,
+        ),
+        install_runtime_section(runtime),
+    ];
+    let score = if sections.is_empty() {
+        0
+    } else {
+        (sections.iter().map(|s| s.score as u16).sum::<u16>() / sections.len() as u16) as u8
+    };
+    let status = overall_status(&sections);
+    UnifiedDiagnosticsReport {
+        generated_at: chrono::Utc::now().to_rfc3339(),
+        summary: format!(
+            "{} sections checked, {} issue clusters found.",
+            sections.len(),
+            failure_clusters.len()
+        ),
+        status,
+        score,
+        sections,
+        failure_clusters,
+    }
+}
+
+#[tauri::command]
+pub async fn get_runtime_console_bundle(
+    st: State<'_, AppState>,
+) -> Result<RuntimeConsoleBundle, String> {
+    let snapshot = load_runtime_snapshot(&st, 500).await?;
+    let dashboard = build_runtime_dashboard_from_snapshot(&snapshot);
+    let usage = build_usage_insights_from_snapshot(&snapshot);
+    let provider_console = build_provider_console_from_snapshot(&snapshot);
+    let unified_diagnostics = build_unified_diagnostics_from_snapshot(&snapshot);
+    let mut workbenches = HashMap::new();
+    for app_id in ["claude_desktop", "claude_code", "codex"] {
+        if let Ok(report) = build_app_workbench_report_from_snapshot(&snapshot, app_id) {
+            workbenches.insert(app_id.to_string(), report);
+        }
+    }
+    Ok(RuntimeConsoleBundle {
+        generated_at: Utc::now().to_rfc3339(),
+        dashboard,
+        usage,
+        provider_console,
+        unified_diagnostics,
+        workbenches,
+    })
 }
 
 #[tauri::command]

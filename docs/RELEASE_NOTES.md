@@ -1,38 +1,32 @@
-# Gateway Switch v1.20.0 Release Notes
+# Gateway Switch v1.20.1 Release Notes
 
 **Release date:** 2026-07-22
-**Version:** 1.20.0
-**Tag:** v1.20.0
+**Version:** 1.20.1
+**Tag:** v1.20.1
 **Platform:** macOS (aarch64 / Apple Silicon)
 **Bundle size:** ~18 MB app / ~7.0 MB DMG
 
 ## Highlights
 
-v1.20.0 is the "ChatGPT Merge + Streamlined Codex" release. It fixes all breakages caused by OpenAI merging Codex into ChatGPT (app rename, CLI config changes, model catalog updates), resolves critical routing bugs (tool-name 400 errors, MiMo/GLM infinite loops), and streamlines the app by removing the Codex++ desktop enhancement layer (asar patching + ad-hoc re-signing) in favor of CLI binding + local gateway proxy — which is more sustainable given ChatGPT's frequent update cycle.
+v1.20.1 is a hotfix release for v1.20.0 that resolves two critical regressions: the "Command not found" error when clicking the Claude/Codex Bind buttons, and the 502 Bad Gateway error when using Codex with Volcengine Ark (火山方舟) endpoints.
 
-### What's New in v1.20.0
+### What's Fixed in v1.20.1
 
-#### 1. ChatGPT/Codex Merge Compatibility
+#### 1. Bind Button "Command Not Found" Fix
 
-- **App detection rewrite**: Locates the Codex desktop app via bundle ID `com.openai.codex` using Spotlight (`mdfind`), with ordered fallback to `/Applications/ChatGPT.app`, `~/Applications/ChatGPT.app`, and legacy `Codex.app` paths. Electron asar validation ensures the correct app is found regardless of rename.
-- **CLI config modernization**: Version-adaptive config writer detects Codex CLI version. Builds ≥0.140 get the modern `[auth]` table layout; older builds keep top-level `preferred_auth_method`. Removed deprecated `requires_openai_auth` key.
-- **[auth] table preservation**: Config cleanup logic strips only `preferred_auth_method` inside `[auth]`, dropping the header only if nothing else remains, preserving user-owned keys.
-- **GPT-5.x model catalog**: Default model list and database seed/backfill updated to gpt-5.6 era (gpt-5.6-sol/terra/luna, gpt-5.5, gpt-5.3-codex, gpt-5.1-codex, gpt-5.1-codex-mini). Model metadata (context window, max output tokens) is written to config.toml to eliminate "Unknown model" warnings.
+- **Root cause**: The async Tauri commands `start_and_bind_claude` and `start_and_bind_codex` (which start the local gateway and apply config binding in a single call) were defined in `commands.rs` with `#[tauri::command]` attributes but were never registered in the `invoke_handler!` macro in `lib.rs`. This caused the frontend `invoke()` calls to fail with "Command start_and_bind_claude not found" / "Command start_and_bind_codex not found".
+- **Fix**: Added both commands to the `tauri::generate_handler![]` registration list in `lib.rs`.
+- **Verification**: Rust dead-code warnings reduced from 8 to 6 (the two commands are now properly referenced).
 
-#### 2. Critical Bug Fixes
+#### 2. Codex 502 Bad Gateway on Volcengine/火山引擎 Fix
 
-- **Tool name sanitization fix**: All tool kinds (including `function`) are now sanitized on send (dots/colons → underscores), fixing 400 InvalidParameter errors on Kimi/Volcengine when MCP tools contain dots or colons. Original names are restored on response items. Added round-trip tests.
-- **MiMo/GLM infinite loop fix**: The streaming retry that forcibly set `tool_choice=required` after empty tool responses caused infinite tool-call loops on MiMo and GLM. Added `should_retry_with_required()` guard that detects MiMo (by strategy ID/model name) and GLM (by model name) and skips the forced retry.
-- **Bind mode persistence**: `codex_profile.bind_mode` column tracks `relay` (enhanced) vs `official` mode across apply/restore operations.
-
-#### 3. Codex++ Desktop Enhancement Removed
-
-Given ChatGPT's rapid update cycle (every patch invalidates asar patches and ad-hoc re-signatures), the Codex++ desktop enhancement module has been removed. The CLI binding + local HTTP gateway proxy are now the sole enhancement path, which is immune to app updates since it only modifies `~/.codex/config.toml`.
-
-- Removed: Electron asar patching, loader injection, ElectronAsarIntegrity hash updates, ad-hoc codesigning, launchd watcher, tweak market, recommended scripts, CLI headless mode (~3300 lines Rust, ~1500 lines TypeScript/React).
-- Removed dependencies: `flate2`, `tar`, `plist`, `sha2` (reduced binary size).
-- PATH resolution utilities inlined into `codex_binding.rs`.
-- Legacy `[model_providers.CodexPlusPlus]` config cleanup preserved for backward compatibility.
+- **Root cause**: The Volcengine DeepSeek compatibility profile in `gateway_strategy.rs` had `strip_unsupported_params: false` and `codex_strict_tool_calls: true`. This caused two validation failures against Volcengine Ark's strict Chat Completions API:
+  - `stream_options: {include_usage: true}` was injected into streaming requests (Ark does not support this parameter → "A parameter specified in the request is not valid").
+  - `tool_choice: "required"` was forced (Ark only supports `"auto"`/`"none"` for tool_choice, not `"required"`).
+- **Fix**:
+  - Set `strip_unsupported_params: true` and `codex_strict_tool_calls: false` for Volcengine DeepSeek.
+  - Expanded `apply_codex_provider_policy()` to strip 15+ OpenAI-exclusive parameters for strict providers: `parallel_tool_calls`, `stream_options`, `frequency_penalty`, `presence_penalty`, `response_format`, `seed`, `logprobs`, `top_logprobs`, `logit_bias`, `service_tier`, `modalities`, `prediction`, `audio`, `store`, `metadata`.
+  - Added auto-downgrade: `tool_choice: "required"` is automatically downgraded to `"auto"` when `strip_unsupported_params` is active, preventing validation errors on providers that don't support `"required"`.
 
 ## Installation
 
@@ -43,7 +37,7 @@ Given ChatGPT's rapid update cycle (every patch invalidates asar patches and ad-
 
 ### Install Steps
 
-1. Download `Gateway Switch_1.20.0_aarch64.dmg` from the release assets.
+1. Download `Gateway.Switch_1.20.1_aarch64.dmg` from the release assets.
 2. Double-click to mount the DMG.
 3. Drag `Gateway Switch.app` into `Applications`.
 4. Launch from `/Applications/Gateway Switch.app`.
@@ -68,16 +62,23 @@ Do not run the app directly from the DMG. The app detects when it's launched fro
 - No Developer ID signing / notarization — Gatekeeper will show a warning on first launch.
 - Desktop app patching (Codex++ style) is intentionally removed; only CLI config binding is supported for Codex enhancement.
 
-## Upgrading from v1.19.0
+## Upgrading from v1.20.0
+
+1. Quit Gateway Switch (including the menu bar icon).
+2. Replace `/Applications/Gateway Switch.app` with the new version.
+3. Launch — all configuration (providers, routes, logs, bind mode) is stored in `~/Library/Application Support/Gateway Switch/` and will be preserved.
+4. Re-apply Codex binding after launching (the fix is in the gateway code, not in config).
+
+## Upgrading from v1.19.0 or earlier
 
 1. Quit Gateway Switch.
 2. Replace `/Applications/Gateway Switch.app` with the new version.
-3. Launch — all configuration (providers, routes, logs, bind mode) is stored in `~/Library/Application Support/Gateway Switch/` and will be preserved.
-4. If you previously had Codex++ desktop enhancement installed, the old user data directory at `~/Library/Application Support/codex-plusplus/` can be safely deleted manually (the app no longer references it).
+3. Launch — existing configuration is preserved.
+4. If you previously had Codex++ desktop enhancement installed, the old user data directory at `~/Library/Application Support/codex-plusplus/` can be safely deleted manually.
 
 ## Rollback
 
-If you experience issues, the previous stable release is v1.19.0. Configuration is backward compatible.
+If you experience issues, the previous stable release is v1.20.0. Configuration is backward compatible.
 
 ## Feedback
 

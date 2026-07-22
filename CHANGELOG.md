@@ -2,6 +2,16 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.20.1 - 2026-07-22
+
+- **Fix: "Command not found" on Claude/Codex bind buttons**: The async Tauri commands `start_and_bind_claude` and `start_and_bind_codex` were defined in `commands.rs` but never registered in the `invoke_handler` in `lib.rs`, causing "Command start_and_bind_claude not found" errors when clicking the Bind button. Both commands are now properly registered. Dead-code warnings reduced from 8 to 6. Source: [lib.rs](file:///Users/hugoguan/Documents/01.%20AI_Projects/03.%20Trae_Projects/gateway-switch/src-tauri/src/lib.rs).
+- **Fix: Codex 502 Bad Gateway on Volcengine/火山引擎 Ark endpoints**: The Volcengine DeepSeek compatibility profile had `strip_unsupported_params: false` and `codex_strict_tool_calls: true`, which caused the gateway to inject `stream_options: {include_usage: true}` into streaming requests and force `tool_choice: "required"` — both rejected by Volcengine Ark with "A parameter specified in the request is not valid". Fixed by:
+  - Setting `strip_unsupported_params: true` and `codex_strict_tool_calls: false` for Volcengine DeepSeek in [gateway_strategy.rs](file:///Users/hugoguan/Documents/01.%20AI_Projects/03.%20Trae_Projects/gateway-switch/src-tauri/src/gateway_strategy.rs).
+  - Expanding `apply_codex_provider_policy()` in [codex_gateway.rs](file:///Users/hugoguan/Documents/01.%20AI_Projects/03.%20Trae_Projects/gateway-switch/src-tauri/src/codex_gateway.rs) to strip 15+ OpenAI-exclusive parameters (`parallel_tool_calls`, `stream_options`, `frequency_penalty`, `presence_penalty`, `response_format`, `seed`, `logprobs`, `top_logprobs`, `logit_bias`, `service_tier`, `modalities`, `prediction`, `audio`, `store`, `metadata`) for strict providers.
+  - Auto-downgrading `tool_choice: "required"` to `"auto"` when `strip_unsupported_params` is active, preventing validation errors on providers that do not support the "required" tool choice.
+- Verification: `cargo test` (117 passed, 0 failed), `pnpm tauri build` successful.
+- DMG size: ~7.0 MB.
+
 ## 1.20.0 - 2026-07-22
 
 - **ChatGPT/Codex merge compatibility fix**: After OpenAI merged Codex into ChatGPT, the desktop app was renamed from `Codex.app` to `ChatGPT.app`. Updated app detection to locate the install via bundle ID `com.openai.codex` using `mdfind` (Spotlight), with fallback candidates for `/Applications/ChatGPT.app`, `~/Applications/ChatGPT.app`, and legacy `Codex.app` paths. Source: [codex_binding.rs](file:///Users/hugoguan/Documents/01.%20AI_Projects/03.%20Trae_Projects/gateway-switch/src-tauri/src/codex_binding.rs).

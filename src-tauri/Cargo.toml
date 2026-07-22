@@ -1,6 +1,6 @@
 [package]
 name = "gateway-switch"
-version = "1.19.0"
+version = "1.20.0"
 description = "Gateway Switch - Claude and Codex Model Router"
 authors = ["Hugo Guan"]
 edition = "2021"
@@ -29,10 +29,6 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 tower = "0.5"
 toml = "0.8"
-flate2 = "1"
-tar = "0.4"
-plist = "1"
-sha2 = "0.10"
 
 [dev-dependencies]
 tempfile = "3"

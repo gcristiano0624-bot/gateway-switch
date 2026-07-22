@@ -274,6 +274,8 @@ mod tests {
                 provider_id: "xiaomi".into(),
                 upstream_model: "mimo-v2.5".into(),
                 enabled: true,
+                failover_enabled: false,
+                failover_provider_id: None,
             },
             ModelRoute {
                 id: "r2".into(),
@@ -282,6 +284,8 @@ mod tests {
                 provider_id: "volcengine".into(),
                 upstream_model: "DeepSeek-V4-Pro".into(),
                 enabled: true,
+                failover_enabled: false,
+                failover_provider_id: None,
             },
         ];
 

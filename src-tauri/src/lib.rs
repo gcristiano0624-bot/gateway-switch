@@ -2,7 +2,6 @@ mod claude_code_binding;
 mod codex_binding;
 mod codex_gateway;
 mod codex_history;
-mod codex_pp;
 mod codex_tools;
 mod coldstart;
 mod commands;
@@ -22,12 +21,8 @@ mod tray;
 
 use tauri::Manager;
 
-pub fn try_run_cli_from_args(args: &[String]) -> Result<Option<i32>, String> {
-    if args.get(1).map(String::as_str) != Some("codexpp") {
-        return Ok(None);
-    }
-    let code = codex_pp::run_headless_cli(&args[2..])?;
-    Ok(Some(code))
+pub fn try_run_cli_from_args(_args: &[String]) -> Result<Option<i32>, String> {
+    Ok(None)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -140,6 +135,7 @@ pub fn run() {
             commands::repair_claude_code_gateway_binding,
             commands::check_gateway_health,
             commands::check_provider_health,
+            commands::test_provider_model,
             commands::export_config,
             commands::import_config,
             commands::start_codex_gateway,
@@ -155,18 +151,7 @@ pub fn run() {
             commands::get_codex_binding_info,
             commands::apply_codex_binding,
             commands::restore_codex_binding,
-            commands::detect_codex_pp,
-            commands::list_codex_pp_tweaks,
-            commands::set_codex_pp_tweak_enabled,
-            commands::fetch_codex_pp_store,
-            commands::install_codex_pp_tweak,
-            commands::uninstall_codex_pp_tweak,
-            commands::get_codex_pp_health,
-            commands::get_codex_pp_preflight,
-            commands::get_codex_pp_recommended_scripts,
-            commands::install_codex_pp_recommended_scripts,
-            commands::run_codex_pp_cli,
-            commands::open_codex_pp_path,
+            commands::get_codex_bind_mode,
             commands::list_model_aliases,
             commands::create_model_alias,
             commands::delete_model_alias,

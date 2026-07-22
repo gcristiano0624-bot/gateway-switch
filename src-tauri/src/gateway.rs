@@ -37,7 +37,7 @@ use crate::{
     },
     gateway_strategy::should_force_chat_fallback,
     loop_guard::{LoopGuard, TextGuardAction},
-    models::{GatewayProfile, Provider, RequestDiagnosticSnapshot, RequestLog},
+    models::{GatewayProfile, ModelRoute, Provider, RequestDiagnosticSnapshot, RequestLog},
     state::{AppState, GatewayHandle, GatewayStatus},
 };
 
@@ -53,6 +53,7 @@ struct Ctx {
     cooldowns: Arc<Mutex<HashMap<String, Instant>>>,
 }
 
+#[derive(Clone)]
 struct Route {
     display: String,
     provider_id: String,
@@ -315,7 +316,7 @@ async fn messages(
         .get("model")
         .and_then(|v| v.as_str())
         .ok_or(bad_req("missing model"))?;
-    let route = resolve(&ctx.db, model).map_err(bad_req)?;
+    let (route, failover_route) = resolve_with_failover(&ctx.db, model).map_err(bad_req)?;
     let req_id = Uuid::new_v4().to_string();
     let started = Instant::now();
     let is_stream = body
@@ -344,8 +345,55 @@ async fn messages(
         .headers(to_headers(&route.headers)?)
         .json(&upstream)
         .send()
-        .await
-        .map_err(|e| {
+        .await;
+
+    let (resp, actual_route) = match (resp, &failover_route) {
+        (Ok(resp), _) => (resp, route.clone()),
+        (Err(e), Some(failover)) => {
+            let _ = database::insert_log(
+                &ctx.db,
+                &RequestLog {
+                    request_id: req_id.clone(),
+                    claude_alias: route.display.clone(),
+                    provider_id: route.provider_id.clone(),
+                    upstream_model: route.upstream_model.clone(),
+                    status_code: None,
+                    duration_ms: Some(started.elapsed().as_millis() as u64),
+                    is_stream,
+                    error_summary: Some(format!("Primary failed, switching to failover: {}", e)),
+                    created_at: String::new(),
+                },
+            );
+            let mut failover_upstream = upstream.clone();
+            failover_upstream["model"] = json!(failover.upstream_model);
+            apply_gateway_provider_policy(&mut failover_upstream, failover);
+            let failover_resp = ctx
+                .client
+                .post(upstream_url(&failover.anthropic_base_url, "messages"))
+                .headers(to_headers(&failover.headers)?)
+                .json(&failover_upstream)
+                .send()
+                .await
+                .map_err(|fe| {
+                    let _ = database::insert_log(
+                        &ctx.db,
+                        &RequestLog {
+                            request_id: req_id.clone(),
+                            claude_alias: failover.display.clone(),
+                            provider_id: failover.provider_id.clone(),
+                            upstream_model: failover.upstream_model.clone(),
+                            status_code: None,
+                            duration_ms: Some(started.elapsed().as_millis() as u64),
+                            is_stream,
+                            error_summary: Some(format!("Failover also failed: {}", fe)),
+                            created_at: String::new(),
+                        },
+                    );
+                    upstream_err(fe)
+                })?;
+            (failover_resp, failover.clone())
+        }
+        (Err(e), None) => {
             record_failed_snapshot(
                 &ctx.db,
                 &req_id,
@@ -370,8 +418,9 @@ async fn messages(
                     created_at: String::new(),
                 },
             );
-            upstream_err(e)
-        })?;
+            return Err(upstream_err(e));
+        }
+    };
 
     let status = resp.status();
 
@@ -379,14 +428,14 @@ async fn messages(
         let bytes = resp.bytes().await.map_err(upstream_err)?;
         if status.is_success() {
             if let Ok(mut json_body) = serde_json::from_slice::<Value>(&bytes) {
-                rewrite_model(&mut json_body, &route.display);
+                rewrite_model(&mut json_body, &actual_route.display);
                 let _ = database::insert_log(
                     &ctx.db,
                     &RequestLog {
                         request_id: req_id,
-                        claude_alias: route.display.clone(),
-                        provider_id: route.provider_id.clone(),
-                        upstream_model: route.upstream_model.clone(),
+                        claude_alias: actual_route.display.clone(),
+                        provider_id: actual_route.provider_id.clone(),
+                        upstream_model: actual_route.upstream_model.clone(),
                         status_code: Some(status.as_u16()),
                         duration_ms: Some(started.elapsed().as_millis() as u64),
                         is_stream: false,
@@ -399,12 +448,12 @@ async fn messages(
         }
         if !should_fallback_from_anthropic_status(status, &bytes) {
             let text = String::from_utf8_lossy(&bytes).to_string();
-            mark_rate_limit_cooldown(&ctx, &route, status);
+            mark_rate_limit_cooldown(&ctx, &actual_route, status);
             record_failed_snapshot(
                 &ctx.db,
                 &req_id,
                 "claude_messages",
-                &route,
+                &actual_route,
                 Some(status.as_u16()),
                 Some(&body_preview(&bytes)),
                 &body,
@@ -414,9 +463,9 @@ async fn messages(
                 &ctx.db,
                 &RequestLog {
                     request_id: req_id.clone(),
-                    claude_alias: route.display.clone(),
-                    provider_id: route.provider_id.clone(),
-                    upstream_model: route.upstream_model.clone(),
+                    claude_alias: actual_route.display.clone(),
+                    provider_id: actual_route.provider_id.clone(),
+                    upstream_model: actual_route.upstream_model.clone(),
                     status_code: Some(status.as_u16()),
                     duration_ms: Some(started.elapsed().as_millis() as u64),
                     is_stream: false,
@@ -428,7 +477,7 @@ async fn messages(
         }
         return chat_completion_fallback(
             ctx,
-            route,
+            actual_route,
             body,
             req_id,
             started,
@@ -448,12 +497,12 @@ async fn messages(
         let bytes = resp.bytes().await.map_err(upstream_err)?;
         if !should_fallback_from_anthropic_status(status, &bytes) {
             let text = String::from_utf8_lossy(&bytes).to_string();
-            mark_rate_limit_cooldown(&ctx, &route, status);
+            mark_rate_limit_cooldown(&ctx, &actual_route, status);
             record_failed_snapshot(
                 &ctx.db,
                 &req_id,
                 "claude_messages_stream",
-                &route,
+                &actual_route,
                 Some(status.as_u16()),
                 Some(&body_preview(&bytes)),
                 &body,
@@ -463,9 +512,9 @@ async fn messages(
                 &ctx.db,
                 &RequestLog {
                     request_id: req_id.clone(),
-                    claude_alias: route.display.clone(),
-                    provider_id: route.provider_id.clone(),
-                    upstream_model: route.upstream_model.clone(),
+                    claude_alias: actual_route.display.clone(),
+                    provider_id: actual_route.provider_id.clone(),
+                    upstream_model: actual_route.upstream_model.clone(),
                     status_code: Some(status.as_u16()),
                     duration_ms: Some(started.elapsed().as_millis() as u64),
                     is_stream: true,
@@ -477,7 +526,7 @@ async fn messages(
         }
         return chat_completion_fallback(
             ctx,
-            route,
+            actual_route,
             body,
             req_id,
             started,
@@ -487,9 +536,9 @@ async fn messages(
         .await;
     }
 
-    let display = route.display.clone();
-    let provider_id = route.provider_id.clone();
-    let upstream_model = route.upstream_model.clone();
+    let display = actual_route.display.clone();
+    let provider_id = actual_route.provider_id.clone();
+    let upstream_model = actual_route.upstream_model.clone();
     let log_req_id = req_id.clone();
     let db = ctx.db.clone();
     let request_loop_summary = request_loop_summary.clone();
@@ -502,7 +551,8 @@ async fn messages(
         while let Some(item) = body_stream.next().await {
             match item {
                 Ok(chunk) => {
-                    buf.push_str(&String::from_utf8_lossy(&chunk));
+                    let chunk_bytes: Bytes = chunk;
+                    buf.push_str(&String::from_utf8_lossy(&chunk_bytes));
                     while let Some(pos) = buf.find('\n') {
                         let line = buf[..=pos].to_string();
                         buf = buf[pos + 1..].to_string();
@@ -847,6 +897,29 @@ async fn chat_completion_fallback(
         .map_err(internal)
 }
 
+fn build_route(db: &PathBuf, route: &ModelRoute, provider: &Provider) -> Route {
+    let strategy = effective_provider_compatibility_profile(db, provider, &route.upstream_model);
+    let chat_role_mode = chat_role_mode_from_profile(&strategy);
+    let force_chat_fallback = should_force_chat_fallback(&strategy);
+    Route {
+        display: route.claude_alias.clone(),
+        provider_id: provider.id.clone(),
+        upstream_model: route.upstream_model.trim().to_string(),
+        strategy,
+        openai_base_url: provider.openai_base_url.trim_end_matches('/').to_string(),
+        anthropic_base_url: provider
+            .anthropic_base_url
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or(&provider.openai_base_url)
+            .trim_end_matches('/')
+            .to_string(),
+        force_chat_fallback,
+        chat_role_mode,
+        headers: auth_headers(provider),
+    }
+}
+
 fn resolve(db: &PathBuf, model: &str) -> Result<Route, String> {
     let routes = database::list_routes(db)?;
     let providers = database::list_providers(db)?;
@@ -858,26 +931,45 @@ fn resolve(db: &PathBuf, model: &str) -> Result<Route, String> {
         .into_iter()
         .find(|p| p.enabled && p.id == route.provider_id)
         .ok_or_else(|| format!("Provider '{}' not found", route.provider_id))?;
-    let strategy = effective_provider_compatibility_profile(db, &provider, &route.upstream_model);
-    let chat_role_mode = chat_role_mode_from_profile(&strategy);
-    let force_chat_fallback = should_force_chat_fallback(&strategy);
-    Ok(Route {
-        display: route.claude_alias,
-        provider_id: provider.id.clone(),
-        upstream_model: route.upstream_model.trim().to_string(),
-        strategy,
-        openai_base_url: provider.openai_base_url.trim_end_matches('/').to_string(),
-        anthropic_base_url: provider
-            .anthropic_base_url
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-        .unwrap_or(&provider.openai_base_url)
-        .trim_end_matches('/')
-        .to_string(),
-        force_chat_fallback,
-        chat_role_mode,
-        headers: auth_headers(&provider),
-    })
+    Ok(build_route(db, &route, &provider))
+}
+
+fn resolve_with_failover(db: &PathBuf, model: &str) -> Result<(Route, Option<Route>), String> {
+    let routes = database::list_routes(db)?;
+    let providers = database::list_providers(db)?;
+    let route = routes
+        .into_iter()
+        .find(|r| r.enabled && r.claude_alias == model)
+        .ok_or_else(|| format!("Unknown model: {model}"))?;
+    
+    let primary_provider = providers
+        .iter()
+        .find(|p| p.enabled && p.id == route.provider_id)
+        .ok_or_else(|| format!("Provider '{}' not found", route.provider_id))?;
+    
+    let primary_route = build_route(db, &route, primary_provider);
+    
+    let failover_route = if route.failover_enabled {
+        match &route.failover_provider_id {
+            Some(failover_id) => {
+                providers
+                    .iter()
+                    .find(|p| p.enabled && p.id == *failover_id)
+                    .map(|p| build_route(db, &route, p))
+            }
+            None => {
+                providers
+                    .iter()
+                    .filter(|p| p.enabled && p.id != route.provider_id)
+                    .min_by_key(|p| p.priority)
+                    .map(|p| build_route(db, &route, p))
+            }
+        }
+    } else {
+        None
+    };
+    
+    Ok((primary_route, failover_route))
 }
 
 
@@ -1590,6 +1682,7 @@ mod tests {
             auth_scheme: Some("Bearer".into()),
             api_key: Some("k".into()),
             enabled: true,
+            priority: 0,
         };
         database::upsert_provider_policy(
             &db,
@@ -2533,6 +2626,7 @@ mod tests {
             auth_scheme: Some("Bearer".into()),
             api_key: None,
             enabled: true,
+            priority: 0,
         };
         let chat_only_provider = Provider {
             anthropic_base_url: None,

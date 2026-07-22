@@ -63,6 +63,7 @@ pub struct Provider {
     pub auth_scheme: Option<String>,
     pub api_key: Option<String>,
     pub enabled: bool,
+    pub priority: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,6 +99,8 @@ pub struct ModelRoute {
     pub provider_id: String,
     pub upstream_model: String,
     pub enabled: bool,
+    pub failover_enabled: bool,
+    pub failover_provider_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -340,6 +343,8 @@ pub struct CodexRoute {
     pub upstream_model: String,
     pub tool_call_mode: String,
     pub enabled: bool,
+    pub failover_enabled: bool,
+    pub failover_provider_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

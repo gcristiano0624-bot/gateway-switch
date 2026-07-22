@@ -70,11 +70,12 @@ impl CodexToolContext {
                 original_name.clone()
             };
 
-            let chat_name = if kind == CodexToolKind::Function {
-                chat_name
-            } else {
-                sanitize_tool_name(&chat_name)
-            };
+            // Sanitize ALL tool kinds (including plain `function` tools). Some
+            // providers (Kimi/Volcengine) reject function names containing `.`
+            // or `:` with a 400 InvalidParameter; a function tool named e.g.
+            // `mcp.foo` must be downgraded to an OpenAI-safe `mcp_foo`. The
+            // original name is preserved in the spec and restored on the way back.
+            let chat_name = sanitize_tool_name(&chat_name);
 
             ctx.specs.push(CodexToolSpec {
                 kind,
@@ -220,7 +221,26 @@ impl CodexToolContext {
         let spec = &self.specs[idx];
 
         match spec.kind {
-            CodexToolKind::Function => None,
+            CodexToolKind::Function => {
+                // If the function name was sanitized on the way out (e.g.
+                // `mcp.foo` -> `mcp_foo`), rewrite it back to the original so
+                // the Codex client matches it against its own tool registry.
+                // When unchanged, keep the passthrough behavior (return None).
+                if spec.original_name == chat_name {
+                    return None;
+                }
+                let arg_str = if let Some(s) = args.as_str() {
+                    s.to_string()
+                } else {
+                    serde_json::to_string(args).unwrap_or_default()
+                };
+                Some(json!({
+                    "type": "function_call",
+                    "name": spec.original_name,
+                    "arguments": arg_str,
+                    "call_id": "",
+                }))
+            }
             CodexToolKind::Custom => {
                 let arg_str = if let Some(s) = args.as_str() {
                     s.to_string()
@@ -434,6 +454,50 @@ mod tests {
 
         let restored = ctx.restore_response_item("search", &json!({"query": "test"}));
         assert!(restored.is_none());
+    }
+
+    #[test]
+    fn test_function_tool_with_dot_is_sanitized_and_round_trips() {
+        // A plain function tool whose name contains a dot must be downgraded to
+        // an OpenAI-safe name (Kimi/Volcengine reject dots with a 400) and
+        // restored back to the original name on the response side.
+        let tools = vec![json!({
+            "type": "function",
+            "name": "mcp.test_tool",
+            "description": "A tool",
+            "parameters": {"type": "object", "properties": {}, "required": []}
+        })];
+
+        let ctx = CodexToolContext::from_request(&tools, &[]);
+        let downgraded = ctx.downgrade_all_to_functions();
+        let chat_name = downgraded[0]["function"]["name"].as_str().unwrap();
+        assert!(!chat_name.contains('.'));
+        assert!(!chat_name.contains(':'));
+        assert_eq!(chat_name, "mcp_test_tool");
+
+        // Restoration maps the sanitized chat name back to the original.
+        let restored = ctx
+            .restore_response_item("mcp_test_tool", &json!({"a": 1}))
+            .expect("sanitized function should be restored");
+        assert_eq!(restored["type"], "function_call");
+        assert_eq!(restored["name"], "mcp.test_tool");
+    }
+
+    #[test]
+    fn test_function_tool_with_colon_is_sanitized() {
+        let tools = vec![json!({
+            "type": "function",
+            "name": "mcp:do_thing",
+            "parameters": {"type": "object"}
+        })];
+        let ctx = CodexToolContext::from_request(&tools, &[]);
+        let downgraded = ctx.downgrade_all_to_functions();
+        let chat_name = downgraded[0]["function"]["name"].as_str().unwrap();
+        assert!(!chat_name.contains(':'));
+        let restored = ctx
+            .restore_response_item(chat_name, &json!({}))
+            .expect("sanitized function should be restored");
+        assert_eq!(restored["name"], "mcp:do_thing");
     }
 
     #[test]

@@ -474,6 +474,7 @@ async fn responses_handler(
         .unwrap_or(false);
     let strict_tool_calls = route.tool_call_mode == "strict_execution" && has_tools_in_req;
     let tool_call_mode = route.tool_call_mode.clone();
+    let strategy_id = route.strategy.strategy_id.clone();
 
     let sse = stream! {
         let mut seq: i64 = 0;
@@ -686,13 +687,19 @@ async fn responses_handler(
 
         // Check if we should retry with tool_choice: "required"
         // This handles the case where the model described actions in text
-        // but failed to emit structured tool_calls.
-        if has_tools_in_req && tool_items.is_empty() && !stream_error {
-            let should_retry = match finish_reason.as_deref() {
-                Some("stop") | Some("length") | None => has_action_description(&full_text),
-                _ => false,
-            };
-            if should_retry {
+        // but failed to emit structured tool_calls. Providers that loop under
+        // forced `required` (MiMo, glm) are excluded so they can still produce
+        // a final text answer instead of an empty tool-call spin.
+        if should_retry_with_required(
+            &strategy_id,
+            &upstream_model_name,
+            finish_reason.as_deref(),
+            has_tools_in_req,
+            tool_items.is_empty(),
+            stream_error,
+            &full_text,
+        ) {
+            {
                 let mut retry_req = chat_req.clone();
                 retry_req["tool_choice"] = json!("required");
                 if let Some(msgs) = retry_req.get_mut("messages").and_then(|v| v.as_array_mut()) {
@@ -1023,6 +1030,37 @@ fn has_action_description(text: &str) -> bool {
     ];
     let lower = text.to_lowercase();
     patterns.iter().any(|p| lower.contains(&p.to_lowercase()))
+}
+
+/// Decide whether to re-issue a streaming request with `tool_choice="required"`
+/// after the model produced only an action description but no structured
+/// tool_calls. Some providers loop forever under forced `required` and never
+/// emit final text (observed with Xiaomi MiMo and Volcengine glm), so those are
+/// excluded. Pure function to keep it unit-testable.
+fn should_retry_with_required(
+    strategy_id: &str,
+    upstream_model: &str,
+    finish_reason: Option<&str>,
+    has_tools: bool,
+    tool_items_empty: bool,
+    stream_error: bool,
+    text: &str,
+) -> bool {
+    if !has_tools || !tool_items_empty || stream_error {
+        return false;
+    }
+    // Providers prone to infinite tool-call loops under forced `required`.
+    let model = upstream_model.to_lowercase();
+    let loops_on_required = matches!(strategy_id, "xiaomi_mimo_chat")
+        || model.contains("mimo")
+        || model.contains("glm");
+    if loops_on_required {
+        return false;
+    }
+    match finish_reason {
+        Some("stop") | Some("length") | None => has_action_description(text),
+        _ => false,
+    }
 }
 
 fn extract_finish_reason(line: &str) -> Option<String> {
@@ -2138,6 +2176,50 @@ mod tests {
     use axum::{body::to_bytes, http};
     use tower::ServiceExt;
 
+    #[test]
+    fn retry_with_required_skipped_for_mimo_and_glm() {
+        // Generic provider that described an action but emitted no tool_calls: retry.
+        assert!(should_retry_with_required(
+            "openai_chat_fallback",
+            "some-model",
+            Some("stop"),
+            true,
+            true,
+            false,
+            "I'll run the tests now.",
+        ));
+        // MiMo (by strategy) loops on forced required: never retry.
+        assert!(!should_retry_with_required(
+            "xiaomi_mimo_chat",
+            "mimo-v2.5-pro",
+            Some("stop"),
+            true,
+            true,
+            false,
+            "I'll run the tests now.",
+        ));
+        // glm (by upstream model name under Volcengine) also excluded.
+        assert!(!should_retry_with_required(
+            "volcengine_deepseek_coding",
+            "glm-latest",
+            Some("stop"),
+            true,
+            true,
+            false,
+            "Let me start.",
+        ));
+        // No tools, or tool items already present, or stream error: never retry.
+        assert!(!should_retry_with_required(
+            "openai_chat_fallback", "m", Some("stop"), false, true, false, "I'll go."
+        ));
+        assert!(!should_retry_with_required(
+            "openai_chat_fallback", "m", Some("stop"), true, false, false, "I'll go."
+        ));
+        assert!(!should_retry_with_required(
+            "openai_chat_fallback", "m", Some("stop"), true, true, true, "I'll go."
+        ));
+    }
+
     fn standard_strategy() -> gateway::ProviderCompatibilityProfile {
         gateway::ProviderCompatibilityProfile {
             strategy_id: "openai_chat_fallback".into(),
@@ -2165,6 +2247,7 @@ mod tests {
             auth_scheme: Some("Bearer".into()),
             api_key: Some("test-key".into()),
             enabled: true,
+            priority: 0,
         }
     }
 

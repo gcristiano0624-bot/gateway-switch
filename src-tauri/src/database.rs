@@ -118,6 +118,18 @@ pub fn initialize(db: &Path) -> Result<(), String> {
         "ALTER TABLE codex_routes ADD COLUMN tool_call_mode TEXT NOT NULL DEFAULT 'force_when_tools_present'",
         [],
     );
+    let _ = conn.execute("ALTER TABLE providers ADD COLUMN priority INTEGER NOT NULL DEFAULT 100", []);
+    let _ = conn.execute("ALTER TABLE model_routes ADD COLUMN failover_enabled INTEGER NOT NULL DEFAULT 0", []);
+    let _ = conn.execute("ALTER TABLE model_routes ADD COLUMN failover_provider_id TEXT", []);
+    let _ = conn.execute("ALTER TABLE codex_routes ADD COLUMN failover_enabled INTEGER NOT NULL DEFAULT 0", []);
+    let _ = conn.execute("ALTER TABLE codex_routes ADD COLUMN failover_provider_id TEXT", []);
+    // C3: persisted Codex binding mode — 'relay' (route through the local
+    // gateway) or 'official' (restore ChatGPT login). 'api-mix' is intentionally
+    // not supported (no Codex mechanism under single-binding).
+    let _ = conn.execute(
+        "ALTER TABLE codex_profile ADD COLUMN bind_mode TEXT NOT NULL DEFAULT 'relay'",
+        [],
+    );
     conn.execute(
         "UPDATE providers SET openai_base_url = COALESCE(NULLIF(openai_base_url, ''), base_url)",
         [],
@@ -169,14 +181,13 @@ pub fn initialize(db: &Path) -> Result<(), String> {
             .unwrap_or(0);
         if codex_count == 0 {
             let defaults = [
-                "gpt-4o",
-                "gpt-4o-mini",
-                "o3",
-                "o4-mini",
-                "o3-pro",
-                "gpt-4.1",
-                "gpt-4.1-mini",
-                "gpt-4.1-nano",
+                "gpt-5.6-sol",
+                "gpt-5.6-terra",
+                "gpt-5.6-luna",
+                "gpt-5.5",
+                "gpt-5.3-codex",
+                "gpt-5.1-codex",
+                "gpt-5.1-codex-mini",
             ];
             for alias in defaults {
                 let id = uuid::Uuid::new_v4().to_string();
@@ -184,6 +195,35 @@ pub fn initialize(db: &Path) -> Result<(), String> {
                     "INSERT INTO model_aliases (id, alias, alias_type) VALUES (?1, ?2, 'codex')",
                     params![id, alias],
                 );
+            }
+        } else {
+            // Idempotently backfill the 2026 Codex catalog for existing installs
+            // that predate the ChatGPT-merge model rename, without disturbing any
+            // user-created aliases.
+            let backfill = [
+                "gpt-5.6-sol",
+                "gpt-5.6-terra",
+                "gpt-5.6-luna",
+                "gpt-5.5",
+                "gpt-5.3-codex",
+                "gpt-5.1-codex",
+                "gpt-5.1-codex-mini",
+            ];
+            for alias in backfill {
+                let exists: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM model_aliases WHERE alias_type='codex' AND alias=?1",
+                        params![alias],
+                        |r| r.get(0),
+                    )
+                    .unwrap_or(0);
+                if exists == 0 {
+                    let id = uuid::Uuid::new_v4().to_string();
+                    let _ = conn.execute(
+                        "INSERT INTO model_aliases (id, alias, alias_type) VALUES (?1, ?2, 'codex')",
+                        params![id, alias],
+                    );
+                }
             }
         }
     }
@@ -214,7 +254,7 @@ fn i64_to_bool(value: Option<i64>) -> Option<bool> {
 pub fn list_providers(db: &Path) -> Result<Vec<Provider>, String> {
     let conn = open(db)?;
     let mut stmt = conn.prepare(
-        "SELECT id, name, base_url, COALESCE(NULLIF(openai_base_url, ''), base_url), NULLIF(anthropic_base_url, ''), auth_header, auth_scheme, api_key, enabled FROM providers ORDER BY created_at DESC"
+        "SELECT id, name, base_url, COALESCE(NULLIF(openai_base_url, ''), base_url), NULLIF(anthropic_base_url, ''), auth_header, auth_scheme, api_key, enabled, COALESCE(priority, 100) FROM providers ORDER BY created_at DESC"
     ).map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |r| {
@@ -228,6 +268,7 @@ pub fn list_providers(db: &Path) -> Result<Vec<Provider>, String> {
                 auth_scheme: r.get(6)?,
                 api_key: r.get(7)?,
                 enabled: r.get::<_, i64>(8)? == 1,
+                priority: r.get(9)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -287,7 +328,7 @@ pub fn delete_provider(db: &Path, id: &str) -> Result<(), String> {
 pub fn list_routes(db: &Path) -> Result<Vec<ModelRoute>, String> {
     let conn = open(db)?;
     let mut stmt = conn.prepare(
-        "SELECT id, claude_alias, display_name, provider_id, upstream_model, enabled FROM model_routes ORDER BY created_at DESC"
+        "SELECT id, claude_alias, display_name, provider_id, upstream_model, enabled, COALESCE(failover_enabled, 0), failover_provider_id FROM model_routes ORDER BY created_at DESC"
     ).map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |r| {
@@ -298,6 +339,8 @@ pub fn list_routes(db: &Path) -> Result<Vec<ModelRoute>, String> {
                 provider_id: r.get(3)?,
                 upstream_model: r.get(4)?,
                 enabled: r.get::<_, i64>(5)? == 1,
+                failover_enabled: r.get::<_, i64>(6)? == 1,
+                failover_provider_id: r.get(7)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -622,7 +665,7 @@ pub fn count_rows(db: &Path, table: &str) -> Result<i64, String> {
 pub fn list_codex_routes(db: &Path) -> Result<Vec<CodexRoute>, String> {
     let conn = open(db)?;
     let mut stmt = conn.prepare(
-        "SELECT id, codex_model, display_name, provider_id, upstream_model, COALESCE(NULLIF(tool_call_mode, ''), 'force_when_tools_present'), enabled FROM codex_routes ORDER BY created_at DESC"
+        "SELECT id, codex_model, display_name, provider_id, upstream_model, COALESCE(NULLIF(tool_call_mode, ''), 'force_when_tools_present'), enabled, COALESCE(failover_enabled, 0), failover_provider_id FROM codex_routes ORDER BY created_at DESC"
     ).map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |r| {
@@ -634,6 +677,8 @@ pub fn list_codex_routes(db: &Path) -> Result<Vec<CodexRoute>, String> {
                 upstream_model: r.get(4)?,
                 tool_call_mode: r.get(5)?,
                 enabled: r.get::<_, i64>(6)? == 1,
+                failover_enabled: r.get::<_, i64>(7)? == 1,
+                failover_provider_id: r.get(8)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -709,6 +754,30 @@ pub fn save_codex_profile(db: &Path, p: &GatewayProfile) -> Result<(), String> {
     conn.execute(
         "UPDATE codex_profile SET listen_host=?1, listen_port=?2, auth_token=?3 WHERE id='default'",
         params![p.listen_host, p.listen_port, p.auth_token],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Read the persisted Codex binding mode ('relay' or 'official'). Defaults to
+/// 'relay' when the column is missing or empty.
+pub fn get_codex_bind_mode(db: &Path) -> Result<String, String> {
+    let conn = open(db)?;
+    let mode: String = conn
+        .query_row(
+            "SELECT COALESCE(NULLIF(bind_mode, ''), 'relay') FROM codex_profile WHERE id = 'default'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or_else(|_| "relay".to_string());
+    Ok(mode)
+}
+
+pub fn set_codex_bind_mode(db: &Path, mode: &str) -> Result<(), String> {
+    let conn = open(db)?;
+    conn.execute(
+        "UPDATE codex_profile SET bind_mode=?1 WHERE id='default'",
+        params![mode],
     )
     .map_err(|e| e.to_string())?;
     Ok(())

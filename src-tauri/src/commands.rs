@@ -1,5 +1,5 @@
 use crate::{
-    claude_code_binding, codex_binding, codex_gateway, codex_pp,
+    claude_code_binding, codex_binding, codex_gateway,
     coldstart::{run_coldstart_checks, RunMode},
     compatibility, database, desktop_binding, gateway, mcp_sync,
     models::*,
@@ -9,7 +9,7 @@ use crate::{
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs, process::Command, time::Instant};
-use tauri::{AppHandle, State};
+use tauri::State;
 
 #[tauri::command]
 pub async fn get_status(st: State<'_, AppState>) -> Result<AppStatus, String> {
@@ -286,8 +286,6 @@ struct RuntimeSnapshot {
     desktop: Option<desktop_binding::DesktopInfo>,
     claude_code: Option<ClaudeCodeInfo>,
     codex_binding: Option<CodexBindingInfo>,
-    codex_pp_install: codex_pp::CodexPpInstall,
-    codex_pp_health: codex_pp::CodexPpHealth,
     claude_gateway_health: HealthStatus,
     codex_gateway_health: HealthStatus,
     claude_gateway_status: GatewayStatus,
@@ -1333,84 +1331,6 @@ fn codex_gateway_section(
     )
 }
 
-fn codex_pp_section(
-    install: &codex_pp::CodexPpInstall,
-    health: &codex_pp::CodexPpHealth,
-) -> DiagnosticsSection {
-    let installed = install.installed;
-    let failed_checks = health
-        .checks
-        .iter()
-        .filter(|check| check.status == "failed" || check.status == "error")
-        .count();
-    let review_checks = health
-        .checks
-        .iter()
-        .filter(|check| check.status == "review")
-        .count();
-    let mut actions = Vec::new();
-    if !installed {
-        actions.push(action(
-            "install_codex_pp",
-            "Install Codex++",
-            "codex",
-            "attention",
-            "Codex++ is not installed in the managed runtime.",
-        ));
-    }
-    if failed_checks > 0 || review_checks > 0 {
-        actions.push(action(
-            "review_codex_pp_health",
-            "Review Codex++ health",
-            "codex",
-            "attention",
-            "One or more Codex++ checks need review.",
-        ));
-    }
-    let score = score_from_issues(&[
-        (!installed, 35),
-        (failed_checks > 0, 25),
-        (review_checks > 0, 10),
-    ]);
-    section(
-        "codex_pp",
-        "Codex++",
-        status_from_score(score),
-        score,
-        if installed {
-            "Codex++ runtime is detected."
-        } else {
-            "Codex++ runtime is not installed."
-        },
-        vec![
-            metric(
-                "Installed",
-                installed.to_string(),
-                if installed { "healthy" } else { "attention" },
-            ),
-            metric(
-                "Failed checks",
-                failed_checks.to_string(),
-                if failed_checks == 0 {
-                    "healthy"
-                } else {
-                    "critical"
-                },
-            ),
-            metric(
-                "Review checks",
-                review_checks.to_string(),
-                if review_checks == 0 {
-                    "healthy"
-                } else {
-                    "attention"
-                },
-            ),
-        ],
-        actions,
-    )
-}
-
 fn providers_section(
     providers: &[Provider],
     route_diagnostics: &[gateway::RouteCompatibilityDiagnostic],
@@ -1825,17 +1745,17 @@ fn runtime_source_report_for_path(bundle_path: String) -> RuntimeSourceReport {
     let (summary, recommendation) = if is_dmg_volume {
         (
             "Gateway Switch is running from a mounted disk image.".into(),
-            "Copy Gateway Switch.app to /Applications before binding launchd watchers or repairing Codex++.".into(),
+            "Copy Gateway Switch.app to /Applications before setting up bindings.".into(),
         )
     } else if is_temp_volume {
         (
             "Gateway Switch is running from a temporary path.".into(),
-            "Install the app under /Applications to avoid poisoned watcher or shim paths.".into(),
+            "Install the app under /Applications to avoid poisoned shim paths.".into(),
         )
     } else if is_applications {
         (
             "Gateway Switch is running from /Applications.".into(),
-            "Runtime source looks stable for launchd watchers and Codex++ repair actions.".into(),
+            "Runtime source looks stable for CLI bindings and gateway operations.".into(),
         )
     } else {
         (
@@ -2119,6 +2039,12 @@ pub fn apply_binding(st: State<'_, AppState>) -> Result<desktop_binding::Desktop
 }
 
 #[tauri::command]
+pub async fn start_and_bind_claude(st: State<'_, AppState>) -> Result<desktop_binding::DesktopInfo, String> {
+    let _ = gateway::start(&st);
+    apply_binding(st)
+}
+
+#[tauri::command]
 pub fn restore_binding(st: State<'_, AppState>) -> Result<desktop_binding::DesktopInfo, String> {
     let _ = st;
     desktop_binding::restore(&dirs::home_dir().ok_or("no home")?)
@@ -2290,8 +2216,6 @@ async fn load_runtime_snapshot(st: &AppState, log_limit: usize) -> Result<Runtim
     let desktop = desktop_binding::inspect(&home).ok();
     let claude_code = claude_code_binding::inspect(&home).ok();
     let codex_binding = codex_binding::inspect(&home).ok();
-    let codex_pp_install = codex_pp::detect();
-    let codex_pp_health = codex_pp::health();
     let profile = database::get_profile(&st.db_path)?;
     let codex_profile = database::get_codex_profile(&st.db_path)?;
     let (claude_gateway_health, codex_gateway_health) = tokio::join!(
@@ -2317,8 +2241,6 @@ async fn load_runtime_snapshot(st: &AppState, log_limit: usize) -> Result<Runtim
         desktop,
         claude_code,
         codex_binding,
-        codex_pp_install,
-        codex_pp_health,
         claude_gateway_health,
         codex_gateway_health,
         claude_gateway_status,
@@ -2670,8 +2592,6 @@ fn build_unified_diagnostics_from_snapshot(
     let claude_code = &snapshot.claude_code;
     let codex_status = &snapshot.codex_gateway_status;
     let codex_binding = &snapshot.codex_binding;
-    let codex_pp_install = &snapshot.codex_pp_install;
-    let codex_pp_health = &snapshot.codex_pp_health;
     let failure_clusters = failure_clusters_from_snapshots(failed);
 
     let sections = vec![
@@ -2683,7 +2603,6 @@ fn build_unified_diagnostics_from_snapshot(
             codex_routes,
             codex_diagnostics,
         ),
-        codex_pp_section(codex_pp_install, codex_pp_health),
         providers_section(
             providers,
             route_diagnostics,
@@ -2771,6 +2690,63 @@ pub async fn check_provider_health(
             message: e.to_string(),
             latency_ms: Some(start.elapsed().as_millis() as u64),
         }),
+    }
+}
+
+#[tauri::command]
+pub async fn test_provider_model(
+    st: State<'_, AppState>,
+    provider_id: String,
+    model: String,
+) -> Result<serde_json::Value, String> {
+    let providers = database::list_providers(&st.db_path)?;
+    let p = providers
+        .into_iter()
+        .find(|p| p.id == provider_id)
+        .ok_or("Provider not found")?;
+    
+    let client = reqwest::Client::new();
+    let mut req = client.post(upstream_url(&p.openai_base_url, "chat/completions"));
+    req = req.header("content-type", "application/json");
+    if let Some(key) = p.api_key.as_deref().filter(|s| !s.is_empty()) {
+        let mut val = key.to_string();
+        if let Some(scheme) = p.auth_scheme.as_deref().filter(|s| !s.is_empty()) {
+            val = format!("{scheme} {val}");
+        }
+        req = req.header(&*p.auth_header, val);
+    }
+    
+    let body = serde_json::json!({
+        "model": model,
+        "messages": [
+            {"role": "user", "content": "Hello, respond with exactly one sentence."}
+        ],
+        "max_tokens": 50,
+        "temperature": 0.0,
+    });
+    
+    let start = Instant::now();
+    match req.json(&body).send().await {
+        Ok(r) => {
+            let latency_ms = start.elapsed().as_millis() as u64;
+            let status = r.status();
+            let text = r.text().await.map_err(|e| e.to_string())?;
+            Ok(serde_json::json!({
+                "ok": status.is_success(),
+                "status_code": status.as_u16(),
+                "latency_ms": latency_ms,
+                "response": text,
+            }))
+        }
+        Err(e) => {
+            let latency_ms = start.elapsed().as_millis() as u64;
+            Ok(serde_json::json!({
+                "ok": false,
+                "status_code": 0,
+                "latency_ms": latency_ms,
+                "response": e.to_string(),
+            }))
+        }
     }
 }
 
@@ -3005,90 +2981,33 @@ pub fn apply_codex_binding(
     model: String,
 ) -> Result<CodexBindingInfo, String> {
     let profile = database::get_codex_profile(&st.db_path)?;
-    codex_binding::apply(
+    let info = codex_binding::apply(
         &dirs::home_dir().ok_or("no home")?,
         &format!("http://{}:{}/v1", profile.listen_host, profile.listen_port),
         &profile.auth_token,
         &model,
-    )
+    )?;
+    let _ = database::set_codex_bind_mode(&st.db_path, "relay");
+    Ok(info)
+}
+
+#[tauri::command]
+pub async fn start_and_bind_codex(st: State<'_, AppState>, model: String) -> Result<CodexBindingInfo, String> {
+    let _ = codex_gateway::start(&st);
+    apply_codex_binding(st, model)
 }
 
 #[tauri::command]
 pub fn restore_codex_binding(st: State<'_, AppState>) -> Result<CodexBindingInfo, String> {
-    let _ = st;
-    codex_binding::restore(&dirs::home_dir().ok_or("no home")?)
+    let info = codex_binding::restore(&dirs::home_dir().ok_or("no home")?)?;
+    let _ = database::set_codex_bind_mode(&st.db_path, "official");
+    Ok(info)
 }
 
+/// Read the persisted Codex binding mode ('relay' or 'official').
 #[tauri::command]
-pub fn detect_codex_pp() -> Result<codex_pp::CodexPpInstall, String> {
-    Ok(codex_pp::detect())
-}
-
-#[tauri::command]
-pub fn list_codex_pp_tweaks() -> Result<Vec<codex_pp::CodexPpTweak>, String> {
-    codex_pp::list_tweaks()
-}
-
-#[tauri::command]
-pub fn set_codex_pp_tweak_enabled(
-    id: String,
-    enabled: bool,
-) -> Result<Vec<codex_pp::CodexPpTweak>, String> {
-    codex_pp::set_tweak_enabled(id, enabled)
-}
-
-#[tauri::command]
-pub async fn fetch_codex_pp_store() -> Result<codex_pp::CodexPpStoreIndex, String> {
-    codex_pp::fetch_store().await
-}
-
-#[tauri::command]
-pub async fn install_codex_pp_tweak(
-    repo: String,
-    approved_commit_sha: String,
-) -> Result<Vec<codex_pp::CodexPpTweak>, String> {
-    codex_pp::install_from_store(repo, approved_commit_sha).await
-}
-
-#[tauri::command]
-pub fn uninstall_codex_pp_tweak(id: String) -> Result<Vec<codex_pp::CodexPpTweak>, String> {
-    codex_pp::uninstall_tweak(id)
-}
-
-#[tauri::command]
-pub fn get_codex_pp_health() -> Result<codex_pp::CodexPpHealth, String> {
-    Ok(codex_pp::health())
-}
-
-#[tauri::command]
-pub fn get_codex_pp_preflight() -> Result<codex_pp::CodexPpPreflight, String> {
-    Ok(codex_pp::preflight())
-}
-
-#[tauri::command]
-pub fn get_codex_pp_recommended_scripts(
-) -> Result<codex_pp::CodexPpRecommendedScriptsReport, String> {
-    Ok(codex_pp::recommended_scripts_report())
-}
-
-#[tauri::command]
-pub fn install_codex_pp_recommended_scripts(
-) -> Result<codex_pp::CodexPpRecommendedScriptsReport, String> {
-    codex_pp::install_recommended_scripts()
-}
-
-#[tauri::command]
-pub fn run_codex_pp_cli(
-    app: AppHandle,
-    action: String,
-    session_id: Option<String>,
-) -> Result<codex_pp::CodexPpCliResult, String> {
-    codex_pp::run_cli(app, action, session_id)
-}
-
-#[tauri::command]
-pub fn open_codex_pp_path(kind: String) -> Result<String, String> {
-    codex_pp::open_path(kind)
+pub fn get_codex_bind_mode(st: State<'_, AppState>) -> Result<String, String> {
+    database::get_codex_bind_mode(&st.db_path)
 }
 
 // =====================================================

@@ -2,6 +2,23 @@
 
 This file tracks user-visible Gateway Switch changes so future AI agents can quickly understand release history. For deeper architecture context, read `docs/project.md`.
 
+## 1.20.0 - 2026-07-22
+
+- **ChatGPT/Codex merge compatibility fix**: After OpenAI merged Codex into ChatGPT, the desktop app was renamed from `Codex.app` to `ChatGPT.app`. Updated app detection to locate the install via bundle ID `com.openai.codex` using `mdfind` (Spotlight), with fallback candidates for `/Applications/ChatGPT.app`, `~/Applications/ChatGPT.app`, and legacy `Codex.app` paths. Source: [codex_binding.rs](file:///Users/hugoguan/Documents/01.%20AI_Projects/03.%20Trae_Projects/gateway-switch/src-tauri/src/codex_binding.rs).
+- **CLI config schema modernization**: Codex CLI ≥0.140 moves `preferred_auth_method` into a `[auth]` table. Added version detection (`parse_codex_cli_version`) and adaptive writing: older builds get top-level auth, newer builds get the `[auth]` table. Removed deprecated `requires_openai_auth = false` key. Robust `[auth]` table stripping preserves user-owned keys during restore.
+- **Model metadata for GPT-5.x era**: Added `model_context_window`/`model_max_output_tokens` metadata for all modern models (gpt-5.6-sol/terra/luna → 400K/128K; gpt-5.5/5.4 → 400K/128K; gpt-5.3-codex/5.1-codex → 272K/128K; unknown → 272K/64K), eliminating the "Unknown model, fallback model metadata" warning that degraded tool-call reliability.
+- **Tool name sanitization fix**: Previously only namespace/custom/tool_search tools had names sanitized (dots/colons replaced with underscores for OpenAI compatibility). This left function tools like `mcp.test_tool` unsanitized, causing 400 InvalidParameter errors on Kimi/Volcengine. All tool kinds are now sanitized on send; original names are restored on response. Added round-trip tests for dot and colon cases. Source: [codex_tools.rs](file:///Users/hugoguan/Documents/01.%20AI_Projects/03.%20Trae_Projects/gateway-switch/src-tauri/src/codex_tools.rs).
+- **MiMo/GLM infinite tool-call loop fix**: The streaming retry logic forcibly set `tool_choice=required` after empty tool responses, which caused MiMo and GLM models to enter infinite tool-call loops. Added `should_retry_with_required()` guard that detects MiMo (by strategy ID and model name) and GLM (by model name) and skips the forced retry for these providers. Source: [codex_gateway.rs](file:///Users/hugoguan/Documents/01.%20AI_Projects/03.%20Trae_Projects/gateway-switch/src-tauri/src/codex_gateway.rs).
+- **Codex++ desktop enhancement removed**: Due to ChatGPT's frequent update cycle making the asar-patch + ad-hoc re-signing workflow unsustainable (each app update invalidated the patch and re-signature), the entire Codex++ desktop enhancement module (`codex_pp.rs`, ~3300 lines) has been removed. This includes Electron asar patching, loader injection, ElectronAsarIntegrity hash updates, ad-hoc codesigning, launchd watcher, tweak store, and recommended scripts. CLI binding + local gateway proxy remain fully functional and are now the primary enhancement path.
+  - PATH resolution utilities (`find_command_on_path`, `augmented_command_path`) have been inlined into [codex_binding.rs](file:///Users/hugoguan/Documents/01.%20AI_Projects/03.%20Trae_Projects/gateway-switch/src-tauri/src/codex_binding.rs).
+  - Removed Cargo dependencies: `flate2`, `tar`, `plist`, `sha2` (were codex_pp-only).
+  - Frontend: removed Codex++ tabs (Enhance, Market, Sessions, Diagnostics) keeping only the Routes management tab.
+  - Config cleanup logic for legacy `[model_providers.CodexPlusPlus]` entries is preserved for backward compatibility.
+- **Bind mode persistence**: Added `codex_profile.bind_mode` column (`relay`/`official`) persisted across apply/restore operations, with a new `get_codex_bind_mode` Tauri command.
+- **Default model catalog updated**: Frontend defaults and database seed/backfill now include gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna, gpt-5.5, gpt-5.3-codex, gpt-5.1-codex, gpt-5.1-codex-mini. Existing installs get an idempotent backfill for missing aliases.
+- Verification: `cargo test` (117 passed, 0 failed), `pnpm build` (tsc + vite production build successful).
+- DMG size: ~7.0 MB (reduced from ~7.6 MB due to removed dependencies).
+
 ## 1.19.0 - 2026-07-03
 
 - **CodexToolContext + bidirectional tool restore (Improvement 1)**: Adds full round-trip support for all 4 Codex tool types (`function`, `custom`, `tool_search`, `namespace`). Previously only `function` tools were forwarded (others silently dropped); now all tool types are downgraded to `function` on the way out (lossless, with original spec embedded in `description`) and restored to their original type on the way back.

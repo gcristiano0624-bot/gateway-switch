@@ -176,16 +176,16 @@ pub fn provider_compatibility_profile(
             system_to_user: !has_anthropic,
             tool_to_user: !has_anthropic,
             disable_tools: false,
-            strip_unsupported_params: false,
+            strip_unsupported_params: true,
             direct_provider_safe: has_anthropic,
             gateway_route_recommended: !has_anthropic,
             codex_disable_responses: true,
-            codex_strict_tool_calls: true,
+            codex_strict_tool_calls: false,
             codex_strip_reasoning: true,
             summary: if has_anthropic {
                 "Volcengine Ark DeepSeek has an Anthropic-compatible endpoint configured; Claude clients can use the Anthropic route while Codex keeps OpenAI compatibility.".into()
             } else {
-                "Volcengine Ark DeepSeek without an Anthropic endpoint falls back through OpenAI Chat and converts unsupported roles.".into()
+                "Volcengine Ark DeepSeek without an Anthropic endpoint falls back through OpenAI Chat, strips unsupported params, and uses auto tool_choice to avoid validation errors.".into()
             },
         }
     } else if key.contains("openrouter") {

@@ -1267,12 +1267,33 @@ fn apply_codex_provider_policy(chat_req: &mut Value, route: &Route) {
             obj.remove("thinking");
             obj.remove("reasoning");
             obj.remove("reasoning_effort");
+            obj.remove("parallel_tool_calls");
+            obj.remove("stream_options");
+            obj.remove("frequency_penalty");
+            obj.remove("presence_penalty");
+            obj.remove("response_format");
+            obj.remove("seed");
+            obj.remove("logprobs");
+            obj.remove("top_logprobs");
+            obj.remove("logit_bias");
+            obj.remove("service_tier");
+            obj.remove("store");
+            obj.remove("metadata");
+            obj.remove("modalities");
+            obj.remove("prediction");
+            obj.remove("audio");
+            if let Some(tc) = obj.get("tool_choice").and_then(|v| v.as_str()) {
+                if tc == "required" {
+                    obj.insert("tool_choice".into(), json!("auto"));
+                }
+            }
         }
     }
     if route.strategy.disable_tools {
         if let Some(obj) = chat_req.as_object_mut() {
             obj.remove("tools");
             obj.remove("tool_choice");
+            obj.remove("parallel_tool_calls");
         }
     }
 }
